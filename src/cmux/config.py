@@ -10,8 +10,6 @@ interpolation, the ``item > defaults > built-in`` precedence merge, and the
 mapping from permission presets to concrete ``copilot`` flags.
 """
 
-from __future__ import annotations
-
 import os
 import re
 from enum import StrEnum
@@ -211,6 +209,55 @@ class Item(BaseModel):
         return self.id or self.slug
 
 
+class ResolvedItem(BaseModel):
+    """A fully merged, ready-to-spawn session spec (item > defaults > built-in)."""
+
+    key: str
+    name: str
+    slug: str
+    prompt: str
+    model: str
+    effort: Effort
+    permissions: Permissions
+    branch: str
+    base: str
+    labels: list[str]
+    draft: bool
+    depends_on: list[str]
+    env: dict[str, str]
+    deps: Deps
+    remote: str
+    pr_title: str
+    pr_body: str
+
+    def spawn_argv(self, worktree: str | Path, session_id: str, log_dir: str | Path) -> list[str]:
+        """Build the exact headless ``copilot`` invocation for this session."""
+        argv = [
+            "copilot",
+            "-C",
+            str(worktree),
+            "-p",
+            self.prompt,
+            "--model",
+            self.model,
+            "--effort",
+            str(self.effort),
+            "--output-format",
+            "json",
+            "--session-id",
+            session_id,
+            "--name",
+            self.name,
+            "--log-dir",
+            str(log_dir),
+        ]
+        argv += self.permissions.to_flags()
+        if "--no-ask-user" not in argv:
+            argv.append("--no-ask-user")
+
+        return argv
+
+
 class Plan(BaseModel):
     """A parsed cmux run: a shared system prompt, defaults, and a list of items."""
 
@@ -287,55 +334,6 @@ class Plan(BaseModel):
             )
 
         return resolved
-
-
-class ResolvedItem(BaseModel):
-    """A fully merged, ready-to-spawn session spec (item > defaults > built-in)."""
-
-    key: str
-    name: str
-    slug: str
-    prompt: str
-    model: str
-    effort: Effort
-    permissions: Permissions
-    branch: str
-    base: str
-    labels: list[str]
-    draft: bool
-    depends_on: list[str]
-    env: dict[str, str]
-    deps: Deps
-    remote: str
-    pr_title: str
-    pr_body: str
-
-    def spawn_argv(self, worktree: str | Path, session_id: str, log_dir: str | Path) -> list[str]:
-        """Build the exact headless ``copilot`` invocation for this session."""
-        argv = [
-            "copilot",
-            "-C",
-            str(worktree),
-            "-p",
-            self.prompt,
-            "--model",
-            self.model,
-            "--effort",
-            str(self.effort),
-            "--output-format",
-            "json",
-            "--session-id",
-            session_id,
-            "--name",
-            self.name,
-            "--log-dir",
-            str(log_dir),
-        ]
-        argv += self.permissions.to_flags()
-        if "--no-ask-user" not in argv:
-            argv.append("--no-ask-user")
-
-        return argv
 
 
 class ConfigError(Exception):

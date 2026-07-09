@@ -9,8 +9,6 @@ resumable session store under ``~/.copilot``. The full layout is documented in
 ``CONVENTIONS.md``.
 """
 
-from __future__ import annotations
-
 import time
 from datetime import datetime, timezone
 from pathlib import Path

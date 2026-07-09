@@ -11,8 +11,6 @@ carrying ``sessionId``, ``exitCode`` and ``usage``. The session id and reliable
 token usage appear only in ``result``.
 """
 
-from __future__ import annotations
-
 import json
 from dataclasses import dataclass, field
 from enum import StrEnum

@@ -7,8 +7,6 @@ Searches the ``transcript.jsonl`` files that cmux tees for every session, so it
 is self-contained and does not couple to copilot's internal session store.
 """
 
-from __future__ import annotations
-
 import re
 from dataclasses import dataclass
 from pathlib import Path

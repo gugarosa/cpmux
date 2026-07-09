@@ -3,8 +3,6 @@
 
 """Thin git helpers: repository detection, worktree lifecycle, dependency seeding."""
 
-from __future__ import annotations
-
 import shutil
 import subprocess
 import sys

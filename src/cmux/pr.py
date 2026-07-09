@@ -10,8 +10,6 @@ worktree diff, pushes the branch, and opens exactly one draft PR per item. When
 ambient token is a fine-grained PAT that lacks repository permissions.
 """
 
-from __future__ import annotations
-
 import os
 import subprocess
 from pathlib import Path
@@ -33,7 +31,9 @@ def gh_env(strip_token: bool = True) -> dict[str, str]:
     return env
 
 
-def _run(cmd: list[str], cwd: str | Path, env: dict[str, str], stdin: str | None = None):
+def _run(
+    cmd: list[str], cwd: str | Path, env: dict[str, str], stdin: str | None = None
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, cwd=str(cwd), env=env, input=stdin, capture_output=True, text=True)
 
 

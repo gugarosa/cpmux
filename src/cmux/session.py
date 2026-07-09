@@ -8,8 +8,6 @@ its own process group. Its stdout is tee'd verbatim to the run's
 ``transcript.jsonl`` and folded into a live :class:`~cmux.events.SessionState`.
 """
 
-from __future__ import annotations
-
 import asyncio
 import os
 import signal

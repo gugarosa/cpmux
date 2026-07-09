@@ -8,8 +8,6 @@ headless follow-up turn. Both resume the same ``--session-id``, so the session's
 memory and transcript stay continuous.
 """
 
-from __future__ import annotations
-
 from pathlib import Path
 
 

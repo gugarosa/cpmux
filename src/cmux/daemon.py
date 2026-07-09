@@ -9,15 +9,12 @@ exits cleanly the file is cleared. A stale owner (present but dead) marks a
 crash, so :func:`reconcile` can flip abandoned sessions to a terminal state.
 """
 
-from __future__ import annotations
-
 import json
 import os
 import signal
 import subprocess
 import sys
 import time
-from pathlib import Path
 
 from cmux.events import TERMINAL, Status
 from cmux.logging import get_logger
