@@ -1,8 +1,6 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
-import subprocess
-
 import pytest
 
 from cmux.vcs.git import (
@@ -18,17 +16,8 @@ from cmux.vcs.git import (
 )
 
 
-def _repo(tmp_path):
-    for args in (["init", "-q"], ["config", "user.email", "t@e.com"], ["config", "user.name", "t"]):
-        subprocess.run(["git", *args], cwd=tmp_path, check=True)
-    (tmp_path / "README.md").write_text("x")
-    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "commit", "-qm", "init"], cwd=tmp_path, check=True)
-    return tmp_path
-
-
-def test_is_git_repo_true_for_repo(tmp_path):
-    assert is_git_repo(_repo(tmp_path)) is True
+def test_is_git_repo_true_for_repo(git_repo):
+    assert is_git_repo(git_repo) is True
 
 
 def test_is_git_repo_false_for_non_repo(tmp_path):
@@ -37,8 +26,8 @@ def test_is_git_repo_false_for_non_repo(tmp_path):
     assert is_git_repo(empty) is False
 
 
-def test_repo_root_matches_repo_path(tmp_path):
-    repo = _repo(tmp_path)
+def test_repo_root_matches_repo_path(git_repo):
+    repo = git_repo
     assert repo_root(repo).resolve() == repo.resolve()
 
 
@@ -49,52 +38,52 @@ def test_repo_root_raises_for_non_repo(tmp_path):
         repo_root(empty)
 
 
-def test_resolve_base_falls_back_to_head(tmp_path):
-    repo = _repo(tmp_path)
+def test_resolve_base_falls_back_to_head(git_repo):
+    repo = git_repo
     base, sha = resolve_base(repo, "origin", "main")
     assert base == "main"
     assert len(sha) == 40
     assert all(c in "0123456789abcdef" for c in sha)
 
 
-def test_branch_exists_false_for_missing_branch(tmp_path):
-    assert branch_exists(_repo(tmp_path), "nope") is False
+def test_branch_exists_false_for_missing_branch(git_repo):
+    assert branch_exists(git_repo, "nope") is False
 
 
-def test_add_worktree_creates_dir_and_branch(tmp_path):
-    repo = _repo(tmp_path)
+def test_add_worktree_creates_dir_and_branch(git_repo):
+    repo = git_repo
     _, sha = resolve_base(repo, "origin", "main")
-    add_worktree(repo, tmp_path / "wt", "feature/x", sha)
+    add_worktree(repo, git_repo / "wt", "feature/x", sha)
     assert branch_exists(repo, "feature/x") is True
-    assert (tmp_path / "wt").is_dir()
+    assert (git_repo / "wt").is_dir()
 
 
-def test_has_changes_false_for_clean_worktree(tmp_path):
-    repo = _repo(tmp_path)
+def test_has_changes_false_for_clean_worktree(git_repo):
+    repo = git_repo
     _, sha = resolve_base(repo, "origin", "main")
-    worktree = tmp_path / "wt"
+    worktree = git_repo / "wt"
     add_worktree(repo, worktree, "feature/x", sha)
     assert has_changes(worktree, sha) is False
 
 
-def test_has_changes_true_after_new_file(tmp_path):
-    repo = _repo(tmp_path)
+def test_has_changes_true_after_new_file(git_repo):
+    repo = git_repo
     _, sha = resolve_base(repo, "origin", "main")
-    worktree = tmp_path / "wt"
+    worktree = git_repo / "wt"
     add_worktree(repo, worktree, "feature/x", sha)
     (worktree / "new.txt").write_text("y")
     assert has_changes(worktree, sha) is True
 
 
-def test_remove_worktree_removes_dir(tmp_path):
-    repo = _repo(tmp_path)
+def test_remove_worktree_removes_dir(git_repo):
+    repo = git_repo
     _, sha = resolve_base(repo, "origin", "main")
-    worktree = tmp_path / "wt"
+    worktree = git_repo / "wt"
     add_worktree(repo, worktree, "feature/x", sha)
     remove_worktree(repo, worktree)
     assert not worktree.exists()
 
 
-def test_run_git_raises_on_bad_subcommand(tmp_path):
+def test_run_git_raises_on_bad_subcommand(git_repo):
     with pytest.raises(GitError):
-        run_git(["not-a-real-subcommand"], cwd=_repo(tmp_path))
+        run_git(["not-a-real-subcommand"], cwd=git_repo)

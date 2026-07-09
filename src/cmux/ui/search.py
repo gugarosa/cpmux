@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from cmux.events import parse_line
+from cmux.events import event_data, parse_line
 
 _SNIPPET_BEFORE = 30
 _SNIPPET_AFTER = 80
@@ -38,7 +38,7 @@ def _messages(transcript_path: str | Path) -> list[tuple[str, str]]:
         if event is None:
             continue
         event_type = event.get("type", "")
-        data = event.get("data") if isinstance(event.get("data"), dict) else event
+        data = event_data(event)
         if event_type == "user.message":
             messages.append(("user", str(data.get("content", ""))))
         elif event_type == "assistant.message":

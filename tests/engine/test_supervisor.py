@@ -1,21 +1,11 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
-import subprocess
 from pathlib import Path
 
 from cmux.config import Plan
 from cmux.engine.supervisor import Options, Supervisor
 from cmux.vcs import git
-
-
-def _repo(tmp_path):
-    for args in (["init", "-q"], ["config", "user.email", "t@e.com"], ["config", "user.name", "t"]):
-        subprocess.run(["git", *args], cwd=tmp_path, check=True)
-    (tmp_path / "README.md").write_text("x")
-    subprocess.run(["git", "add", "-A"], cwd=tmp_path, check=True)
-    subprocess.run(["git", "commit", "-qm", "init"], cwd=tmp_path, check=True)
-    return tmp_path
 
 
 def _plan():
@@ -30,22 +20,22 @@ def test_options_defaults_are_conservative():
     assert options.deps_override is None
 
 
-def test_create_builds_supervisor_from_plan(tmp_path):
-    repo = _repo(tmp_path)
+def test_create_builds_supervisor_from_plan(git_repo):
+    repo = git_repo
     sup = Supervisor.create(_plan(), str(repo), Options())
     assert isinstance(sup.run_id, str)
     assert sup.run_id
     assert len(sup.resolved) == 2
 
 
-def test_create_uses_plan_concurrency_when_option_none(tmp_path):
-    repo = _repo(tmp_path)
+def test_create_uses_plan_concurrency_when_option_none(git_repo):
+    repo = git_repo
     sup = Supervisor.create(_plan(), str(repo), Options())
     assert sup.concurrency == 3
 
 
-def test_prepare_creates_one_record_per_item(tmp_path):
-    repo = _repo(tmp_path)
+def test_prepare_creates_one_record_per_item(git_repo):
+    repo = git_repo
     sup = Supervisor.create(_plan(), str(repo), Options())
     sup.prepare()
     assert len(sup.records) == len(sup.resolved)
@@ -53,8 +43,8 @@ def test_prepare_creates_one_record_per_item(tmp_path):
         assert item.key in sup.records
 
 
-def test_prepare_records_have_session_and_worktree(tmp_path):
-    repo = _repo(tmp_path)
+def test_prepare_records_have_session_and_worktree(git_repo):
+    repo = git_repo
     sup = Supervisor.create(_plan(), str(repo), Options())
     sup.prepare()
     for record in sup.records.values():
@@ -63,23 +53,23 @@ def test_prepare_records_have_session_and_worktree(tmp_path):
         assert Path(record.worktree).exists()
 
 
-def test_prepare_writes_manifest(tmp_path):
-    repo = _repo(tmp_path)
+def test_prepare_writes_manifest(git_repo):
+    repo = git_repo
     sup = Supervisor.create(_plan(), str(repo), Options())
     sup.prepare()
     assert sup.paths.manifest.exists()
 
 
-def test_prepare_creates_branch_per_item(tmp_path):
-    repo = _repo(tmp_path)
+def test_prepare_creates_branch_per_item(git_repo):
+    repo = git_repo
     sup = Supervisor.create(_plan(), str(repo), Options())
     sup.prepare()
     for record in sup.records.values():
         assert git.branch_exists(repo, record.branch) is True
 
 
-def test_from_run_reloads_resolved_and_records(tmp_path):
-    repo = _repo(tmp_path)
+def test_from_run_reloads_resolved_and_records(git_repo):
+    repo = git_repo
     sup = Supervisor.create(_plan(), str(repo), Options())
     sup.prepare()
 

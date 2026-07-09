@@ -27,33 +27,9 @@ from cmux.engine import daemon
 from cmux.engine.interact import followup_argv, resume_interactive_argv
 from cmux.engine.session import SessionRunner
 from cmux.engine.store import RunPaths, SessionRecord, load_run
-from cmux.events import Status, parse_line
+from cmux.events import parse_line
+from cmux.ui.render import STATUS_COLOR, event_text
 from cmux.ui.search import search_transcripts
-
-_STATUS_STYLE = {
-    Status.DONE: "green",
-    Status.NO_CHANGES: "dim",
-    Status.FAILED: "red",
-    Status.KILLED: "red",
-    Status.TIMED_OUT: "red",
-}
-
-
-def _event_text(event: dict) -> Text | None:
-    event_type = event.get("type", "")
-    data = event.get("data") if isinstance(event.get("data"), dict) else event
-
-    if event_type == "user.message":
-        return Text.assemble(("🧑 user ", "bold blue"), str(data.get("content", "")).strip())
-    if event_type == "assistant.message":
-        text = str(data.get("content", "")).strip()
-        return Text.assemble(("🤖 assistant ", "bold green"), text) if text else None
-    if event_type == "tool.execution_start":
-        return Text.assemble(("🔧 tool ", "cyan"), str(data.get("toolName") or data.get("name") or ""))
-    if event_type == "result":
-        return Text(f"— result exit={event.get('exitCode')}", style="dim")
-
-    return None
 
 
 class SearchScreen(ModalScreen[str | None]):
@@ -165,7 +141,7 @@ class CmuxApp(App):
         table.clear()
 
         for record in self.records:
-            style = _STATUS_STYLE.get(record.status, "cyan")
+            style = STATUS_COLOR.get(record.status, "cyan")
             table.add_row(record.key, Text(record.status, style=style), record.model, record.pr_url or record.branch)
 
         if table.row_count:
@@ -203,7 +179,7 @@ class CmuxApp(App):
             event = parse_line(line)
             if event is None:
                 continue
-            renderable = _event_text(event)
+            renderable = event_text(event)
             if renderable is not None:
                 log.write(renderable)
 

@@ -26,8 +26,9 @@ from cmux.engine.store import (
     load_run,
 )
 from cmux.engine.supervisor import Options, Supervisor
-from cmux.events import TERMINAL, Status, parse_line
+from cmux.events import TERMINAL, Status, event_data, parse_line
 from cmux.logging import get_logger
+from cmux.ui.render import STATUS_COLOR, event_text
 from cmux.ui.search import search_transcripts
 from cmux.vcs.git import GitError, prune_worktrees, remove_worktree
 
@@ -38,8 +39,6 @@ app = typer.Typer(
 )
 console = Console()
 logger = get_logger(__name__)
-
-_STATUS_COLOR = {"done": "green", "no_changes": "dim", "failed": "red", "killed": "red", "timed_out": "red"}
 
 
 def _version(value: bool) -> None:
@@ -65,12 +64,17 @@ def _load(file: Path) -> Plan:
         raise typer.Exit(1)
 
 
-def _resolve_record(run: str | None, key: str) -> tuple[RunPaths, SessionRecord]:
-    run_id = run or latest_run_id(Path("."))
+def _run_id_or_exit(run: str | None, root: Path = Path(".")) -> str:
+    run_id = run or latest_run_id(root)
     if not run_id:
         logger.error("no cmux runs found here.")
         raise typer.Exit(1)
 
+    return run_id
+
+
+def _resolve_record(run: str | None, key: str) -> tuple[RunPaths, SessionRecord]:
+    run_id = _run_id_or_exit(run)
     paths = RunPaths(Path("."), run_id)
     if not paths.record_file(key).exists():
         logger.error(f"no session `{key}` in run `{run_id}`.")
@@ -192,10 +196,7 @@ def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: 
     """Live-monitor a run's sessions read-only (Ctrl-C to exit)."""
 
     root = Path(".")
-    run_id = run or latest_run_id(root)
-    if not run_id:
-        logger.error("no cmux runs found here.")
-        raise typer.Exit(1)
+    run_id = _run_id_or_exit(run, root)
 
     paths = RunPaths(root, run_id)
 
@@ -216,10 +217,7 @@ def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: 
 def dash(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
     """Open the interactive dashboard for a run."""
 
-    run_id = run or latest_run_id(Path("."))
-    if not run_id:
-        logger.error("no cmux runs found here.")
-        raise typer.Exit(1)
+    run_id = _run_id_or_exit(run)
 
     from cmux.ui.dashboard import CmuxApp
 
@@ -282,10 +280,7 @@ def logs(
 ) -> None:
     """Print a session's transcript."""
 
-    run_id = run or latest_run_id(Path("."))
-    if not run_id:
-        logger.error("no cmux runs found here.")
-        raise typer.Exit(1)
+    run_id = _run_id_or_exit(run)
 
     transcript = RunPaths(Path("."), run_id).transcript(key)
     if not transcript.exists():
@@ -337,10 +332,7 @@ def rm(
 ) -> None:
     """Remove the git worktrees for a run."""
 
-    run_id = run or latest_run_id(Path("."))
-    if not run_id:
-        logger.error("no cmux runs found here.")
-        raise typer.Exit(1)
+    run_id = _run_id_or_exit(run)
 
     manifest, records = load_run(Path("."), run_id)
     if not force and not typer.confirm(f"Remove {len(records)} worktree(s) for run {run_id}?"):
@@ -360,10 +352,7 @@ def down(
     """Stop a run's background daemon and any live sessions."""
 
     root = Path(".")
-    run_id = run or latest_run_id(root)
-    if not run_id:
-        logger.error("no cmux runs found here.")
-        raise typer.Exit(1)
+    run_id = _run_id_or_exit(run, root)
 
     _, records = load_run(root, run_id)
     if not yes and not typer.confirm(f"Stop run {run_id}?"):
@@ -397,19 +386,9 @@ def _daemon_command(run_id: str = typer.Argument(...)) -> None:
 
 
 def _render_event(event: dict) -> None:
-    event_type = event.get("type", "")
-    data = event.get("data") if isinstance(event.get("data"), dict) else event
-
-    if event_type == "user.message":
-        console.print(f"[bold blue]🧑 user[/bold blue] {escape(str(data.get('content', '')).strip())}")
-    elif event_type == "assistant.message":
-        text = str(data.get("content", "")).strip()
-        if text:
-            console.print(f"[bold green]🤖 assistant[/bold green] {escape(text)}")
-    elif event_type == "tool.execution_start":
-        console.print(f"[cyan]🔧 tool[/cyan] {escape(str(data.get('toolName') or data.get('name') or ''))}")
-    elif event_type == "result":
-        console.print(f"[dim]— result exit={event.get('exitCode')}[/dim]")
+    text = event_text(event)
+    if text is not None:
+        console.print(text)
 
 
 def _emit_transcript(text: str, raw: bool) -> int:
@@ -443,7 +422,7 @@ def _tail_last_assistant(transcript: Path) -> str:
     for line in transcript.read_text(encoding="utf-8").splitlines():
         event = parse_line(line)
         if event is not None and event.get("type") == "assistant.message":
-            data = event.get("data") if isinstance(event.get("data"), dict) else event
+            data = event_data(event)
             text = str(data.get("content", ""))
             if text:
                 last = text
@@ -460,7 +439,7 @@ def _monitor_table(run_id: str, records: list[SessionRecord], paths: RunPaths) -
     table.add_column("branch / PR", no_wrap=True)
 
     for record in records:
-        color = _STATUS_COLOR.get(record.status, "cyan")
+        color = STATUS_COLOR.get(record.status, "cyan")
         detail = record.error.splitlines()[0][:80] if record.status == Status.FAILED and record.error else ""
         if record.status not in TERMINAL:
             detail = _tail_last_assistant(paths.transcript(record.key))
@@ -476,10 +455,7 @@ def _monitor_table(run_id: str, records: list[SessionRecord], paths: RunPaths) -
 
 
 def _print_summary(root: Path, run_id: str | None) -> None:
-    run_id = run_id or latest_run_id(root)
-    if not run_id:
-        logger.error("no cmux runs found here.")
-        raise typer.Exit(1)
+    run_id = _run_id_or_exit(run_id, root)
 
     _, records = load_run(root, run_id)
     records = daemon.reconcile(RunPaths(root, run_id), records)
@@ -492,7 +468,7 @@ def _print_summary(root: Path, run_id: str | None) -> None:
     table.add_column("PR")
 
     for record in records:
-        color = _STATUS_COLOR.get(record.status, "cyan")
+        color = STATUS_COLOR.get(record.status, "cyan")
         table.add_row(
             record.key, f"[{color}]{record.status}[/{color}]", record.model, record.branch, record.pr_url or "-"
         )

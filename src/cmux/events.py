@@ -36,6 +36,22 @@ def _first(data: dict[str, Any], *keys: str, default: str = "") -> str:
     return default
 
 
+def event_data(event: dict[str, Any]) -> dict[str, Any]:
+    """Unwrap a JSONL event's nested payload, falling back to the event itself.
+
+    Args:
+        event: Decoded JSONL event.
+
+    Returns:
+        The nested `data` mapping when present, otherwise the event.
+
+    """
+
+    data = event.get("data")
+
+    return data if isinstance(data, dict) else event
+
+
 @dataclass
 class SessionState:
     """Live, reduced view of one copilot session, updated event by event.
@@ -86,7 +102,7 @@ def apply_event(state: SessionState, event: dict[str, Any]) -> SessionState:
     """
 
     event_type = event.get("type", "")
-    data = event.get("data") if isinstance(event.get("data"), dict) else event
+    data = event_data(event)
 
     if event_type == "user.message":
         state.status = Status.STARTING

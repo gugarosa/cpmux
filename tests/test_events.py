@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
-from cmux.events import SessionState, Status, apply_event, parse_line
+from cmux.events import SessionState, Status, apply_event, event_data, parse_line
 
 # Real copilot JSONL sequence, trimmed
 SAMPLE = [
@@ -54,3 +54,10 @@ def test_parse_line_tolerant():
     assert parse_line("   ") is None
     assert parse_line("not json") is None
     assert parse_line('{"type":"x"}') == {"type": "x"}
+
+
+def test_event_data_unwraps_nested_payload_or_returns_event():
+    assert event_data({"type": "x", "data": {"content": "hi"}}) == {"content": "hi"}
+    bare = {"type": "result", "exitCode": 0}
+    assert event_data(bare) is bare
+    assert event_data({"type": "x", "data": "not-a-dict"}) == {"type": "x", "data": "not-a-dict"}
