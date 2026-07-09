@@ -247,8 +247,11 @@ class Supervisor:
                 record.files_modified = state.files_modified
                 record.error = state.error
                 record.status = state.status
-                if state.status == Status.DONE and self.options.open_pr:
-                    await self._open_pr(item, record)
+                if state.status == Status.DONE:
+                    if self.options.open_pr:
+                        await self._open_pr(item, record)
+                    else:
+                        await self._commit_local(item, record)
                 self.paths.write_record(record)
                 self._refresh()
         finally:
@@ -288,6 +291,21 @@ class Supervisor:
             record.status = Status.FAILED
             record.error = str(exc)
             logger.error(f"`{item.key}` pull request failed: {exc}.")
+
+    async def _commit_local(self, item: ResolvedItem, record: SessionRecord) -> None:
+        worktree = self.paths.worktree(item.key)
+        try:
+            committed = await asyncio.to_thread(
+                pr.commit_all,
+                worktree,
+                f"{item.pr_title}\n\ncmux item: {item.key}",
+                pr.gh_env(self.options.strip_github_token),
+            )
+            record.status = Status.DONE if committed else Status.NO_CHANGES
+        except pr.PRError as exc:
+            record.status = Status.FAILED
+            record.error = str(exc)
+            logger.error(f"`{item.key}` local commit failed: {exc}.")
 
     def _on_update(self, key: str, state: SessionState, event: dict) -> None:
         self.live_states[key] = state

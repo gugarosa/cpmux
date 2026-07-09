@@ -1,10 +1,12 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
+import asyncio
 from pathlib import Path
 
 from cmux.config import Plan
 from cmux.engine.supervisor import Options, Supervisor
+from cmux.events import Status
 from cmux.vcs import git
 
 
@@ -78,3 +80,28 @@ def test_from_run_reloads_resolved_and_records(git_repo):
     assert sorted(loaded.records) == sorted(sup.records)
     for key, record in sup.records.items():
         assert loaded.records[key].branch == record.branch
+
+
+def test_commit_local_commits_worktree_and_marks_done(git_repo):
+    sup = Supervisor.create(_plan(), str(git_repo), Options(open_pr=False))
+    sup.prepare()
+    item = sup.resolved[0]
+    record = sup.records[item.key]
+    (Path(record.worktree) / "new.txt").write_text("hi")
+
+    asyncio.run(sup._commit_local(item, record))
+
+    assert record.status == Status.DONE
+    assert git.run_git(["status", "--porcelain"], cwd=record.worktree).stdout.strip() == ""
+    assert git.run_git(["rev-parse", "HEAD"], cwd=record.worktree).stdout.strip() != record.base_sha
+
+
+def test_commit_local_marks_no_changes_when_clean(git_repo):
+    sup = Supervisor.create(_plan(), str(git_repo), Options(open_pr=False))
+    sup.prepare()
+    item = sup.resolved[0]
+    record = sup.records[item.key]
+
+    asyncio.run(sup._commit_local(item, record))
+
+    assert record.status == Status.NO_CHANGES
