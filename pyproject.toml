@@ -1,0 +1,35 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "copilot-mux"
+version = "0.0.1"
+description = "cmux — a declarative, guided multiplexer for GitHub Copilot CLI agents (tmux for copilot sessions)."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Gustavo de Rosa" }]
+keywords = ["copilot", "cli", "tmux", "multiplexer", "agents", "orchestration", "worktree"]
+dependencies = [
+    "typer>=0.12",
+    "pydantic>=2.5",
+    "pyyaml>=6.0",
+    "rich>=13.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+cmux = "cmux.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/gugarosa/cmux"
+Repository = "https://github.com/gugarosa/cmux"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cmux"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

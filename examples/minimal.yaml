@@ -1,0 +1,10 @@
+version: 1
+
+system: |
+  You are a careful engineer. Make the smallest change that fully fixes the
+  issue, follow the surrounding conventions, and add or update a test.
+
+items:
+  - Fix the off-by-one error in the pagination helper
+  - Add a --json flag to the status command
+  - Correct the broken install link in the README

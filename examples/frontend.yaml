@@ -1,0 +1,50 @@
+version: 1
+
+# The realistic 12-issue parallel run: mostly bare-string tasks, a couple of
+# items opt into per-item overrides (model, labels, paths, draft).
+system: |
+  You are a senior frontend engineer on the Acme web app (React 18 + TypeScript,
+  Vite, Tailwind, React Query, Vitest). Conventions:
+    - Function components + hooks only; no class components.
+    - Co-locate tests as *.test.tsx next to the component.
+    - Keep the change single-purpose.
+  Run `npm run lint && npm test` before finishing.
+
+defaults:
+  model: gpt-5.5
+  effort: medium
+  permissions: edit          # edit files + run tests/git locally; never push, no network
+  base: main
+  branch_template: cmux/{slug}
+  concurrency: 6
+  deps: symlink
+  pr:
+    draft: true
+    labels: [frontend, cmux]
+
+items:
+  - Fix layout shift on the pricing page caused by late-loading fonts
+  - Make the mobile nav drawer trap focus and close on Escape (a11y)
+  - Replace the hand-rolled fetch in useProjects with React Query
+  - Memoize the expensive <Chart/> render; it re-renders on every keystroke
+  - Fix the dark-mode contrast on secondary buttons (fails WCAG AA)
+  - Add optimistic UI to the "star repo" button and roll back on error
+  - The date picker breaks in Safari 16 — normalize to ISO strings
+  - Paginate the notifications list for speed (currently renders 500 rows)
+  - Add loading skeletons to the dashboard cards
+
+  - name: Migrate the settings form to react-hook-form + zod
+    prompt: >
+      Rewrite ProfileForm.tsx to use react-hook-form with a zod schema for
+      validation. Preserve current field behavior and error copy.
+    model: claude-opus-4.8
+    effort: high
+    paths: [src/components/settings]
+    labels: [refactor]
+
+  - name: Security — sanitize markdown in comments (XSS)
+    prompt: >
+      Comments render raw markdown via dangerouslySetInnerHTML. Sanitize with
+      DOMPurify and add a test proving <script> is stripped.
+    labels: [security]
+    draft: false

@@ -1,0 +1,18 @@
+# cmux runtime state (worktrees, transcripts, run manifests)
+.cmux/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
