@@ -201,6 +201,19 @@ def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: 
 
 
 @app.command()
+def dash(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
+    """Open the interactive dashboard for a run."""
+    run_id = run or latest_run_id(Path("."))
+    if not run_id:
+        logger.error("no cmux runs found here.")
+        raise typer.Exit(1)
+
+    from cmux.dashboard import CmuxApp
+
+    CmuxApp(".", run_id).run()
+
+
+@app.command()
 def enter(
     key: str = typer.Argument(..., help="Item key to open interactively."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),

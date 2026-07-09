@@ -49,6 +49,7 @@ cmux up issues.yaml --dry-run     # resolve and print the plan and copilot comma
 cmux up issues.yaml               # spawn the fleet in the foreground (asks first)
 cmux up issues.yaml --detach      # spawn a background daemon and return immediately
 cmux attach                       # live-monitor a run (reconnects to a background run)
+cmux dash                         # interactive dashboard (list + live transcript + search)
 cmux ls                           # status of the latest run
 cmux enter migrate-settings-form  # drop into an interactive copilot session
 cmux send migrate-settings-form "also add a test"   # append a follow-up turn
