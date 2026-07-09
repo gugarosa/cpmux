@@ -3,25 +3,33 @@
 
 """cmux command-line interface (Typer).
 
-v0 verbs: ``up`` (spawn a run), ``ls`` (status of a run), ``logs`` (a session
-transcript), ``rm`` (clean up worktrees). A background daemon plus the
-interactive dashboard arrive in v1.
+Verbs: ``up`` (spawn a run), ``ls`` (status), ``attach`` (live monitor), ``enter``
+(interactive resume), ``send`` (follow-up turn), ``logs`` (transcript), ``search``
+(cross-session), and ``rm`` (clean up worktrees). A background daemon that lets a
+run outlive its terminal arrives in v1b.
 """
 
 import asyncio
+import os
+import shutil
+import time
 from pathlib import Path
 
 import typer
 from rich.console import Console
+from rich.live import Live
 from rich.markup import escape
 from rich.table import Table
 
 from cmux import __version__
 from cmux.config import ConfigError, Deps, Plan, ResolvedItem, load_plan
-from cmux.events import parse_line
+from cmux.events import TERMINAL, Status, parse_line
 from cmux.gitutil import GitError, prune_worktrees, remove_worktree
+from cmux.interact import followup_argv, resume_interactive_argv
 from cmux.logging import get_logger
-from cmux.state import RunPaths, latest_run_id, load_run
+from cmux.search import search_transcripts
+from cmux.session import SessionRunner
+from cmux.state import RunPaths, SessionRecord, all_run_ids, latest_run_id, load_run
 from cmux.supervisor import Options, Supervisor
 
 app = typer.Typer(
@@ -31,6 +39,8 @@ app = typer.Typer(
 )
 console = Console()
 logger = get_logger(__name__)
+
+_STATUS_COLOR = {"done": "green", "no_changes": "dim", "failed": "red"}
 
 
 def _version(value: bool) -> None:
@@ -54,6 +64,20 @@ def _load(file: Path) -> Plan:
     except ConfigError as exc:
         logger.error(str(exc))
         raise typer.Exit(1)
+
+
+def _resolve_record(run: str | None, key: str) -> tuple[RunPaths, SessionRecord]:
+    run_id = run or latest_run_id(Path("."))
+    if not run_id:
+        logger.error("no cmux runs found here.")
+        raise typer.Exit(1)
+
+    paths = RunPaths(Path("."), run_id)
+    if not paths.record_file(key).exists():
+        logger.error(f"no session `{key}` in run `{run_id}`.")
+        raise typer.Exit(1)
+
+    return paths, paths.read_record(key)
 
 
 def _display_argv(argv: list[str]) -> str:
@@ -143,10 +167,78 @@ def ls(run: str | None = typer.Option(None, "--run", help="Run id (default: late
 
 
 @app.command()
+def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
+    """Live-monitor a run's sessions read-only (Ctrl-C to exit)."""
+    root = Path(".")
+    run_id = run or latest_run_id(root)
+    if not run_id:
+        logger.error("no cmux runs found here.")
+        raise typer.Exit(1)
+
+    paths = RunPaths(root, run_id)
+    try:
+        with Live(console=console, refresh_per_second=4) as live:
+            while True:
+                _, records = load_run(root, run_id)
+                live.update(_monitor_table(run_id, records, paths))
+                if all(r.status in TERMINAL for r in records):
+                    break
+                time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
+
+
+@app.command()
+def enter(
+    key: str = typer.Argument(..., help="Item key to open interactively."),
+    run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
+) -> None:
+    """Open an interactive Copilot session for an item, resuming it in place."""
+    _, record = _resolve_record(run, key)
+    if shutil.which("copilot") is None:
+        logger.error("`copilot` is not on PATH.")
+        raise typer.Exit(1)
+    if not Path(record.worktree).exists():
+        logger.error(f"`{record.worktree}` worktree is gone, the run may have been cleaned.")
+        raise typer.Exit(1)
+
+    os.execvp("copilot", resume_interactive_argv(record.session_id, record.worktree))
+
+
+@app.command()
+def send(
+    key: str = typer.Argument(..., help="Item key to message."),
+    message: str = typer.Argument(..., help="Follow-up prompt to append to the session."),
+    run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
+) -> None:
+    """Append a follow-up turn to an item's session and print the reply."""
+    paths, record = _resolve_record(run, key)
+    if not Path(record.worktree).exists():
+        logger.error(f"`{record.worktree}` worktree is gone, the run may have been cleaned.")
+        raise typer.Exit(1)
+
+    argv = followup_argv(record.session_id, record.worktree, record.model, record.permission_flags, message)
+    state = asyncio.run(SessionRunner(key, argv, paths.transcript(key)).run())
+
+    record.status = state.status
+    record.exit_code = state.exit_code
+    record.error = state.error
+    if state.premium_requests is not None:
+        record.premium_requests = state.premium_requests
+    paths.write_record(record)
+
+    if state.last_text:
+        console.print(f"[bold green]🤖 assistant[/bold green] {escape(state.last_text)}")
+    else:
+        console.print(f"[dim]session {record.status}[/dim]")
+
+
+@app.command()
 def logs(
     key: str = typer.Argument(..., help="Item key to show the transcript for."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
     raw: bool = typer.Option(False, "--raw", help="Print the raw JSONL transcript."),
+    follow: bool = typer.Option(False, "--follow", "-f", help="Stream new events as they arrive."),
 ) -> None:
     """Print a session's transcript."""
     run_id = run or latest_run_id(Path("."))
@@ -159,13 +251,37 @@ def logs(
         logger.error(f"no transcript for `{key}` in run `{run_id}`.")
         raise typer.Exit(1)
 
-    for line in transcript.read_text(encoding="utf-8").splitlines():
-        if raw:
-            typer.echo(line)
-            continue
-        ev = parse_line(line)
-        if ev is not None:
-            _render_event(ev)
+    consumed = _emit_transcript(transcript.read_text(encoding="utf-8"), raw)
+    if follow:
+        _follow_transcript(transcript, raw, consumed)
+
+
+@app.command()
+def search(
+    query: str = typer.Argument(..., help="Text (or regex with --regex) to find."),
+    run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
+    all_runs: bool = typer.Option(False, "--all", help="Search every run, not just the latest."),
+    regex: bool = typer.Option(False, "--regex", help="Treat the query as a regular expression."),
+) -> None:
+    """Search across session transcripts for matching text."""
+    root = Path(".")
+    run_ids = all_run_ids(root) if all_runs else [r for r in [run or latest_run_id(root)] if r]
+    if not run_ids:
+        logger.error("no cmux runs found here.")
+        raise typer.Exit(1)
+
+    items: list[tuple[str, Path]] = []
+    for run_id in run_ids:
+        paths = RunPaths(root, run_id)
+        _, records = load_run(root, run_id)
+        for record in records:
+            label = f"{run_id}/{record.key}" if all_runs else record.key
+            items.append((label, paths.transcript(record.key)))
+
+    hits = search_transcripts(items, query, regex)
+    for hit in hits:
+        console.print(f"[cyan]{hit.label}[/cyan] [dim]{hit.role}[/dim] {escape(hit.snippet)}")
+    console.print(f"[dim]{len(hits)} hit(s)[/dim]")
 
 
 @app.command()
@@ -204,6 +320,68 @@ def _render_event(ev: dict) -> None:
         console.print(f"[dim]— result exit={ev.get('exitCode')}[/dim]")
 
 
+def _emit_transcript(text: str, raw: bool) -> int:
+    boundary = text.rfind("\n") + 1
+    for line in text[:boundary].splitlines():
+        if raw:
+            typer.echo(line)
+        else:
+            ev = parse_line(line)
+            if ev is not None:
+                _render_event(ev)
+    return boundary
+
+
+def _follow_transcript(transcript: Path, raw: bool, consumed: int) -> None:
+    try:
+        while True:
+            text = transcript.read_text(encoding="utf-8")
+            consumed += _emit_transcript(text[consumed:], raw)
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
+
+
+def _tail_last_assistant(transcript: Path) -> str:
+    if not transcript.exists():
+        return ""
+
+    last = ""
+    for line in transcript.read_text(encoding="utf-8").splitlines():
+        ev = parse_line(line)
+        if ev is not None and ev.get("type") == "assistant.message":
+            data = ev.get("data") if isinstance(ev.get("data"), dict) else ev
+            text = str(data.get("content", ""))
+            if text:
+                last = text
+
+    return " ".join(last.split())[:80]
+
+
+def _monitor_table(run_id: str, records: list[SessionRecord], paths: RunPaths) -> Table:
+    table = Table(title=f"cmux · run {run_id}", expand=True)
+    table.add_column("item", style="bold", no_wrap=True)
+    table.add_column("status", no_wrap=True)
+    table.add_column("model", no_wrap=True)
+    table.add_column("detail", overflow="ellipsis")
+    table.add_column("branch / PR", no_wrap=True)
+
+    for record in records:
+        color = _STATUS_COLOR.get(record.status, "cyan")
+        detail = record.error.splitlines()[0][:80] if record.status == Status.FAILED and record.error else ""
+        if record.status not in TERMINAL:
+            detail = _tail_last_assistant(paths.transcript(record.key))
+        table.add_row(
+            record.key,
+            f"[{color}]{record.status}[/{color}]",
+            record.model,
+            detail,
+            record.pr_url or record.branch,
+        )
+
+    return table
+
+
 def _print_summary(root: Path, run_id: str | None) -> None:
     run_id = run_id or latest_run_id(root)
     if not run_id:
@@ -218,7 +396,7 @@ def _print_summary(root: Path, run_id: str | None) -> None:
     table.add_column("branch")
     table.add_column("PR")
     for record in records:
-        color = {"done": "green", "no_changes": "dim", "failed": "red"}.get(record.status, "cyan")
+        color = _STATUS_COLOR.get(record.status, "cyan")
         table.add_row(
             record.key, f"[{color}]{record.status}[/{color}]", record.model, record.branch, record.pr_url or "-"
         )

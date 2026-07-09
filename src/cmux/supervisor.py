@@ -92,6 +92,7 @@ class Supervisor:
                 model=it.model,
                 session_id=str(uuid4()),
                 worktree=str(self.paths.worktree(it.key)),
+                permission_flags=it.permissions.to_flags(),
             )
             self.records[it.key] = record
             self.paths.ensure_session_dirs(it.key)

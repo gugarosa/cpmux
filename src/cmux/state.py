@@ -43,6 +43,7 @@ class SessionRecord(BaseModel):
     model: str
     session_id: str
     worktree: str
+    permission_flags: list[str] = Field(default_factory=list)
     status: Status = Status.PENDING
     exit_code: int | None = None
     pr_url: str | None = None
@@ -132,15 +133,20 @@ class RunPaths:
         return SessionRecord.model_validate_json(self.record_file(key).read_text())
 
 
-def latest_run_id(repo_root: str | Path) -> str | None:
-    """Return the most recent run id under ``<repo_root>/.cmux``, if any."""
+def all_run_ids(repo_root: str | Path) -> list[str]:
+    """Return every run id under ``<repo_root>/.cmux``, newest first."""
     runs = Path(repo_root) / CMUX_DIR / "runs"
     if not runs.is_dir():
-        return None
+        return []
 
-    candidates = sorted((p.name for p in runs.iterdir() if p.is_dir()), reverse=True)
+    return sorted((p.name for p in runs.iterdir() if p.is_dir()), reverse=True)
 
-    return candidates[0] if candidates else None
+
+def latest_run_id(repo_root: str | Path) -> str | None:
+    """Return the most recent run id under ``<repo_root>/.cmux``, if any."""
+    ids = all_run_ids(repo_root)
+
+    return ids[0] if ids else None
 
 
 def load_run(repo_root: str | Path, run_id: str) -> tuple[RunManifest, list[SessionRecord]]:
