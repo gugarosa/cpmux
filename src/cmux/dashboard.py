@@ -121,6 +121,7 @@ class CmuxApp(App):
 
     def __init__(self, start_path: str, run_id: str) -> None:
         super().__init__()
+
         self.start_path = Path(start_path)
         self.run_id = run_id
         self.paths = RunPaths(start_path, run_id)
@@ -130,9 +131,11 @@ class CmuxApp(App):
 
     def compose(self) -> ComposeResult:
         yield Header()
+
         with Horizontal():
             yield DataTable(id="sessions")
             yield RichLog(id="transcript", wrap=True)
+
         yield Footer()
 
     def on_mount(self) -> None:
@@ -146,6 +149,7 @@ class CmuxApp(App):
 
     def reload(self) -> None:
         """Reload records from disk, reconcile crashes, and refresh both panes."""
+
         try:
             _, records = load_run(self.start_path, self.run_id)
         except FileNotFoundError:
@@ -208,18 +212,22 @@ class CmuxApp(App):
 
     def action_cursor_down(self) -> None:
         table = self.query_one("#sessions", DataTable)
+
         table.move_cursor(row=min(table.cursor_row + 1, table.row_count - 1))
 
     def action_cursor_up(self) -> None:
         table = self.query_one("#sessions", DataTable)
+
         table.move_cursor(row=max(table.cursor_row - 1, 0))
 
     def action_refresh(self) -> None:
         """Reload the run immediately."""
+
         self.reload()
 
     def action_search(self) -> None:
         """Open the cross-session search overlay."""
+
         items = [(record.key, self.paths.transcript(record.key)) for record in self.records]
 
         self.push_screen(SearchScreen(items), self._jump_to_key)
@@ -235,6 +243,7 @@ class CmuxApp(App):
 
     def action_enter(self) -> None:
         """Suspend the dashboard and drop into an interactive copilot session."""
+
         record = self._selected_record()
         if record is None:
             return
@@ -252,6 +261,7 @@ class CmuxApp(App):
 
     def action_send(self) -> None:
         """Prompt for a follow-up message and append a turn to the selected session."""
+
         record = self._selected_record()
         if record is None:
             return

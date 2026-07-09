@@ -20,6 +20,7 @@ def gh_env(strip_token: bool = True) -> dict[str, str]:
         The environment mapping for the subprocess.
 
     """
+
     env = os.environ.copy()
     env.setdefault("GH_PROMPT_DISABLED", "1")
     env.setdefault("GH_NO_UPDATE_NOTIFIER", "1")
@@ -52,6 +53,7 @@ def commit_all(worktree: str | Path, message: str, env: dict[str, str]) -> bool:
         PRError: If `git commit` fails.
 
     """
+
     _run(["git", "add", "-A"], worktree, env)
     if _run(["git", "diff", "--cached", "--quiet"], worktree, env).returncode == 0:
         return False
@@ -76,6 +78,7 @@ def push_branch(worktree: str | Path, remote: str, branch: str, env: dict[str, s
         PRError: If `git push` fails.
 
     """
+
     proc = _run(["git", "push", "-u", remote, f"HEAD:refs/heads/{branch}"], worktree, env)
     if proc.returncode != 0:
         raise PRError(f"`git push` failed: {proc.stderr.strip()}.")
@@ -94,6 +97,7 @@ def existing_pr_url(worktree: str | Path, base: str, branch: str, env: dict[str,
         The open PR URL, or `None` if none exists.
 
     """
+
     proc = _run(
         [
             "gh",
@@ -148,6 +152,7 @@ def create_pr(
         PRError: If `gh pr create` fails.
 
     """
+
     cmd = ["gh", "pr", "create", "--base", base, "--head", branch, "--title", title, "--body-file", "-"]
     if draft:
         cmd.append("--draft")
@@ -194,6 +199,7 @@ def open_pull_request(
         PRError: If a commit, push, or create step fails.
 
     """
+
     env = gh_env(strip_token)
 
     commit_all(worktree, commit_message, env)

@@ -27,6 +27,7 @@ def get_logger(logger_name: str) -> Logger:
         Configured logger with a single stderr handler.
 
     """
+
     logger = logging.getLogger(logger_name)
     logger.setLevel(LOG_LEVEL)
 

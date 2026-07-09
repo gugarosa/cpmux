@@ -13,7 +13,14 @@ _SNIPPET_AFTER = 80
 
 @dataclass
 class Hit:
-    """One search match: session label, role, and text snippet."""
+    """One search match: session label, role, and text snippet.
+
+    Attributes:
+        label: Session label the match came from.
+        role: Message role that produced the match.
+        snippet: Text snippet surrounding the match.
+
+    """
 
     label: str
     role: str
@@ -71,6 +78,7 @@ def search_transcripts(items: list[tuple[str, Path]], query: str, regex: bool = 
         A list of hits, one per matching message.
 
     """
+
     hits: list[Hit] = []
     for label, transcript_path in items:
         for role, text in _messages(transcript_path):

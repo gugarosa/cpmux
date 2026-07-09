@@ -25,6 +25,7 @@ def pid_alive(pid: int | None) -> bool:
         `True` when a process with that id exists.
 
     """
+
     if not pid:
         return False
 
@@ -66,6 +67,7 @@ def write_owner(paths: RunPaths, pid: int) -> None:
         pid: Owner process id to record.
 
     """
+
     paths.owner_file.write_text(json.dumps({"pid": pid}))
 
 
@@ -79,6 +81,7 @@ def read_owner(paths: RunPaths) -> int | None:
         The recorded owner pid, or `None` when absent or unreadable.
 
     """
+
     if not paths.owner_file.exists():
         return None
 
@@ -95,6 +98,7 @@ def clear_owner(paths: RunPaths) -> None:
         paths: Run paths locating the owner file.
 
     """
+
     paths.owner_file.unlink(missing_ok=True)
 
 
@@ -108,6 +112,7 @@ def owner_alive(paths: RunPaths) -> bool:
         `True` when a recorded owner pid is running.
 
     """
+
     return pid_alive(read_owner(paths))
 
 
@@ -122,6 +127,7 @@ def launch_detached(run_id: str, repo_root: str) -> int:
         The pid of the spawned daemon.
 
     """
+
     paths = RunPaths(repo_root, run_id)
 
     with (paths.run_dir / "daemon.log").open("ab") as log:
@@ -149,6 +155,7 @@ def reconcile(paths: RunPaths, records: list[SessionRecord]) -> list[SessionReco
         The same records, with abandoned sessions marked failed.
 
     """
+
     if owner_alive(paths):
         return records
 
@@ -173,6 +180,7 @@ def stop(paths: RunPaths, records: list[SessionRecord]) -> int:
         The number of processes signalled.
 
     """
+
     signalled = 0
 
     owner = read_owner(paths)
@@ -205,6 +213,7 @@ def kill_session(paths: RunPaths, record: SessionRecord) -> bool:
         `True` when the session was still running.
 
     """
+
     alive = pid_alive(record.pid)
 
     if alive:

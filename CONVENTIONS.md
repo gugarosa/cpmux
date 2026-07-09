@@ -60,6 +60,10 @@ Adopted from phitrain (rule ids in parentheses).
 - Public functions and classes carry Google-style docstrings (single-sentence
   summary; one-line `Args:`/`Returns:`/`Raises:` entries). Private helpers (`_name`)
   carry no docstring. No semicolons or `defaults to <X>` tails in entries. (R3, R13)
+- A docstring keeps one blank line before its closing `"""`, and one blank line
+  after the closing `"""` before the first statement or field.
+- Data classes (Pydantic models and `@dataclass`) document every field in an
+  `Attributes:` section, one line per field (`name: what it holds.`).
 - Logging uses `get_logger(__name__)` from `cmux.logging`; **never `print()` in
   library code** (the CLI presentation layer uses Rich and `typer.echo`). Diagnostic
   `logger.warning`/`logger.error` use a backticked offender and trailing period:

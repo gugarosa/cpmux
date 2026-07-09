@@ -15,6 +15,7 @@ def resume_interactive_argv(session_id: str, worktree: str | Path) -> list[str]:
         The argv list for an interactive resumed session.
 
     """
+
     return ["copilot", f"--resume={session_id}", "-C", str(worktree)]
 
 
@@ -38,6 +39,7 @@ def followup_argv(
         The argv list for the follow-up turn.
 
     """
+
     argv = [
         "copilot",
         "-C",

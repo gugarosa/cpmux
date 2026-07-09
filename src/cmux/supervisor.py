@@ -36,7 +36,15 @@ _GLYPH = {
 
 @dataclass
 class Options:
-    """Runtime options for a single run."""
+    """Runtime options for a single run.
+
+    Attributes:
+        concurrency: Max sessions to run at once, or None for the plan default.
+        open_pr: Whether to open a draft PR per item.
+        strip_github_token: Whether to scrub the GitHub token from spawned session environments.
+        deps_override: Dependency provisioning command that overrides each item's `deps`, if set.
+
+    """
 
     concurrency: int | None = None
     open_pr: bool = True
@@ -85,6 +93,7 @@ class Supervisor:
             gitutil.GitError: If start_path is not inside a git repository.
 
         """
+
         repo_root = gitutil.repo_root(start_path)
         concurrency = options.concurrency or plan.defaults.concurrency
 
@@ -102,6 +111,7 @@ class Supervisor:
             A supervisor rehydrated from the run manifest and records.
 
         """
+
         manifest = RunManifest.model_validate_json(RunPaths(start_path, run_id).manifest.read_text())
         options = Options(
             concurrency=manifest.concurrency,
@@ -121,6 +131,7 @@ class Supervisor:
 
     def prepare(self) -> None:
         """Write the manifest and create one worktree and record per item."""
+
         self.paths.write_manifest(
             RunManifest(
                 run_id=self.run_id,
@@ -177,6 +188,7 @@ class Supervisor:
             The final record for every item in the run.
 
         """
+
         sem = asyncio.Semaphore(self.concurrency)
         done_events = {item.key: asyncio.Event() for item in self.resolved}
 

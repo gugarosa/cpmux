@@ -126,6 +126,7 @@ def up(
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
 ) -> None:
     """Spawn one Copilot session per item, each in its own worktree, branch, and PR."""
+
     plan = _load(file)
     resolved = plan.resolve()
 
@@ -175,12 +176,14 @@ def up(
 @app.command()
 def ls(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
     """Show the status of a run."""
+
     _print_summary(Path("."), run)
 
 
 @app.command()
 def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
     """Live-monitor a run's sessions read-only (Ctrl-C to exit)."""
+
     root = Path(".")
     run_id = run or latest_run_id(root)
     if not run_id:
@@ -188,6 +191,7 @@ def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: 
         raise typer.Exit(1)
 
     paths = RunPaths(root, run_id)
+
     try:
         with Live(console=console, refresh_per_second=4) as live:
             while True:
@@ -204,6 +208,7 @@ def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: 
 @app.command()
 def dash(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
     """Open the interactive dashboard for a run."""
+
     run_id = run or latest_run_id(Path("."))
     if not run_id:
         logger.error("no cmux runs found here.")
@@ -220,6 +225,7 @@ def enter(
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
 ) -> None:
     """Open an interactive Copilot session for an item, resuming it in place."""
+
     _, record = _resolve_record(run, key)
     if shutil.which("copilot") is None:
         logger.error("`copilot` is not on PATH.")
@@ -238,6 +244,7 @@ def send(
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
 ) -> None:
     """Append a follow-up turn to an item's session and print the reply."""
+
     paths, record = _resolve_record(run, key)
     if not Path(record.worktree).exists():
         logger.error(f"`{record.worktree}` worktree is gone, the run may have been cleaned.")
@@ -267,6 +274,7 @@ def logs(
     follow: bool = typer.Option(False, "--follow", "-f", help="Stream new events as they arrive."),
 ) -> None:
     """Print a session's transcript."""
+
     run_id = run or latest_run_id(Path("."))
     if not run_id:
         logger.error("no cmux runs found here.")
@@ -289,7 +297,8 @@ def search(
     all_runs: bool = typer.Option(False, "--all", help="Search every run, not just the latest."),
     regex: bool = typer.Option(False, "--regex", help="Treat the query as a regular expression."),
 ) -> None:
-    """Search across session transcripts for matching text."""
+    """Search session transcripts for matching text."""
+
     root = Path(".")
     run_ids = all_run_ids(root) if all_runs else [run_id for run_id in [run or latest_run_id(root)] if run_id]
     if not run_ids:
@@ -315,7 +324,8 @@ def rm(
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation."),
 ) -> None:
-    """Remove the git worktrees created for a run."""
+    """Remove the git worktrees for a run."""
+
     run_id = run or latest_run_id(Path("."))
     if not run_id:
         logger.error("no cmux runs found here.")
@@ -337,6 +347,7 @@ def down(
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
 ) -> None:
     """Stop a run's background daemon and any live sessions."""
+
     root = Path(".")
     run_id = run or latest_run_id(root)
     if not run_id:
@@ -357,6 +368,7 @@ def kill(
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
 ) -> None:
     """Stop a single running session."""
+
     paths, record = _resolve_record(run, key)
     if daemon.kill_session(paths, record):
         console.print(f"[green]killed session {key}.[/green]")
@@ -479,6 +491,7 @@ def _print_summary(root: Path, run_id: str | None) -> None:
 
 def main() -> None:
     """Run the cmux command-line interface."""
+
     app()
 
 

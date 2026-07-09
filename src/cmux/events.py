@@ -38,7 +38,20 @@ def _first(data: dict[str, Any], *keys: str, default: str = "") -> str:
 
 @dataclass
 class SessionState:
-    """Live, reduced view of one copilot session, updated event by event."""
+    """Live, reduced view of one copilot session, updated event by event.
+
+    Attributes:
+        status: Current lifecycle status.
+        last_text: Most recent assistant message text.
+        current_tool: Name of the tool currently executing, if any.
+        tool_count: Number of tool executions started so far.
+        exit_code: Process exit code once the session ends.
+        session_id: Copilot session id reported on completion.
+        premium_requests: Premium request count reported on completion.
+        files_modified: Paths of files changed during the session.
+        error: Error message when the session fails.
+
+    """
 
     status: Status = Status.PENDING
     last_text: str = ""
@@ -54,6 +67,7 @@ class SessionState:
     @property
     def summary_line(self) -> str:
         """Latest assistant text, truncated for single-line display."""
+
         text = (self.last_text or self._delta_buf).strip().replace("\n", " ")
 
         return text[:80]
@@ -70,6 +84,7 @@ def apply_event(state: SessionState, event: dict[str, Any]) -> SessionState:
         The updated session state.
 
     """
+
     event_type = event.get("type", "")
     data = event.get("data") if isinstance(event.get("data"), dict) else event
 
@@ -123,6 +138,7 @@ def parse_line(line: str) -> dict[str, Any] | None:
         The decoded object, or `None` for blank or non-JSON lines.
 
     """
+
     line = line.strip()
     if not line:
         return None

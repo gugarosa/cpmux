@@ -44,6 +44,7 @@ class SessionRunner:
             The session state after the subprocess exits.
 
         """
+
         self.transcript_path.parent.mkdir(parents=True, exist_ok=True)
 
         self.proc = await asyncio.create_subprocess_exec(
@@ -94,6 +95,7 @@ class SessionRunner:
 
     def terminate(self) -> None:
         """Send SIGTERM to the session's process group if it is still running."""
+
         if self.proc is not None and self.proc.returncode is None:
             try:
                 os.killpg(os.getpgid(self.proc.pid), signal.SIGTERM)

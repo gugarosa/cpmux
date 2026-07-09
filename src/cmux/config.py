@@ -99,6 +99,7 @@ def slugify(text: str) -> str:
         A lowercased, hyphenated slug of at most 50 characters.
 
     """
+
     text = text.strip().lower().splitlines()[0] if text.strip() else "task"
     text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
 
@@ -106,7 +107,16 @@ def slugify(text: str) -> str:
 
 
 class Permissions(BaseModel):
-    """Permission preset with explicit allow/deny lists and network knobs."""
+    """Permission preset with explicit allow/deny lists and network knobs.
+
+    Attributes:
+        preset: Named permission baseline the explicit lists extend.
+        allow: Tool specs to additionally allow.
+        deny: Tool specs to additionally deny.
+        add_dir: Extra directories the session may access.
+        allow_url: URLs the session may reach.
+
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -130,6 +140,7 @@ class Permissions(BaseModel):
             The `copilot` command-line flags for these permissions.
 
         """
+
         flags: list[str] = []
         if self.preset in (Preset.full, Preset.yolo):
             flags.append("--allow-all-tools")
@@ -151,7 +162,15 @@ class Permissions(BaseModel):
 
 
 class PRSettings(BaseModel):
-    """Pull-request defaults applied to every item unless overridden."""
+    """Pull-request defaults applied to every item unless overridden.
+
+    Attributes:
+        draft: Whether pull requests open as drafts.
+        labels: Labels attached to every pull request.
+        title_template: Format string for the pull-request title.
+        body_template: Format string for the pull-request body.
+
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -162,7 +181,20 @@ class PRSettings(BaseModel):
 
 
 class Defaults(BaseModel):
-    """Run-wide defaults that each item inherits unless it overrides them."""
+    """Run-wide defaults that each item inherits unless it overrides them.
+
+    Attributes:
+        model: Model id passed to `copilot --model`.
+        effort: Reasoning effort passed to `copilot --effort`.
+        permissions: Permission settings shared across items.
+        base: Base branch to open pull requests against.
+        branch_template: Format string for per-item branch names.
+        pr: Pull-request defaults.
+        concurrency: Maximum number of sessions run at once.
+        deps: Strategy for seeding a worktree's dependencies.
+        remote: Git remote to push branches to.
+
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -178,7 +210,25 @@ class Defaults(BaseModel):
 
 
 class Item(BaseModel):
-    """One task, expressed as a bare prompt string or a mapping of overrides."""
+    """One task, expressed as a bare prompt string or a mapping of overrides.
+
+    Attributes:
+        prompt: Task prompt handed to the session.
+        name: Human-readable label for the item.
+        id: Explicit stable identifier.
+        model: Model override for this item.
+        effort: Reasoning-effort override for this item.
+        permissions: Permission override for this item.
+        branch: Explicit branch name for this item.
+        base: Base-branch override for this item.
+        labels: Extra labels for this item's pull request.
+        draft: Draft-state override for this item's pull request.
+        paths: Extra directories the session may access.
+        depends_on: Ids of items that must finish first.
+        env: Environment variables set for the session.
+        include_system: Whether to prepend the shared system prompt.
+
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -208,16 +258,39 @@ class Item(BaseModel):
     @property
     def slug(self) -> str:
         """Branch- and worktree-safe slug derived from name, id, or prompt."""
+
         return slugify(self.name or self.id or self.prompt)
 
     @property
     def key(self) -> str:
         """Stable identifier: explicit id when set, else the slug."""
+
         return self.id or self.slug
 
 
 class ResolvedItem(BaseModel):
-    """A resolved session spec ready to spawn (item > defaults > built-in)."""
+    """A resolved session spec ready to spawn (item > defaults > built-in).
+
+    Attributes:
+        key: Stable identifier for the item.
+        name: Display name for the session.
+        slug: Branch- and worktree-safe slug.
+        prompt: Final prompt, with the system prompt merged in when enabled.
+        model: Model id passed to `copilot --model`.
+        effort: Reasoning effort passed to `copilot --effort`.
+        permissions: Resolved permission settings.
+        branch: Branch name for the session.
+        base: Base branch to open the pull request against.
+        labels: Labels for the pull request.
+        draft: Whether the pull request opens as a draft.
+        depends_on: Ids of items that must finish first.
+        env: Environment variables set for the session.
+        deps: Strategy for seeding the worktree's dependencies.
+        remote: Git remote to push the branch to.
+        pr_title: Rendered pull-request title.
+        pr_body: Rendered pull-request body.
+
+    """
 
     key: str
     name: str
@@ -249,6 +322,7 @@ class ResolvedItem(BaseModel):
             The full `copilot` argv.
 
         """
+
         argv = [
             "copilot",
             "-C",
@@ -276,7 +350,15 @@ class ResolvedItem(BaseModel):
 
 
 class Plan(BaseModel):
-    """Parsed cmux run: shared system prompt, defaults, and a list of items."""
+    """Parsed cmux run: shared system prompt, defaults, and a list of items.
+
+    Attributes:
+        version: Config schema version.
+        system: Shared system prompt prepended to items.
+        defaults: Run-wide defaults inherited by items.
+        items: Tasks to run, each a prompt string or an item mapping.
+
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -322,6 +404,7 @@ class Plan(BaseModel):
             One resolved item per plan item, in declaration order.
 
         """
+
         defaults = self.defaults
         resolved: list[ResolvedItem] = []
 
@@ -379,6 +462,7 @@ def load_plan(path: str | Path) -> Plan:
         ConfigError: If the file is missing, unparseable, or fails validation.
 
     """
+
     config_path = Path(path)
     if not config_path.exists():
         raise ConfigError(f"`{config_path}` config file does not exist.")

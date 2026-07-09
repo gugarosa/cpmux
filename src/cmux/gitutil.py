@@ -36,6 +36,7 @@ def run_git(
         GitError: If `check` is set and git exits non-zero.
 
     """
+
     proc = subprocess.run(["git", *args], cwd=str(cwd), env=env, capture_output=True, text=True)
 
     if check and proc.returncode != 0:
@@ -55,6 +56,7 @@ def is_git_repo(path: str | Path) -> bool:
         `True` if `path` is inside a git work tree.
 
     """
+
     proc = run_git(["rev-parse", "--is-inside-work-tree"], cwd=path, check=False)
 
     return proc.returncode == 0 and proc.stdout.strip() == "true"
@@ -73,6 +75,7 @@ def repo_root(path: str | Path) -> Path:
         GitError: If `path` is not inside a git repository.
 
     """
+
     if not is_git_repo(path):
         raise GitError(f"`{path}` is not inside a git repository.")
 
@@ -91,6 +94,7 @@ def resolve_base(root: str | Path, remote: str, base: str) -> tuple[str, str]:
         The base branch name and the resolved commit sha.
 
     """
+
     for ref in (f"refs/remotes/{remote}/{base}", f"refs/heads/{base}"):
         proc = run_git(["rev-parse", "--verify", "--quiet", ref], cwd=root, check=False)
         if proc.returncode == 0 and proc.stdout.strip():
@@ -109,6 +113,7 @@ def add_worktree(root: str | Path, worktree: str | Path, branch: str, base_sha: 
         base_sha: Commit the branch starts from.
 
     """
+
     Path(worktree).parent.mkdir(parents=True, exist_ok=True)
 
     run_git(["worktree", "add", "-b", branch, str(worktree), base_sha], cwd=root)
@@ -125,6 +130,7 @@ def branch_exists(root: str | Path, branch: str) -> bool:
         `True` if the local branch exists.
 
     """
+
     proc = run_git(["rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], cwd=root, check=False)
 
     return proc.returncode == 0
@@ -139,6 +145,7 @@ def remove_worktree(root: str | Path, worktree: str | Path, force: bool = True) 
         force: Whether to pass `--force`.
 
     """
+
     args = ["worktree", "remove", str(worktree)]
     if force:
         args.append("--force")
@@ -153,6 +160,7 @@ def prune_worktrees(root: str | Path) -> None:
         root: Repository root.
 
     """
+
     run_git(["worktree", "prune"], cwd=root, check=False)
 
 
@@ -167,6 +175,7 @@ def has_changes(worktree: str | Path, base_sha: str) -> bool:
         `True` if there are staged, unstaged, or committed changes.
 
     """
+
     if run_git(["status", "--porcelain"], cwd=worktree).stdout.strip():
         return True
 
@@ -184,6 +193,7 @@ def provision_deps(root: str | Path, worktree: str | Path, strategy: str) -> Non
         strategy: One of `skip`, `symlink`, `copy`, or `install`.
 
     """
+
     src = Path(root) / "node_modules"
     dst = Path(worktree) / "node_modules"
     if strategy == "skip" or dst.exists():
