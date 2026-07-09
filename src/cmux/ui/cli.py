@@ -388,7 +388,8 @@ def _daemon_command(run_id: str = typer.Argument(...)) -> None:
 def _render_event(event: dict) -> None:
     text = event_text(event)
     if text is not None:
-        console.print(text)
+        # Re-apply the repr highlighter that console.print skips for Text inputs
+        console.print(console.highlighter(text))
 
 
 def _emit_transcript(text: str, raw: bool) -> int:

@@ -31,6 +31,30 @@ These define how cmux stays composable. Crossing them turns one bug into many.
 - **Config precedence is `item > defaults > built-in`.** Resolution happens once in
   `Plan.resolve()`; downstream code consumes `ResolvedItem`, never re-merges.
 
+## Package structure
+
+Modules are grouped by responsibility into three subpackages, with the foundation
+modules that everything shares kept at the package root.
+
+```
+src/cmux/
+  config.py  events.py  logging.py      foundation: config model, JSONL/status, logging
+  engine/    supervisor session daemon store interact   run lifecycle + state
+  vcs/       git pr                       git worktrees + PR automation
+  ui/        cli dashboard search render  Typer commands, TUI, transcript rendering
+```
+
+- **Layering is one-directional:** `ui` → `engine` → `vcs` → foundation. A layer may
+  import the ones below it, never above; foundation imports no subpackage. Keeping
+  this acyclic is what lets `engine` run headless without the TUI. Shared code moves
+  down to the lowest layer that needs it (status-to-colour lives in `ui/render.py`
+  because only the UI reads it; the JSONL `event_data` unwrap lives in `events.py`
+  because the engine needs it too).
+- **Absolute imports only**, and `__init__.py` stays empty apart from the header —
+  import from the module, not the package.
+- **Tests mirror source 1:1**, so `engine/store.py` is tested by
+  `tests/engine/test_store.py`. Shared fixtures live in `tests/conftest.py`.
+
 ## `.cmux/` layout
 
 Repo-local and gitignored. cmux owns the orchestration bookkeeping; nothing here is committed.
@@ -82,10 +106,10 @@ Adopted from phitrain (rule ids in parentheses).
 config with `@dataclass` + `__post_init__` because it is driven by OmegaConf. cmux is a
 declarative-YAML tool whose value is string→item coercion, discriminated unions,
 `${ENV}` interpolation, and precise validation errors, all idiomatic in Pydantic v2.
-The config models in `config.py` and the on-disk records in `state.py` are therefore
+The config models in `config.py` and the on-disk records in `engine/store.py` are therefore
 Pydantic `BaseModel`s. Everything else follows phitrain.
 
-## CLI conventions (`cli.py`)
+## CLI conventions (`ui/cli.py`)
 
 - One `command()` function per verb, aggregated on the Typer `app`.
 - Every `Option(...)` whose parameter name contains an underscore exposes both the
@@ -100,7 +124,8 @@ Pydantic `BaseModel`s. Everything else follows phitrain.
 
 ## Tests
 
-- Tests mirror the source layout: `tests/test_<module>.py`.
+- Tests mirror the source layout: `tests/<subpackage>/test_<module>.py`, with foundation
+  modules tested at the `tests/` root and shared fixtures in `tests/conftest.py`.
 - Test functions use `test_behavior_under_condition`, are plain functions, and carry no
   docstrings or type hints.
 - Asserts are bare `assert <expr>`, with no failure-message strings; the test name carries
