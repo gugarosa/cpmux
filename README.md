@@ -46,9 +46,15 @@ items:
 
 ```bash
 cmux up issues.yaml --dry-run     # resolve and print the plan and copilot commands
-cmux up issues.yaml               # spawn the fleet (asks before doing anything)
+cmux up issues.yaml               # spawn the fleet in the foreground (asks first)
+cmux up issues.yaml --detach      # spawn a background daemon and return immediately
+cmux attach                       # live-monitor a run (reconnects to a background run)
 cmux ls                           # status of the latest run
-cmux logs migrate-settings-form   # a session's transcript
+cmux enter migrate-settings-form  # drop into an interactive copilot session
+cmux send migrate-settings-form "also add a test"   # append a follow-up turn
+cmux search parseISO --all        # full-text search across every session
+cmux logs migrate-settings-form -f  # stream a transcript live
+cmux down                         # stop a background run
 cmux rm                           # remove the run's worktrees
 ```
 

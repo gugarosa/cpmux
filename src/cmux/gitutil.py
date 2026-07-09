@@ -64,6 +64,12 @@ def add_worktree(root: str | Path, worktree: str | Path, branch: str, base_sha: 
     run_git(["worktree", "add", "-b", branch, str(worktree), base_sha], cwd=root)
 
 
+def branch_exists(root: str | Path, branch: str) -> bool:
+    """Return whether a local branch already exists in the repository."""
+    proc = run_git(["rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], cwd=root, check=False)
+    return proc.returncode == 0
+
+
 def remove_worktree(root: str | Path, worktree: str | Path, force: bool = True) -> None:
     """Remove a worktree directory (never raises)."""
     args = ["worktree", "remove", str(worktree)]

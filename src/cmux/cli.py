@@ -21,7 +21,7 @@ from rich.live import Live
 from rich.markup import escape
 from rich.table import Table
 
-from cmux import __version__
+from cmux import __version__, daemon
 from cmux.config import ConfigError, Deps, Plan, ResolvedItem, load_plan
 from cmux.events import TERMINAL, Status, parse_line
 from cmux.gitutil import GitError, prune_worktrees, remove_worktree
@@ -113,6 +113,7 @@ def _plan_table(resolved: list[ResolvedItem]) -> Table:
 def up(
     file: Path = typer.Argument(..., exists=True, dir_okay=False, help="Path to the cmux YAML file."),
     dry_run: bool = typer.Option(False, "--dry-run", "--dry_run", help="Resolve and print the plan; spawn nothing."),
+    detach: bool = typer.Option(False, "--detach", "-d", help="Run in the background and return immediately."),
     concurrency: int | None = typer.Option(None, "--concurrency", "-j", help="Max parallel sessions."),
     pr: bool = typer.Option(True, "--pr/--no-pr", help="Open one draft PR per item (default: on)."),
     deps: Deps | None = typer.Option(None, "--deps", help="Override the dependency strategy."),
@@ -143,7 +144,7 @@ def up(
         deps_override=str(deps) if deps else None,
     )
     try:
-        supervisor = Supervisor(plan, ".", options)
+        supervisor = Supervisor.create(plan, ".", options)
     except GitError as exc:
         logger.error(str(exc))
         raise typer.Exit(1)
@@ -156,7 +157,17 @@ def up(
         raise typer.Exit(1)
 
     supervisor.prepare()
-    asyncio.run(supervisor.run())
+    if detach:
+        daemon.launch_detached(supervisor.run_id, str(supervisor.repo_root))
+        console.print(f"[green]run {supervisor.run_id} started in the background.[/green]")
+        console.print("[dim]monitor it with:[/dim] cmux attach")
+        return
+
+    daemon.write_owner(supervisor.paths, os.getpid())
+    try:
+        asyncio.run(supervisor.run())
+    finally:
+        daemon.clear_owner(supervisor.paths)
     _print_summary(Path("."), supervisor.run_id)
 
 
@@ -180,6 +191,7 @@ def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: 
         with Live(console=console, refresh_per_second=4) as live:
             while True:
                 _, records = load_run(root, run_id)
+                records = daemon.reconcile(paths, records)
                 live.update(_monitor_table(run_id, records, paths))
                 if all(r.status in TERMINAL for r in records):
                     break
@@ -305,6 +317,48 @@ def rm(
     console.print(f"[green]removed worktrees for run {run_id}.[/green]")
 
 
+@app.command()
+def down(
+    run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
+) -> None:
+    """Stop a run's background daemon and any live sessions."""
+    root = Path(".")
+    run_id = run or latest_run_id(root)
+    if not run_id:
+        logger.error("no cmux runs found here.")
+        raise typer.Exit(1)
+
+    _, records = load_run(root, run_id)
+    if not yes and not typer.confirm(f"Stop run {run_id}?"):
+        raise typer.Exit(1)
+
+    signalled = daemon.stop(RunPaths(root, run_id), records)
+    console.print(f"[green]stopped {signalled} process(es) for run {run_id}.[/green]")
+
+
+@app.command()
+def kill(
+    key: str = typer.Argument(..., help="Item key to stop."),
+    run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
+) -> None:
+    """Stop a single running session."""
+    paths, record = _resolve_record(run, key)
+    if daemon.kill_session(paths, record):
+        console.print(f"[green]killed session {key}.[/green]")
+    else:
+        console.print(f"[dim]session {key} was not running.[/dim]")
+
+
+@app.command(name="_daemon", hidden=True)
+def _daemon_command(run_id: str = typer.Argument(...)) -> None:
+    supervisor = Supervisor.from_run(".", run_id)
+    try:
+        asyncio.run(supervisor.run(headless=True))
+    finally:
+        daemon.clear_owner(supervisor.paths)
+
+
 def _render_event(ev: dict) -> None:
     typ = ev.get("type", "")
     data = ev.get("data") if isinstance(ev.get("data"), dict) else ev
@@ -389,6 +443,7 @@ def _print_summary(root: Path, run_id: str | None) -> None:
         raise typer.Exit(1)
 
     _, records = load_run(root, run_id)
+    records = daemon.reconcile(RunPaths(root, run_id), records)
     table = Table(title=f"cmux · run {run_id}", expand=True)
     table.add_column("item", style="bold")
     table.add_column("status")

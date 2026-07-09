@@ -19,6 +19,7 @@ from pathlib import Path
 from cmux.events import SessionState, Status, apply_event, parse_line
 
 OnUpdate = Callable[[str, SessionState, dict], None]
+OnSpawn = Callable[[int], None]
 
 _STREAM_LIMIT = 1 << 20
 
@@ -41,7 +42,7 @@ class SessionRunner:
         self.proc: asyncio.subprocess.Process | None = None
         self._stderr = ""
 
-    async def run(self, on_update: OnUpdate | None = None) -> SessionState:
+    async def run(self, on_update: OnUpdate | None = None, on_spawn: OnSpawn | None = None) -> SessionState:
         """Spawn the session, stream its events to disk and ``on_update``, and return the final state."""
         self.transcript_path.parent.mkdir(parents=True, exist_ok=True)
         self.proc = await asyncio.create_subprocess_exec(
@@ -53,6 +54,8 @@ class SessionRunner:
             limit=_STREAM_LIMIT,
         )
         self.state.status = Status.STARTING
+        if on_spawn is not None:
+            on_spawn(self.proc.pid)
         stderr_task = asyncio.create_task(self._drain_stderr())
 
         with self.transcript_path.open("a", encoding="utf-8") as tf:

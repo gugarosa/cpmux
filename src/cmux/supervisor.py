@@ -3,14 +3,18 @@
 
 """The cmux supervisor: create worktrees, spawn the session pool, open PRs.
 
-v0 runs in the foreground with an asyncio pool (concurrency plus ``depends_on``
-ordering) and a live Rich status table. A background daemon is planned for v1.
+A supervisor is built either fresh from a :class:`~cmux.config.Plan`
+(:meth:`Supervisor.create`) or reconstructed from a persisted run
+(:meth:`Supervisor.from_run`), so the same object drives a foreground run and a
+detached daemon. Foreground runs render a live Rich table; headless runs only
+persist state to ``.cmux/``.
 """
 
 from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
+from pathlib import Path
 from uuid import uuid4
 
 from rich.console import Console
@@ -45,7 +49,7 @@ _GLYPH = {
 
 @dataclass
 class Options:
-    """Runtime options for a single ``cmux up`` invocation."""
+    """Runtime options for a single run."""
 
     concurrency: int | None = None
     open_pr: bool = True
@@ -56,19 +60,52 @@ class Options:
 class Supervisor:
     """Drives a run end to end: worktrees, the session pool, and pull requests."""
 
-    def __init__(self, plan: Plan, start_path: str, options: Options) -> None:
-        self.plan = plan
+    def __init__(
+        self,
+        repo_root: str | Path,
+        run_id: str,
+        resolved: list[ResolvedItem],
+        options: Options,
+        concurrency: int,
+        system: str = "",
+    ) -> None:
+        self.repo_root = Path(repo_root)
+        self.run_id = run_id
+        self.resolved = resolved
         self.options = options
+        self.concurrency = concurrency
+        self.system = system
+        self.paths = RunPaths(self.repo_root, run_id)
         self.console = Console()
-        self.repo_root = gitutil.repo_root(start_path)
-        self.run_id = new_run_id()
-        self.paths = RunPaths(self.repo_root, self.run_id)
-        self.resolved: list[ResolvedItem] = plan.resolve()
         self.records: dict[str, SessionRecord] = {}
-        self.base_sha: dict[str, str] = {}
         self.live_states: dict[str, SessionState] = {}
         self.runners: dict[str, SessionRunner] = {}
         self._live: Live | None = None
+
+    @classmethod
+    def create(cls, plan: Plan, start_path: str, options: Options) -> Supervisor:
+        """Build a fresh supervisor for a new run (raises if not a git repository)."""
+        repo_root = gitutil.repo_root(start_path)
+        concurrency = options.concurrency or plan.defaults.concurrency
+
+        return cls(repo_root, new_run_id(), plan.resolve(), options, concurrency, plan.system)
+
+    @classmethod
+    def from_run(cls, start_path: str, run_id: str) -> Supervisor:
+        """Reconstruct a supervisor and its records from a persisted run."""
+        manifest = RunManifest.model_validate_json(RunPaths(start_path, run_id).manifest.read_text())
+        options = Options(
+            concurrency=manifest.concurrency,
+            open_pr=manifest.open_pr,
+            strip_github_token=manifest.strip_github_token,
+            deps_override=manifest.deps_override,
+        )
+        sup = cls(manifest.repo_root, run_id, manifest.resolved, options, manifest.concurrency or 4, manifest.system)
+        for key in manifest.item_keys:
+            if sup.paths.record_file(key).exists():
+                sup.records[key] = sup.paths.read_record(key)
+
+        return sup
 
     def prepare(self) -> None:
         """Write the manifest and create one worktree and record per item."""
@@ -77,8 +114,13 @@ class Supervisor:
                 run_id=self.run_id,
                 repo_root=str(self.repo_root),
                 config_path="",
-                system=self.plan.system,
+                system=self.system,
                 item_keys=[it.key for it in self.resolved],
+                resolved=self.resolved,
+                open_pr=self.options.open_pr,
+                concurrency=self.concurrency,
+                strip_github_token=self.options.strip_github_token,
+                deps_override=self.options.deps_override,
             )
         )
 
@@ -98,9 +140,10 @@ class Supervisor:
             self.paths.ensure_session_dirs(it.key)
             self.paths.prompt_file(it.key).write_text(it.prompt)
             try:
-                _, base_sha = gitutil.resolve_base(self.repo_root, it.remote, it.base)
-                self.base_sha[it.key] = base_sha
-                gitutil.add_worktree(self.repo_root, self.paths.worktree(it.key), it.branch, base_sha)
+                _, record.base_sha = gitutil.resolve_base(self.repo_root, it.remote, it.base)
+                if gitutil.branch_exists(self.repo_root, record.branch):
+                    record.branch = f"{it.branch}-{self.run_id[-6:]}"
+                gitutil.add_worktree(self.repo_root, self.paths.worktree(it.key), record.branch, record.base_sha)
                 gitutil.provision_deps(
                     self.repo_root, self.paths.worktree(it.key), self.options.deps_override or it.deps
                 )
@@ -110,24 +153,29 @@ class Supervisor:
                 logger.warning(f"`{it.key}` worktree setup failed: {exc}.")
             self.paths.write_record(record)
 
-    async def run(self) -> list[SessionRecord]:
+    async def run(self, headless: bool = False) -> list[SessionRecord]:
         """Spawn every item under the concurrency pool and return the final records."""
-        concurrency = self.options.concurrency or self.plan.defaults.concurrency
-        sem = asyncio.Semaphore(concurrency)
+        sem = asyncio.Semaphore(self.concurrency)
         done_events = {it.key: asyncio.Event() for it in self.resolved}
 
-        with Live(self._render(), console=self.console, refresh_per_second=8) as live:
-            self._live = live
-            tasks = [asyncio.create_task(self._run_item(it, sem, done_events)) for it in self.resolved]
-            try:
-                await asyncio.gather(*tasks)
-            except asyncio.CancelledError:
-                for runner in self.runners.values():
-                    runner.terminate()
-                raise
-            live.update(self._render())
+        if headless:
+            await self._run_all(sem, done_events)
+        else:
+            with Live(self._render(), console=self.console, refresh_per_second=8) as live:
+                self._live = live
+                await self._run_all(sem, done_events)
+                live.update(self._render())
 
         return list(self.records.values())
+
+    async def _run_all(self, sem: asyncio.Semaphore, done: dict[str, asyncio.Event]) -> None:
+        tasks = [asyncio.create_task(self._run_item(it, sem, done)) for it in self.resolved]
+        try:
+            await asyncio.gather(*tasks)
+        except asyncio.CancelledError:
+            for runner in self.runners.values():
+                runner.terminate()
+            raise
 
     async def _run_item(self, it: ResolvedItem, sem: asyncio.Semaphore, done: dict[str, asyncio.Event]) -> None:
         record = self.records[it.key]
@@ -155,7 +203,7 @@ class Supervisor:
                 argv = it.spawn_argv(self.paths.worktree(it.key), record.session_id, self.paths.copilot_log_dir(it.key))
                 runner = SessionRunner(it.key, argv, self.paths.transcript(it.key))
                 self.runners[it.key] = runner
-                state = await runner.run(self._on_update)
+                state = await runner.run(self._on_update, on_spawn=lambda pid: self._on_spawn(record, pid))
 
                 record.exit_code = state.exit_code
                 record.premium_requests = state.premium_requests
@@ -172,10 +220,14 @@ class Supervisor:
             done[it.key].set()
             self._refresh()
 
+    def _on_spawn(self, record: SessionRecord, pid: int) -> None:
+        record.pid = pid
+        self.paths.write_record(record)
+
     async def _open_pr(self, it: ResolvedItem, record: SessionRecord) -> None:
         worktree = self.paths.worktree(it.key)
         try:
-            if not await asyncio.to_thread(gitutil.has_changes, worktree, self.base_sha.get(it.key, "")):
+            if not await asyncio.to_thread(gitutil.has_changes, worktree, record.base_sha):
                 record.status = Status.NO_CHANGES
                 return
 
@@ -186,7 +238,7 @@ class Supervisor:
                 worktree,
                 it.remote,
                 it.base,
-                it.branch,
+                record.branch,
                 it.pr_title,
                 it.pr_body,
                 it.labels,

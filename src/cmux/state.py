@@ -18,6 +18,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
+from cmux.config import ResolvedItem
 from cmux.events import Status
 
 CMUX_DIR = ".cmux"
@@ -43,7 +44,9 @@ class SessionRecord(BaseModel):
     model: str
     session_id: str
     worktree: str
+    base_sha: str = ""
     permission_flags: list[str] = Field(default_factory=list)
+    pid: int | None = None
     status: Status = Status.PENDING
     exit_code: int | None = None
     pr_url: str | None = None
@@ -63,7 +66,7 @@ class SessionRecord(BaseModel):
 
 
 class RunManifest(BaseModel):
-    """Immutable snapshot of a run's resolved configuration."""
+    """Immutable snapshot of a run's resolved configuration (reconstructable from disk)."""
 
     run_id: str
     created_at: str = Field(default_factory=_now)
@@ -71,6 +74,11 @@ class RunManifest(BaseModel):
     config_path: str
     system: str = ""
     item_keys: list[str] = Field(default_factory=list)
+    resolved: list[ResolvedItem] = Field(default_factory=list)
+    open_pr: bool = True
+    concurrency: int | None = None
+    strip_github_token: bool = True
+    deps_override: str | None = None
 
 
 class RunPaths:
@@ -88,6 +96,11 @@ class RunPaths:
     def manifest(self) -> Path:
         """Path to the run manifest file."""
         return self.run_dir / "manifest.json"
+
+    @property
+    def daemon_file(self) -> Path:
+        """Path to the detached daemon's pid file."""
+        return self.run_dir / "daemon.json"
 
     def session_dir(self, key: str) -> Path:
         """Directory holding an item's session artifacts."""

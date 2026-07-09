@@ -24,6 +24,10 @@ These define how cmux stays composable. Crossing them turns one bug into many.
   resume, and recovery.
 - **cmux owns only `.cmux/`.** copilot keeps its own transcripts and resumable
   session store under `~/.copilot`; reuse it read-only rather than duplicating it.
+- **A run has one owner.** Its pid is recorded in `daemon.json` — the foreground `up`
+  process, or the detached daemon. While the owner is alive the run is managed; a stale
+  owner (present but dead) marks a crash, so non-terminal sessions reconcile to a terminal
+  state instead of hanging as "running" forever.
 - **Config precedence is `item > defaults > built-in`.** Resolution happens once in
   `Plan.resolve()`; downstream code consumes `ResolvedItem`, never re-merges.
 
@@ -110,9 +114,9 @@ pytest
 
 ## Status and roadmap
 
-- **v0 (current):** foreground supervisor — `up`/`ls`/`logs`/`rm` + `--dry-run`.
-- **v1:** background daemon + thin client; Rich dashboard with live transcript and
-  cross-session full-text search; `enter <id>` drops into a native `copilot --resume`;
-  queued follow-ups; crash recovery.
+- **v0/v1 (current):** foreground and detached (`--detach`) runs; `ls`/`attach` live
+  monitor; `enter`/`send` interaction on a native `copilot --resume`; cross-session
+  `search`; `logs --follow`; `down`/`kill`; crash reconciliation via the run owner.
 - **v2:** Textual embedded panes; ACP transport for live permission prompts; optional
-  remote `/delegate` mode; `depends_on` DAG; dev-server/port management.
+  remote `/delegate` mode; `depends_on` DAG surfacing; dev-server/port management;
+  reuse of copilot's own FTS index for search.
