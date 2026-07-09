@@ -1,14 +1,6 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
-"""cmux command-line interface (Typer).
-
-Verbs: ``up`` (spawn a run), ``ls`` (status), ``attach`` (live monitor), ``enter``
-(interactive resume), ``send`` (follow-up turn), ``logs`` (transcript), ``search``
-(cross-session), and ``rm`` (clean up worktrees). A background daemon that lets a
-run outlive its terminal arrives in v1b.
-"""
-
 import asyncio
 import os
 import shutil
@@ -81,17 +73,18 @@ def _resolve_record(run: str | None, key: str) -> tuple[RunPaths, SessionRecord]
 
 
 def _display_argv(argv: list[str]) -> str:
-    out: list[str] = []
-    skip = False
-    for tok in argv:
-        if skip:
-            out.append(f"<prompt {len(tok)} chars>")
-            skip = False
+    parts: list[str] = []
+    redact_next = False
+    for token in argv:
+        if redact_next:
+            parts.append(f"<prompt {len(token)} chars>")
+            redact_next = False
             continue
-        out.append(tok)
-        if tok == "-p":
-            skip = True
-    return " ".join(out)
+        parts.append(token)
+        if token == "-p":
+            redact_next = True
+
+    return " ".join(parts)
 
 
 def _plan_table(resolved: list[ResolvedItem]) -> Table:
@@ -102,10 +95,16 @@ def _plan_table(resolved: list[ResolvedItem]) -> Table:
     table.add_column("branch")
     table.add_column("perms")
     table.add_column("deps on")
-    for it in resolved:
+    for item in resolved:
         table.add_row(
-            it.key, it.model, str(it.effort), it.branch, it.permissions.preset, ", ".join(it.depends_on) or "-"
+            item.key,
+            item.model,
+            str(item.effort),
+            item.branch,
+            item.permissions.preset,
+            ", ".join(item.depends_on) or "-",
         )
+
     return table
 
 
@@ -132,9 +131,9 @@ def up(
     if dry_run:
         console.print(_plan_table(resolved))
         console.print("\n[bold]spawn commands:[/bold]")
-        for it in resolved:
-            argv = it.spawn_argv(f"<worktree>/{it.key}", "<session-id>", "<log-dir>")
-            console.print(f"  [cyan]{it.key}[/cyan]: {_display_argv(argv)}")
+        for item in resolved:
+            argv = item.spawn_argv(f"<worktree>/{item.key}", "<session-id>", "<log-dir>")
+            console.print(f"  [cyan]{item.key}[/cyan]: {_display_argv(argv)}")
         return
 
     options = Options(
@@ -168,6 +167,7 @@ def up(
         asyncio.run(supervisor.run())
     finally:
         daemon.clear_owner(supervisor.paths)
+
     _print_summary(Path("."), supervisor.run_id)
 
 
@@ -372,19 +372,19 @@ def _daemon_command(run_id: str = typer.Argument(...)) -> None:
         daemon.clear_owner(supervisor.paths)
 
 
-def _render_event(ev: dict) -> None:
-    typ = ev.get("type", "")
-    data = ev.get("data") if isinstance(ev.get("data"), dict) else ev
-    if typ == "user.message":
+def _render_event(event: dict) -> None:
+    event_type = event.get("type", "")
+    data = event.get("data") if isinstance(event.get("data"), dict) else event
+    if event_type == "user.message":
         console.print(f"[bold blue]🧑 user[/bold blue] {escape(str(data.get('content', '')).strip())}")
-    elif typ == "assistant.message":
+    elif event_type == "assistant.message":
         text = str(data.get("content", "")).strip()
         if text:
             console.print(f"[bold green]🤖 assistant[/bold green] {escape(text)}")
-    elif typ == "tool.execution_start":
+    elif event_type == "tool.execution_start":
         console.print(f"[cyan]🔧 tool[/cyan] {escape(str(data.get('toolName') or data.get('name') or ''))}")
-    elif typ == "result":
-        console.print(f"[dim]— result exit={ev.get('exitCode')}[/dim]")
+    elif event_type == "result":
+        console.print(f"[dim]— result exit={event.get('exitCode')}[/dim]")
 
 
 def _emit_transcript(text: str, raw: bool) -> int:
@@ -393,9 +393,10 @@ def _emit_transcript(text: str, raw: bool) -> int:
         if raw:
             typer.echo(line)
         else:
-            ev = parse_line(line)
-            if ev is not None:
-                _render_event(ev)
+            event = parse_line(line)
+            if event is not None:
+                _render_event(event)
+
     return boundary
 
 
@@ -415,9 +416,9 @@ def _tail_last_assistant(transcript: Path) -> str:
 
     last = ""
     for line in transcript.read_text(encoding="utf-8").splitlines():
-        ev = parse_line(line)
-        if ev is not None and ev.get("type") == "assistant.message":
-            data = ev.get("data") if isinstance(ev.get("data"), dict) else ev
+        event = parse_line(line)
+        if event is not None and event.get("type") == "assistant.message":
+            data = event.get("data") if isinstance(event.get("data"), dict) else event
             text = str(data.get("content", ""))
             if text:
                 last = text
@@ -468,11 +469,12 @@ def _print_summary(root: Path, run_id: str | None) -> None:
         table.add_row(
             record.key, f"[{color}]{record.status}[/{color}]", record.model, record.branch, record.pr_url or "-"
         )
+
     console.print(table)
 
 
 def main() -> None:
-    """Entry point for the ``cmux`` command."""
+    """Run the cmux command-line interface."""
     app()
 
 

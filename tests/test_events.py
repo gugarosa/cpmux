@@ -3,7 +3,7 @@
 
 from cmux.events import SessionState, Status, apply_event, parse_line
 
-# A real copilot 1.0.70 JSONL sequence (from the "PONG" probe), trimmed
+# Real copilot JSONL sequence, trimmed
 SAMPLE = [
     {"type": "session.tools_updated", "data": {"model": "gpt-5.5"}},
     {"type": "user.message", "data": {"content": "Say PONG"}},
@@ -23,29 +23,30 @@ SAMPLE = [
 
 
 def test_reduce_full_sequence():
-    st = SessionState()
-    for ev in SAMPLE:
-        apply_event(st, ev)
-    assert st.status == Status.DONE
-    assert st.session_id == "abc-123"
-    assert st.last_text == "PONG"
-    assert st.premium_requests == 3
-    assert st.files_modified == ["a.ts"]
+    state = SessionState()
+    for event in SAMPLE:
+        apply_event(state, event)
+
+    assert state.status == Status.DONE
+    assert state.session_id == "abc-123"
+    assert state.last_text == "PONG"
+    assert state.premium_requests == 3
+    assert state.files_modified == ["a.ts"]
 
 
 def test_tool_events_update_status():
-    st = SessionState()
-    apply_event(st, {"type": "tool.execution_start", "data": {"toolName": "write"}})
-    assert st.status == Status.TOOL
-    assert st.current_tool == "write"
-    apply_event(st, {"type": "tool.execution_complete", "data": {"success": True}})
-    assert st.status == Status.RUNNING
+    state = SessionState()
+    apply_event(state, {"type": "tool.execution_start", "data": {"toolName": "write"}})
+    assert state.status == Status.TOOL
+    assert state.current_tool == "write"
+    apply_event(state, {"type": "tool.execution_complete", "data": {"success": True}})
+    assert state.status == Status.RUNNING
 
 
 def test_failure_exit_code():
-    st = SessionState()
-    apply_event(st, {"type": "result", "sessionId": "z", "exitCode": 1, "usage": {}})
-    assert st.status == Status.FAILED
+    state = SessionState()
+    apply_event(state, {"type": "result", "sessionId": "z", "exitCode": 1, "usage": {}})
+    assert state.status == Status.FAILED
 
 
 def test_parse_line_tolerant():

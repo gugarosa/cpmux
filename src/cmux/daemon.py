@@ -1,14 +1,6 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
-"""Detached-daemon lifecycle and crash reconciliation for cmux runs.
-
-A run records its "owner" pid (the foreground ``up`` process, or the detached
-daemon) in ``daemon.json``. While the owner is alive the run is managed; once it
-exits cleanly the file is cleared. A stale owner (present but dead) marks a
-crash, so :func:`reconcile` can flip abandoned sessions to a terminal state.
-"""
-
 import json
 import os
 import signal
@@ -24,7 +16,15 @@ logger = get_logger(__name__)
 
 
 def pid_alive(pid: int | None) -> bool:
-    """Return whether ``pid`` names a live process."""
+    """Check whether a process id is currently running.
+
+    Args:
+        pid: Process id to probe, or None.
+
+    Returns:
+        True when a process with that id exists.
+
+    """
     if not pid:
         return False
 
@@ -39,6 +39,7 @@ def pid_alive(pid: int | None) -> bool:
 def _terminate(pid: int | None, grace: float = 3.0) -> None:
     if not pid:
         return
+
     try:
         pgid = os.getpgid(pid)
         os.killpg(pgid, signal.SIGTERM)
@@ -58,12 +59,26 @@ def _terminate(pid: int | None, grace: float = 3.0) -> None:
 
 
 def write_owner(paths: RunPaths, pid: int) -> None:
-    """Record the pid that currently owns (manages) the run."""
+    """Record the pid that currently owns (manages) the run.
+
+    Args:
+        paths: Run paths locating the owner file.
+        pid: Owner process id to record.
+
+    """
     paths.daemon_file.write_text(json.dumps({"pid": pid}))
 
 
 def read_owner(paths: RunPaths) -> int | None:
-    """Return the run's recorded owner pid, or ``None`` if there is none."""
+    """Read the run's recorded owner pid.
+
+    Args:
+        paths: Run paths locating the owner file.
+
+    Returns:
+        The recorded owner pid, or None when absent or unreadable.
+
+    """
     if not paths.daemon_file.exists():
         return None
 
@@ -74,18 +89,41 @@ def read_owner(paths: RunPaths) -> int | None:
 
 
 def clear_owner(paths: RunPaths) -> None:
-    """Remove the owner pid file, marking the run as no longer managed."""
+    """Delete the owner file, marking the run as no longer managed.
+
+    Args:
+        paths: Run paths locating the owner file.
+
+    """
     paths.daemon_file.unlink(missing_ok=True)
 
 
 def owner_alive(paths: RunPaths) -> bool:
-    """Return whether the run's owner process is still alive."""
+    """Check whether the run's owner process is still alive.
+
+    Args:
+        paths: Run paths locating the owner file.
+
+    Returns:
+        True when a recorded owner pid is running.
+
+    """
     return pid_alive(read_owner(paths))
 
 
 def launch_detached(run_id: str, repo_root: str) -> int:
-    """Start the run's supervisor as a detached background daemon and return its pid."""
+    """Start the run's supervisor as a detached background daemon.
+
+    Args:
+        run_id: Identifier of the run to supervise.
+        repo_root: Repository root the daemon runs from.
+
+    Returns:
+        The pid of the spawned daemon.
+
+    """
     paths = RunPaths(repo_root, run_id)
+
     with (paths.run_dir / "daemon.log").open("ab") as log:
         proc = subprocess.Popen(
             [sys.executable, "-m", "cmux", "_daemon", run_id],
@@ -101,7 +139,16 @@ def launch_detached(run_id: str, repo_root: str) -> int:
 
 
 def reconcile(paths: RunPaths, records: list[SessionRecord]) -> list[SessionRecord]:
-    """Flip non-terminal sessions to failed when the run's owner has exited."""
+    """Flip non-terminal sessions to failed when the run's owner has exited.
+
+    Args:
+        paths: Run paths for the run being reconciled.
+        records: Session records to inspect and update.
+
+    Returns:
+        The same records, with abandoned sessions marked failed.
+
+    """
     if owner_alive(paths):
         return records
 
@@ -116,8 +163,18 @@ def reconcile(paths: RunPaths, records: list[SessionRecord]) -> list[SessionReco
 
 
 def stop(paths: RunPaths, records: list[SessionRecord]) -> int:
-    """Terminate the run's owner and any live sessions, returning how many were signalled."""
+    """Terminate the run's owner and any live sessions.
+
+    Args:
+        paths: Run paths for the run to stop.
+        records: Session records whose processes may be running.
+
+    Returns:
+        The number of processes signalled.
+
+    """
     signalled = 0
+
     if pid_alive(read_owner(paths)):
         _terminate(read_owner(paths))
         signalled += 1
@@ -137,8 +194,18 @@ def stop(paths: RunPaths, records: list[SessionRecord]) -> int:
 
 
 def kill_session(paths: RunPaths, record: SessionRecord) -> bool:
-    """Terminate a single session, returning whether it was still running."""
+    """Terminate a single session.
+
+    Args:
+        paths: Run paths used to persist the updated record.
+        record: Session record identifying the process to kill.
+
+    Returns:
+        True when the session was still running.
+
+    """
     alive = pid_alive(record.pid)
+
     if alive:
         _terminate(record.pid)
     if record.status not in TERMINAL:

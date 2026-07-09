@@ -1,15 +1,6 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
-"""Commit, push, and open one pull request per item (agents stay edit-only).
-
-The agent sessions never push; the orchestrator deterministically commits the
-worktree diff, pushes the branch, and opens exactly one draft PR per item. When
-``strip_token`` is set, the ambient ``GITHUB_TOKEN``/``GH_TOKEN`` is removed so
-``gh`` and ``git push`` fall back to the keyring account, which matters where the
-ambient token is a fine-grained PAT that lacks repository permissions.
-"""
-
 import os
 import subprocess
 from pathlib import Path
@@ -20,10 +11,19 @@ class PRError(Exception):
 
 
 def gh_env(strip_token: bool = True) -> dict[str, str]:
-    """Build a subprocess environment for ``gh``/``git``, optionally token-stripped."""
+    """Build a subprocess environment for ``gh``/``git``.
+
+    Args:
+        strip_token: Whether to drop ambient ``GITHUB_TOKEN``/``GH_TOKEN`` so ``gh``
+            falls back to the keyring account.
+
+    Returns:
+        The environment mapping for the subprocess.
+    """
     env = os.environ.copy()
     env.setdefault("GH_PROMPT_DISABLED", "1")
     env.setdefault("GH_NO_UPDATE_NOTIFIER", "1")
+
     if strip_token:
         env.pop("GITHUB_TOKEN", None)
         env.pop("GH_TOKEN", None)
@@ -38,7 +38,19 @@ def _run(
 
 
 def commit_all(worktree: str | Path, message: str, env: dict[str, str]) -> bool:
-    """Stage and commit everything in the worktree, returning whether a commit was made."""
+    """Stage and commit everything in the worktree.
+
+    Args:
+        worktree: Worktree to commit.
+        message: Commit message.
+        env: Subprocess environment.
+
+    Returns:
+        ``True`` if a commit was made, ``False`` if there was nothing to commit.
+
+    Raises:
+        PRError: If ``git commit`` fails.
+    """
     _run(["git", "add", "-A"], worktree, env)
     if _run(["git", "diff", "--cached", "--quiet"], worktree, env).returncode == 0:
         return False
@@ -51,14 +63,34 @@ def commit_all(worktree: str | Path, message: str, env: dict[str, str]) -> bool:
 
 
 def push_branch(worktree: str | Path, remote: str, branch: str, env: dict[str, str]) -> None:
-    """Push the worktree's HEAD to ``branch`` on ``remote``."""
+    """Push the worktree's HEAD to ``branch`` on ``remote``.
+
+    Args:
+        worktree: Worktree to push from.
+        remote: Remote name.
+        branch: Target branch name.
+        env: Subprocess environment.
+
+    Raises:
+        PRError: If ``git push`` fails.
+    """
     proc = _run(["git", "push", "-u", remote, f"HEAD:refs/heads/{branch}"], worktree, env)
     if proc.returncode != 0:
         raise PRError(f"`git push` failed: {proc.stderr.strip()}.")
 
 
 def existing_pr_url(worktree: str | Path, base: str, branch: str, env: dict[str, str]) -> str | None:
-    """Return the URL of an open PR for ``branch``, or ``None`` if there is none."""
+    """Return the URL of an open PR for ``branch``, or ``None`` if there is none.
+
+    Args:
+        worktree: Worktree used to run ``gh``.
+        base: Base branch of the PR.
+        branch: Head branch of the PR.
+        env: Subprocess environment.
+
+    Returns:
+        The open PR URL, or ``None`` if none exists.
+    """
     proc = _run(
         [
             "gh",
@@ -94,7 +126,24 @@ def create_pr(
     draft: bool,
     env: dict[str, str],
 ) -> str:
-    """Create a pull request for ``branch`` and return its URL."""
+    """Create a pull request for ``branch`` and return its URL.
+
+    Args:
+        worktree: Worktree used to run ``gh``.
+        base: Base branch of the PR.
+        branch: Head branch of the PR.
+        title: PR title.
+        body: PR body, passed on stdin.
+        labels: Labels to apply.
+        draft: Whether to open the PR as a draft.
+        env: Subprocess environment.
+
+    Returns:
+        The created PR URL, or an empty string if ``gh`` printed nothing.
+
+    Raises:
+        PRError: If ``gh pr create`` fails.
+    """
     cmd = ["gh", "pr", "create", "--base", base, "--head", branch, "--title", title, "--body-file", "-"]
     if draft:
         cmd.append("--draft")
@@ -120,8 +169,28 @@ def open_pull_request(
     commit_message: str,
     strip_token: bool = True,
 ) -> str:
-    """Run the idempotent commit, push, and reuse-or-create pipeline; return the PR URL."""
+    """Commit, push, and reuse-or-create a PR, returning its URL.
+
+    Args:
+        worktree: Worktree to publish.
+        remote: Remote to push to.
+        base: Base branch of the PR.
+        branch: Head branch of the PR.
+        title: PR title.
+        body: PR body.
+        labels: Labels to apply.
+        draft: Whether to open the PR as a draft.
+        commit_message: Message for the worktree commit.
+        strip_token: Whether to strip ambient GitHub tokens from the environment.
+
+    Returns:
+        The URL of the existing or newly created PR.
+
+    Raises:
+        PRError: If a commit, push, or create step fails.
+    """
     env = gh_env(strip_token)
+
     commit_all(worktree, commit_message, env)
     push_branch(worktree, remote, branch, env)
 

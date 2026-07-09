@@ -1,15 +1,6 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
-"""Declarative config model for cmux.
-
-A cmux run takes one input: a YAML file with a shared ``system`` prompt and a
-list of ``items`` (each a plain string or a mapping of overrides). This module
-defines the validated schema, string-to-item normalisation, ``${ENV}``
-interpolation, the ``item > defaults > built-in`` precedence merge, and the
-mapping from permission presets to concrete ``copilot`` flags.
-"""
-
 import os
 import re
 from enum import StrEnum
@@ -61,7 +52,17 @@ class Deps(StrEnum):
 
 
 def interpolate_env(value: str) -> str:
-    """Expand ``${VAR}`` and ``${VAR:-default}`` references in a string."""
+    """Expand ``${VAR}`` and ``${VAR:-default}`` references in a string.
+
+    Args:
+        value: Text possibly containing environment-variable references.
+
+    Returns:
+        The string with every reference replaced by its value or fallback.
+
+    Raises:
+        ValueError: If a referenced variable is unset and has no fallback.
+    """
 
     def repl(match: re.Match[str]) -> str:
         name, default = match.group(1), match.group(2)
@@ -88,7 +89,14 @@ def _walk_interpolate(obj: Any) -> Any:
 
 
 def slugify(text: str) -> str:
-    """Convert free text into a branch- and worktree-safe slug."""
+    """Convert free text into a branch- and worktree-safe slug.
+
+    Args:
+        text: Free-form text to normalise.
+
+    Returns:
+        A lowercased, hyphenated slug of at most 50 characters.
+    """
     text = text.strip().lower().splitlines()[0] if text.strip() else "task"
     text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
 
@@ -96,7 +104,7 @@ def slugify(text: str) -> str:
 
 
 class Permissions(BaseModel):
-    """A permission preset plus escape-hatch allow/deny lists and network knobs."""
+    """Permission preset with explicit allow/deny lists and network knobs."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -122,7 +130,11 @@ class Permissions(BaseModel):
         return self.preset in (Preset.full, Preset.yolo)
 
     def to_flags(self) -> list[str]:
-        """Expand the preset, then append explicit allow/deny/network flags."""
+        """Expand the preset, then append explicit allow/deny/network flags.
+
+        Returns:
+            The ``copilot`` command-line flags for these permissions.
+        """
         flags: list[str] = []
         if self.preset in (Preset.full, Preset.yolo):
             flags.append("--allow-all-tools")
@@ -202,15 +214,17 @@ class Item(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def slug(self) -> str:
+        """Branch- and worktree-safe slug derived from name, id, or prompt."""
         return slugify(self.name or self.id or self.prompt)
 
     @property
     def key(self) -> str:
+        """Stable identifier: explicit id when set, else the slug."""
         return self.id or self.slug
 
 
 class ResolvedItem(BaseModel):
-    """A fully merged, ready-to-spawn session spec (item > defaults > built-in)."""
+    """Fully merged, ready-to-spawn session spec (item > defaults > built-in)."""
 
     key: str
     name: str
@@ -231,7 +245,16 @@ class ResolvedItem(BaseModel):
     pr_body: str
 
     def spawn_argv(self, worktree: str | Path, session_id: str, log_dir: str | Path) -> list[str]:
-        """Build the exact headless ``copilot`` invocation for this session."""
+        """Build the headless ``copilot`` invocation for this session.
+
+        Args:
+            worktree: Working directory for the session.
+            session_id: Stable identifier for the copilot session.
+            log_dir: Directory where session logs are written.
+
+        Returns:
+            The full ``copilot`` argv.
+        """
         argv = [
             "copilot",
             "-C",
@@ -259,7 +282,7 @@ class ResolvedItem(BaseModel):
 
 
 class Plan(BaseModel):
-    """A parsed cmux run: a shared system prompt, defaults, and a list of items."""
+    """Parsed cmux run: shared system prompt, defaults, and a list of items."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -279,7 +302,7 @@ class Plan(BaseModel):
     @field_validator("items")
     @classmethod
     def _unique_and_wired(cls, items: list[Item]) -> list[Item]:
-        keys = [it.key for it in items]
+        keys = [item.key for item in items]
         dupes = {k for k in keys if keys.count(k) > 1}
         if dupes:
             raise ValueError(
@@ -288,48 +311,54 @@ class Plan(BaseModel):
             )
 
         known = set(keys)
-        for it in items:
-            missing = [d for d in it.depends_on if d not in known]
+        for item in items:
+            missing = [d for d in item.depends_on if d not in known]
             if missing:
                 raise ValueError(
-                    f"`depends_on` of item '{it.key}' references unknown id(s) {missing}, "
+                    f"`depends_on` of item '{item.key}' references unknown id(s) {missing}, "
                     f"known ids are {sorted(known)}."
                 )
 
         return items
 
     def resolve(self) -> list[ResolvedItem]:
-        """Apply precedence and compute the ready-to-spawn spec for every item."""
+        """Apply precedence and compute the ready-to-spawn spec for every item.
+
+        Returns:
+            One resolved item per plan item, in declaration order.
+        """
         defaults = self.defaults
         resolved: list[ResolvedItem] = []
-        for it in self.items:
-            permissions = it.permissions or defaults.permissions
-            if it.paths:
-                permissions = permissions.model_copy(update={"add_dir": [*permissions.add_dir, *it.paths]})
-            branch = it.branch or defaults.branch_template.format(slug=it.slug, id=it.key)
-            prompt = it.prompt
-            if it.include_system and self.system.strip():
-                prompt = f"{self.system.strip()}\n\n---\n\n{it.prompt.strip()}"
+
+        for item in self.items:
+            permissions = item.permissions or defaults.permissions
+            if item.paths:
+                permissions = permissions.model_copy(update={"add_dir": [*permissions.add_dir, *item.paths]})
+            branch = item.branch or defaults.branch_template.format(slug=item.slug, id=item.key)
+            prompt = item.prompt
+            if item.include_system and self.system.strip():
+                prompt = f"{self.system.strip()}\n\n---\n\n{item.prompt.strip()}"
             pr = defaults.pr
+            display_name = item.name or item.slug
             resolved.append(
                 ResolvedItem(
-                    key=it.key,
-                    name=it.name or it.slug,
-                    slug=it.slug,
+                    key=item.key,
+                    name=display_name,
+                    slug=item.slug,
                     prompt=prompt,
-                    model=it.model or defaults.model,
-                    effort=it.effort or defaults.effort,
+                    model=item.model or defaults.model,
+                    effort=item.effort or defaults.effort,
                     permissions=permissions,
                     branch=branch,
-                    base=it.base or defaults.base,
-                    labels=list(dict.fromkeys([*pr.labels, *it.labels])),
-                    draft=pr.draft if it.draft is None else it.draft,
-                    depends_on=list(it.depends_on),
-                    env=dict(it.env),
+                    base=item.base or defaults.base,
+                    labels=list(dict.fromkeys([*pr.labels, *item.labels])),
+                    draft=pr.draft if item.draft is None else item.draft,
+                    depends_on=list(item.depends_on),
+                    env=dict(item.env),
                     deps=defaults.deps,
                     remote=defaults.remote,
-                    pr_title=pr.title_template.format(name=it.name or it.slug, slug=it.slug),
-                    pr_body=pr.body_template.format(name=it.name or it.slug, slug=it.slug, prompt=it.prompt.strip()),
+                    pr_title=pr.title_template.format(name=display_name, slug=item.slug),
+                    pr_body=pr.body_template.format(name=display_name, slug=item.slug, prompt=item.prompt.strip()),
                 )
             )
 
@@ -341,19 +370,29 @@ class ConfigError(Exception):
 
 
 def load_plan(path: str | Path) -> Plan:
-    """Load and validate a cmux YAML file into a :class:`Plan`."""
-    p = Path(path)
-    if not p.exists():
-        raise ConfigError(f"`{p}` config file does not exist.")
+    """Load and validate a cmux YAML file into a :class:`Plan`.
+
+    Args:
+        path: Filesystem path to the YAML config file.
+
+    Returns:
+        The validated plan.
+
+    Raises:
+        ConfigError: If the file is missing, unparseable, or fails validation.
+    """
+    config_path = Path(path)
+    if not config_path.exists():
+        raise ConfigError(f"`{config_path}` config file does not exist.")
 
     try:
-        raw = yaml.safe_load(p.read_text()) or {}
+        raw = yaml.safe_load(config_path.read_text()) or {}
     except yaml.YAMLError as exc:
-        raise ConfigError(f"`{p}` is not valid YAML: {exc}.") from exc
+        raise ConfigError(f"`{config_path}` is not valid YAML: {exc}.") from exc
     if not isinstance(raw, dict):
-        raise ConfigError(f"`{p}` top-level YAML must be a mapping, but got {type(raw).__name__}.")
+        raise ConfigError(f"`{config_path}` top-level YAML must be a mapping, but got {type(raw).__name__}.")
 
     try:
         return Plan.model_validate(raw)
     except ValidationError as exc:
-        raise ConfigError(f"`{p}` is not a valid cmux config:\n{exc}") from exc
+        raise ConfigError(f"`{config_path}` is not a valid cmux config:\n{exc}") from exc

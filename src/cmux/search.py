@@ -1,12 +1,6 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
-"""Full-text search across cmux session transcripts.
-
-Searches the ``transcript.jsonl`` files that cmux tees for every session, so it
-is self-contained and does not couple to copilot's internal session store.
-"""
-
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,7 +13,7 @@ _SNIPPET_AFTER = 80
 
 @dataclass
 class Hit:
-    """A single search match: which session, which role, and a text snippet."""
+    """One search match: session label, role, and text snippet."""
 
     label: str
     role: str
@@ -33,11 +27,11 @@ def _messages(transcript_path: str | Path) -> list[tuple[str, str]]:
 
     out: list[tuple[str, str]] = []
     for line in path.read_text(encoding="utf-8").splitlines():
-        ev = parse_line(line)
-        if ev is None:
+        event = parse_line(line)
+        if event is None:
             continue
-        typ = ev.get("type", "")
-        data = ev.get("data") if isinstance(ev.get("data"), dict) else ev
+        typ = event.get("type", "")
+        data = event.get("data") if isinstance(event.get("data"), dict) else event
         if typ == "user.message":
             out.append(("user", str(data.get("content", ""))))
         elif typ == "assistant.message":
@@ -66,7 +60,17 @@ def _snippet(text: str, index: int) -> str:
 
 
 def search_transcripts(items: list[tuple[str, Path]], query: str, regex: bool = False) -> list[Hit]:
-    """Return every transcript message matching ``query`` across the given sessions."""
+    """Return every transcript message matching a query across sessions.
+
+    Args:
+        items: Pairs of session label and transcript path.
+        query: Text or regular expression to match.
+        regex: Whether to treat query as a regular expression.
+
+    Returns:
+        A list of hits, one per matching message.
+
+    """
     hits: list[Hit] = []
     for label, transcript_path in items:
         for role, text in _messages(transcript_path):

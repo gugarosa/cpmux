@@ -1,7 +1,5 @@
 version: 1
 
-# The realistic 12-issue parallel run: mostly bare-string tasks, a couple of
-# items opt into per-item overrides (model, labels, paths, draft).
 system: |
   You are a senior frontend engineer on the Acme web app (React 18 + TypeScript,
   Vite, Tailwind, React Query, Vitest). Conventions:
@@ -13,7 +11,7 @@ system: |
 defaults:
   model: gpt-5.5
   effort: medium
-  permissions: edit          # edit files + run tests/git locally; never push, no network
+  permissions: edit
   base: main
   branch_template: cmux/{slug}
   concurrency: 6

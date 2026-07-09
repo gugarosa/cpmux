@@ -1,16 +1,6 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
-"""Parse and reduce the JSONL event stream emitted by ``copilot --output-format json``.
-
-A session emits, in order, ``session.*`` setup events, ``user.message``,
-``assistant.turn_start``, streamed ``assistant.message_delta``, a final
-``assistant.message`` (with ``toolRequests``/``outputTokens``),
-``assistant.turn_end``, ``assistant.idle``, and a terminal ``result`` object
-carrying ``sessionId``, ``exitCode`` and ``usage``. The session id and reliable
-token usage appear only in ``result``.
-"""
-
 import json
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -40,10 +30,11 @@ TERMINAL = frozenset({Status.DONE, Status.NO_CHANGES, Status.FAILED, Status.TIME
 
 
 def _first(data: dict[str, Any], *keys: str, default: str = "") -> str:
-    for k in keys:
-        v = data.get(k)
-        if isinstance(v, str) and v:
-            return v
+    for key in keys:
+        value = data.get(key)
+        if isinstance(value, str) and value:
+            return value
+
     return default
 
 
@@ -64,13 +55,23 @@ class SessionState:
 
     @property
     def summary_line(self) -> str:
-        """The latest assistant text, truncated for single-line display."""
+        """Latest assistant text, truncated for single-line display."""
         text = (self.last_text or self._delta_buf).strip().replace("\n", " ")
+
         return text[:80]
 
 
 def apply_event(state: SessionState, ev: dict[str, Any]) -> SessionState:
-    """Fold a single decoded JSONL event into ``state`` and return it."""
+    """Fold one decoded JSONL event into the session state.
+
+    Args:
+        state: Session state to update in place.
+        ev: Decoded JSONL event.
+
+    Returns:
+        The updated session state.
+
+    """
     typ = ev.get("type", "")
     data = ev.get("data") if isinstance(ev.get("data"), dict) else ev
 
@@ -115,7 +116,15 @@ def apply_event(state: SessionState, ev: dict[str, Any]) -> SessionState:
 
 
 def parse_line(line: str) -> dict[str, Any] | None:
-    """Decode one JSONL line, returning ``None`` for blank or non-JSON lines."""
+    """Decode one JSONL line into a dict.
+
+    Args:
+        line: Raw JSONL line.
+
+    Returns:
+        The decoded object, or None for blank or non-JSON lines.
+
+    """
     line = line.strip()
     if not line:
         return None

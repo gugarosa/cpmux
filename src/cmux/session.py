@@ -1,13 +1,6 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
-"""Spawn a single headless ``copilot`` session and reduce its JSONL stream.
-
-Each session is a one-shot ``copilot -p ... --output-format json`` subprocess in
-its own process group. Its stdout is tee'd verbatim to the run's
-``transcript.jsonl`` and folded into a live :class:`~cmux.events.SessionState`.
-"""
-
 import asyncio
 import os
 import signal
@@ -23,7 +16,7 @@ _STREAM_LIMIT = 1 << 20
 
 
 class SessionRunner:
-    """Owns one ``copilot`` subprocess: spawns it, streams JSONL, tracks state."""
+    """Own one ``copilot`` subprocess: spawn it, stream its JSONL, and track its state."""
 
     def __init__(
         self,
@@ -41,8 +34,17 @@ class SessionRunner:
         self._stderr = ""
 
     async def run(self, on_update: OnUpdate | None = None, on_spawn: OnSpawn | None = None) -> SessionState:
-        """Spawn the session, stream its events to disk and ``on_update``, and return the final state."""
+        """Spawn the session, stream its events to disk, and return the final state.
+
+        Args:
+            on_update: Called with ``(key, state, event)`` after each applied event.
+            on_spawn: Called with the child PID once the subprocess starts.
+
+        Returns:
+            The session state after the subprocess exits.
+        """
         self.transcript_path.parent.mkdir(parents=True, exist_ok=True)
+
         self.proc = await asyncio.create_subprocess_exec(
             *self.argv,
             stdout=asyncio.subprocess.PIPE,
@@ -54,28 +56,32 @@ class SessionRunner:
         self.state.status = Status.STARTING
         if on_spawn is not None:
             on_spawn(self.proc.pid)
+
         stderr_task = asyncio.create_task(self._drain_stderr())
 
-        with self.transcript_path.open("a", encoding="utf-8") as tf:
+        with self.transcript_path.open("a", encoding="utf-8") as transcript_file:
             try:
                 async for raw in self.proc.stdout:  # type: ignore[union-attr]
                     line = raw.decode("utf-8", "replace")
-                    tf.write(line)
-                    tf.flush()
-                    ev = parse_line(line)
-                    if ev is None:
+                    transcript_file.write(line)
+                    transcript_file.flush()
+
+                    event = parse_line(line)
+                    if event is None:
                         continue
-                    apply_event(self.state, ev)
+
+                    apply_event(self.state, event)
                     if on_update is not None:
-                        on_update(self.key, self.state, ev)
+                        on_update(self.key, self.state, event)
             except (ValueError, asyncio.LimitOverrunError):
                 pass
 
-        rc = await self.proc.wait()
+        return_code = await self.proc.wait()
         self._stderr = await stderr_task
+
         if self.state.exit_code is None:
-            self.state.exit_code = rc
-            self.state.status = Status.DONE if rc == 0 else Status.FAILED
+            self.state.exit_code = return_code
+            self.state.status = Status.DONE if return_code == 0 else Status.FAILED
         if self.state.status == Status.FAILED and not self.state.error:
             self.state.error = self._stderr.strip()[-500:] or f"exit code {self.state.exit_code}"
 
@@ -83,6 +89,7 @@ class SessionRunner:
 
     async def _drain_stderr(self) -> str:
         data = await self.proc.stderr.read()
+
         return data.decode("utf-8", "replace")
 
     def terminate(self) -> None:

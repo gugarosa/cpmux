@@ -31,7 +31,9 @@ def test_precedence_and_labels_and_system_prompt():
             ],
         }
     )
+
     resolved = plan.resolve()
+
     assert resolved[0].model == "gpt-5.5"
     assert resolved[1].model == "claude-opus-4.8"
     assert resolved[1].labels == ["batch", "refactor"]
@@ -47,6 +49,7 @@ def test_include_system_false_opts_out():
 def test_full_preset_flags():
     plan = Plan.model_validate({"items": [{"prompt": "x", "permissions": "full"}]})
     flags = plan.resolve()[0].permissions.to_flags()
+
     assert "--allow-all-tools" in flags
     assert "--no-ask-user" in flags
 
@@ -61,6 +64,7 @@ def test_edit_preset_gates_push_but_allows_shell():
 def test_paths_feed_add_dir():
     plan = Plan.model_validate({"items": [{"prompt": "x", "paths": ["src/settings"]}]})
     flags = plan.resolve()[0].permissions.to_flags()
+
     assert "--add-dir" in flags and "src/settings" in flags
 
 
@@ -89,6 +93,7 @@ def test_env_default_used_when_missing(monkeypatch):
 def test_spawn_argv_shape():
     resolved = Plan.model_validate({"items": [{"name": "Fix X", "prompt": "do"}]}).resolve()[0]
     argv = resolved.spawn_argv("/wt/fix-x", "sid-123", "/logs")
+
     assert argv[0] == "copilot"
     assert argv[argv.index("--session-id") + 1] == "sid-123"
     assert argv[argv.index("-C") + 1] == "/wt/fix-x"

@@ -77,7 +77,7 @@ Adopted from phitrain (rule ids in parentheses).
 **Deliberate divergence — config uses Pydantic v2, not `@dataclass`.** phitrain models
 config with `@dataclass` + `__post_init__` because it is driven by OmegaConf. cmux is a
 declarative-YAML tool whose value is string→item coercion, discriminated unions,
-`${ENV}` interpolation, and precise validation errors — all idiomatic in Pydantic v2.
+`${ENV}` interpolation, and precise validation errors, all idiomatic in Pydantic v2.
 The config models in `config.py` and the on-disk records in `state.py` are therefore
 Pydantic `BaseModel`s. Everything else follows phitrain.
 

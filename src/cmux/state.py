@@ -1,14 +1,6 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
-"""On-disk run state for cmux: the repo-local, gitignored ``.cmux/`` control plane.
-
-cmux owns only its orchestration bookkeeping here (the run manifest and one
-record, prompt, and transcript per item). copilot keeps its own transcripts and
-resumable session store under ``~/.copilot``. The full layout is documented in
-``CONVENTIONS.md``.
-"""
-
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,7 +15,12 @@ CMUX_DIR = ".cmux"
 
 
 def new_run_id() -> str:
-    """Return a time-sortable run identifier."""
+    """Return a time-sortable run identifier.
+
+    Returns:
+        A run id combining a UTC timestamp and a short random suffix.
+
+    """
     return f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:6]}"
 
 
@@ -80,7 +77,7 @@ class RunManifest(BaseModel):
 
 
 class RunPaths:
-    """Filesystem paths for a single run, rooted at ``<repo_root>/.cmux``."""
+    """Filesystem paths for a single run, rooted at `<repo_root>/.cmux`."""
 
     def __init__(self, repo_root: str | Path, run_id: str) -> None:
         self.repo_root = Path(repo_root)
@@ -121,7 +118,7 @@ class RunPaths:
         return self.session_dir(key) / "session.json"
 
     def copilot_log_dir(self, key: str) -> Path:
-        """Path to an item's copilot ``--log-dir``."""
+        """Path to an item's copilot `--log-dir`."""
         return self.session_dir(key) / "copilot-logs"
 
     def ensure_session_dirs(self, key: str) -> None:
@@ -132,20 +129,38 @@ class RunPaths:
     def write_manifest(self, manifest: RunManifest) -> None:
         """Persist the run manifest to disk."""
         self.run_dir.mkdir(parents=True, exist_ok=True)
+
         self.manifest.write_text(manifest.model_dump_json(indent=2))
 
     def write_record(self, record: SessionRecord) -> None:
         """Persist a single session record to disk."""
         self.ensure_session_dirs(record.key)
+
         self.record_file(record.key).write_text(record.model_dump_json(indent=2))
 
     def read_record(self, key: str) -> SessionRecord:
-        """Load a single session record from disk."""
+        """Load a single session record from disk.
+
+        Args:
+            key: Item key whose record to load.
+
+        Returns:
+            The deserialised session record.
+
+        """
         return SessionRecord.model_validate_json(self.record_file(key).read_text())
 
 
 def all_run_ids(repo_root: str | Path) -> list[str]:
-    """Return every run id under ``<repo_root>/.cmux``, newest first."""
+    """List every run id under `<repo_root>/.cmux`, newest first.
+
+    Args:
+        repo_root: Repository root containing the `.cmux` directory.
+
+    Returns:
+        Run ids sorted newest first, or empty when none exist.
+
+    """
     runs = Path(repo_root) / CMUX_DIR / "runs"
     if not runs.is_dir():
         return []
@@ -154,21 +169,38 @@ def all_run_ids(repo_root: str | Path) -> list[str]:
 
 
 def latest_run_id(repo_root: str | Path) -> str | None:
-    """Return the most recent run id under ``<repo_root>/.cmux``, if any."""
+    """Return the most recent run id under `<repo_root>/.cmux`.
+
+    Args:
+        repo_root: Repository root containing the `.cmux` directory.
+
+    Returns:
+        The newest run id, or None when there are no runs.
+
+    """
     ids = all_run_ids(repo_root)
 
     return ids[0] if ids else None
 
 
 def load_run(repo_root: str | Path, run_id: str) -> tuple[RunManifest, list[SessionRecord]]:
-    """Load a run's manifest and every session record it references."""
+    """Load a run's manifest and every session record it references.
+
+    Args:
+        repo_root: Repository root containing the `.cmux` directory.
+        run_id: Identifier of the run to load.
+
+    Returns:
+        The run manifest paired with its existing session records.
+
+    """
     paths = RunPaths(repo_root, run_id)
     manifest = RunManifest.model_validate_json(paths.manifest.read_text())
 
     records: list[SessionRecord] = []
     for key in manifest.item_keys:
-        f = paths.record_file(key)
-        if f.exists():
-            records.append(SessionRecord.model_validate_json(f.read_text()))
+        record_path = paths.record_file(key)
+        if record_path.exists():
+            records.append(SessionRecord.model_validate_json(record_path.read_text()))
 
     return manifest, records
