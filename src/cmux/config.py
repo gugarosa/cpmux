@@ -418,6 +418,7 @@ class Plan(BaseModel):
                 prompt = f"{self.system.strip()}\n\n---\n\n{item.prompt.strip()}"
             pr_settings = defaults.pr
             display_name = item.name or item.slug
+
             resolved.append(
                 ResolvedItem(
                     key=item.key,
@@ -450,7 +451,7 @@ class ConfigError(Exception):
 
 
 def load_plan(path: str | Path) -> Plan:
-    """Load and validate a cmux YAML file into a :class:`Plan`.
+    """Load and validate a cmux YAML file into a `Plan`.
 
     Args:
         path: Filesystem path to the YAML config file.
@@ -471,6 +472,7 @@ def load_plan(path: str | Path) -> Plan:
         raw = yaml.safe_load(config_path.read_text()) or {}
     except yaml.YAMLError as exc:
         raise ConfigError(f"`{config_path}` is not valid YAML: {exc}.") from exc
+
     if not isinstance(raw, dict):
         raise ConfigError(f"`{config_path}` top-level YAML must be a mapping, but got {type(raw).__name__}.")
 

@@ -156,7 +156,7 @@ def up(
         deps_override=str(deps) if deps else None,
     )
     try:
-        supervisor = Supervisor.create(plan, ".", options)
+        supervisor = Supervisor.create(plan, ".", options, str(file))
     except GitError as exc:
         logger.error(str(exc))
         raise typer.Exit(1)

@@ -5,6 +5,7 @@ import asyncio
 from pathlib import Path
 
 from cmux.config import Plan
+from cmux.engine.store import RunManifest
 from cmux.engine.supervisor import Options, Supervisor
 from cmux.events import Status
 from cmux.vcs import git
@@ -60,6 +61,13 @@ def test_prepare_writes_manifest(git_repo):
     sup = Supervisor.create(_plan(), str(repo), Options())
     sup.prepare()
     assert sup.paths.manifest.exists()
+
+
+def test_prepare_records_config_path_for_provenance(git_repo):
+    sup = Supervisor.create(_plan(), str(git_repo), Options(), "issues.yaml")
+    sup.prepare()
+    manifest = RunManifest.model_validate_json(sup.paths.manifest.read_text())
+    assert manifest.config_path == "issues.yaml"
 
 
 def test_prepare_creates_branch_per_item(git_repo):

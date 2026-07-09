@@ -139,7 +139,7 @@ def launch_detached(run_id: str, repo_root: str) -> int:
             stderr=log,
             start_new_session=True,
         )
-    
+
     write_owner(paths, proc.pid)
 
     return proc.pid
@@ -165,7 +165,6 @@ def reconcile(paths: RunPaths, records: list[SessionRecord]) -> list[SessionReco
             record.status = Status.FAILED
             record.error = record.error or "session interrupted, the run owner exited."
             record.mark_ended()
-            
             paths.write_record(record)
 
     return records
@@ -194,7 +193,7 @@ def stop(paths: RunPaths, records: list[SessionRecord]) -> int:
         if pid_alive(record.pid):
             _terminate(record.pid)
             signalled += 1
-        
+
         if record.status not in TERMINAL:
             record.status = Status.KILLED
             record.mark_ended()
@@ -221,11 +220,10 @@ def kill_session(paths: RunPaths, record: SessionRecord) -> bool:
 
     if alive:
         _terminate(record.pid)
-    
+
     if record.status not in TERMINAL:
         record.status = Status.KILLED
         record.mark_ended()
-        
         paths.write_record(record)
 
     return alive

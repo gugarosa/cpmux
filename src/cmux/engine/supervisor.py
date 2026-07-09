@@ -63,6 +63,7 @@ class Supervisor:
         options: Options,
         concurrency: int,
         system: str = "",
+        config_path: str = "",
     ) -> None:
         self.repo_root = Path(repo_root)
         self.run_id = run_id
@@ -70,6 +71,7 @@ class Supervisor:
         self.options = options
         self.concurrency = concurrency
         self.system = system
+        self.config_path = config_path
         self.paths = RunPaths(self.repo_root, run_id)
         self.console = Console()
         self.records: dict[str, SessionRecord] = {}
@@ -78,13 +80,14 @@ class Supervisor:
         self._live: Live | None = None
 
     @classmethod
-    def create(cls, plan: Plan, start_path: str, options: Options) -> "Supervisor":
+    def create(cls, plan: Plan, start_path: str, options: Options, config_path: str = "") -> "Supervisor":
         """Build a fresh supervisor for a new run.
 
         Args:
             plan: Parsed run plan.
             start_path: Path inside the target git repository.
             options: Runtime options for the run.
+            config_path: Path of the config file the run resolved, recorded for provenance.
 
         Returns:
             A supervisor ready to prepare and run.
@@ -97,7 +100,7 @@ class Supervisor:
         repo_root = git.repo_root(start_path)
         concurrency = options.concurrency or plan.defaults.concurrency
 
-        return cls(repo_root, new_run_id(), plan.resolve(), options, concurrency, plan.system)
+        return cls(repo_root, new_run_id(), plan.resolve(), options, concurrency, plan.system, config_path)
 
     @classmethod
     def from_run(cls, start_path: str, run_id: str) -> "Supervisor":
@@ -120,7 +123,13 @@ class Supervisor:
             deps_override=manifest.deps_override,
         )
         supervisor = cls(
-            manifest.repo_root, run_id, manifest.resolved, options, manifest.concurrency or 4, manifest.system
+            manifest.repo_root,
+            run_id,
+            manifest.resolved,
+            options,
+            manifest.concurrency or 4,
+            manifest.system,
+            manifest.config_path,
         )
 
         for key in manifest.item_keys:
@@ -136,7 +145,7 @@ class Supervisor:
             RunManifest(
                 run_id=self.run_id,
                 repo_root=str(self.repo_root),
-                config_path="",
+                config_path=self.config_path,
                 system=self.system,
                 item_keys=[item.key for item in self.resolved],
                 resolved=self.resolved,
@@ -225,7 +234,7 @@ class Supervisor:
             )
             if failed_dep is not None:
                 record.status = Status.FAILED
-                record.error = f"dependency '{failed_dep}' did not succeed."
+                record.error = f"dependency `{failed_dep}` did not succeed."
                 self.paths.write_record(record)
                 return
 
