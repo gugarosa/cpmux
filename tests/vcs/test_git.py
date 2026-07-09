@@ -5,7 +5,7 @@ import subprocess
 
 import pytest
 
-from cmux.gitutil import (
+from cmux.vcs.git import (
     GitError,
     add_worktree,
     branch_exists,

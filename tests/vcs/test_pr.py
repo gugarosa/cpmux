@@ -5,7 +5,7 @@ import subprocess
 
 import pytest
 
-from cmux.pr import PRError, commit_all, gh_env, push_branch
+from cmux.vcs.pr import PRError, commit_all, gh_env, push_branch
 
 
 def _repo(tmp_path):

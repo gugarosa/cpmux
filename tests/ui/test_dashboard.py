@@ -6,9 +6,9 @@ import json
 
 from textual.widgets import DataTable
 
-from cmux.dashboard import CmuxApp
+from cmux.engine.store import RunManifest, RunPaths, SessionRecord
 from cmux.events import Status
-from cmux.state import RunManifest, RunPaths, SessionRecord
+from cmux.ui.dashboard import CmuxApp
 
 
 def _build_run(tmp_path, keys):

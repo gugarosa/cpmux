@@ -8,9 +8,9 @@ import subprocess
 import sys
 import time
 
+from cmux.engine.store import RunPaths, SessionRecord
 from cmux.events import TERMINAL, Status
 from cmux.logging import get_logger
-from cmux.state import RunPaths, SessionRecord
 
 logger = get_logger(__name__)
 

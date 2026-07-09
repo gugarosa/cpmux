@@ -10,12 +10,12 @@ from rich.console import Console
 from rich.live import Live
 from rich.table import Table
 
-from cmux import gitutil, pr
 from cmux.config import Plan, ResolvedItem
+from cmux.engine.session import SessionRunner
+from cmux.engine.store import RunManifest, RunPaths, SessionRecord, new_run_id
 from cmux.events import SessionState, Status
 from cmux.logging import get_logger
-from cmux.session import SessionRunner
-from cmux.state import RunManifest, RunPaths, SessionRecord, new_run_id
+from cmux.vcs import git, pr
 
 logger = get_logger(__name__)
 
@@ -90,11 +90,11 @@ class Supervisor:
             A supervisor ready to prepare and run.
 
         Raises:
-            gitutil.GitError: If start_path is not inside a git repository.
+            git.GitError: If start_path is not inside a git repository.
 
         """
 
-        repo_root = gitutil.repo_root(start_path)
+        repo_root = git.repo_root(start_path)
         concurrency = options.concurrency or plan.defaults.concurrency
 
         return cls(repo_root, new_run_id(), plan.resolve(), options, concurrency, plan.system)
@@ -164,14 +164,14 @@ class Supervisor:
             self.paths.prompt_file(item.key).write_text(item.prompt)
 
             try:
-                _, record.base_sha = gitutil.resolve_base(self.repo_root, item.remote, item.base)
-                if gitutil.branch_exists(self.repo_root, record.branch):
+                _, record.base_sha = git.resolve_base(self.repo_root, item.remote, item.base)
+                if git.branch_exists(self.repo_root, record.branch):
                     record.branch = f"{item.branch}-{self.run_id[-6:]}"
-                gitutil.add_worktree(self.repo_root, self.paths.worktree(item.key), record.branch, record.base_sha)
-                gitutil.provision_deps(
+                git.add_worktree(self.repo_root, self.paths.worktree(item.key), record.branch, record.base_sha)
+                git.provision_deps(
                     self.repo_root, self.paths.worktree(item.key), self.options.deps_override or item.deps
                 )
-            except gitutil.GitError as exc:
+            except git.GitError as exc:
                 record.status = Status.FAILED
                 record.error = str(exc)
                 logger.warning(f"`{item.key}` worktree setup failed: {exc}.")
@@ -264,7 +264,7 @@ class Supervisor:
     async def _open_pr(self, item: ResolvedItem, record: SessionRecord) -> None:
         worktree = self.paths.worktree(item.key)
         try:
-            if not await asyncio.to_thread(gitutil.has_changes, worktree, record.base_sha):
+            if not await asyncio.to_thread(git.has_changes, worktree, record.base_sha):
                 record.status = Status.NO_CHANGES
                 return
 
@@ -284,7 +284,7 @@ class Supervisor:
                 self.options.strip_github_token,
             )
             record.status = Status.DONE
-        except (pr.PRError, gitutil.GitError) as exc:
+        except (pr.PRError, git.GitError) as exc:
             record.status = Status.FAILED
             record.error = str(exc)
             logger.error(f"`{item.key}` pull request failed: {exc}.")

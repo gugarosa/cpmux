@@ -4,8 +4,8 @@
 import asyncio
 import sys
 
+from cmux.engine.session import SessionRunner
 from cmux.events import Status
-from cmux.session import SessionRunner
 
 
 def _fake_argv(lines):

@@ -13,16 +13,23 @@ from rich.live import Live
 from rich.markup import escape
 from rich.table import Table
 
-from cmux import __version__, daemon
+from cmux import __version__
 from cmux.config import ConfigError, Deps, Plan, ResolvedItem, load_plan
+from cmux.engine import daemon
+from cmux.engine.interact import followup_argv, resume_interactive_argv
+from cmux.engine.session import SessionRunner
+from cmux.engine.store import (
+    RunPaths,
+    SessionRecord,
+    all_run_ids,
+    latest_run_id,
+    load_run,
+)
+from cmux.engine.supervisor import Options, Supervisor
 from cmux.events import TERMINAL, Status, parse_line
-from cmux.gitutil import GitError, prune_worktrees, remove_worktree
-from cmux.interact import followup_argv, resume_interactive_argv
 from cmux.logging import get_logger
-from cmux.search import search_transcripts
-from cmux.session import SessionRunner
-from cmux.state import RunPaths, SessionRecord, all_run_ids, latest_run_id, load_run
-from cmux.supervisor import Options, Supervisor
+from cmux.ui.search import search_transcripts
+from cmux.vcs.git import GitError, prune_worktrees, remove_worktree
 
 app = typer.Typer(
     add_completion=False,
@@ -214,7 +221,7 @@ def dash(run: str | None = typer.Option(None, "--run", help="Run id (default: la
         logger.error("no cmux runs found here.")
         raise typer.Exit(1)
 
-    from cmux.dashboard import CmuxApp
+    from cmux.ui.dashboard import CmuxApp
 
     CmuxApp(".", run_id).run()
 

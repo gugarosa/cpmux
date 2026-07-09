@@ -3,7 +3,7 @@
 
 from typer.testing import CliRunner
 
-from cmux.cli import app
+from cmux.ui.cli import app
 
 runner = CliRunner()
 

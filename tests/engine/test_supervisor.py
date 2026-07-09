@@ -4,9 +4,9 @@
 import subprocess
 from pathlib import Path
 
-from cmux import gitutil
 from cmux.config import Plan
-from cmux.supervisor import Options, Supervisor
+from cmux.engine.supervisor import Options, Supervisor
+from cmux.vcs import git
 
 
 def _repo(tmp_path):
@@ -75,7 +75,7 @@ def test_prepare_creates_branch_per_item(tmp_path):
     sup = Supervisor.create(_plan(), str(repo), Options())
     sup.prepare()
     for record in sup.records.values():
-        assert gitutil.branch_exists(repo, record.branch) is True
+        assert git.branch_exists(repo, record.branch) is True
 
 
 def test_from_run_reloads_resolved_and_records(tmp_path):

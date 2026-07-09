@@ -1,8 +1,7 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
-from cmux.events import Status
-from cmux.state import (
+from cmux.engine.store import (
     RunManifest,
     RunPaths,
     SessionRecord,
@@ -11,6 +10,7 @@ from cmux.state import (
     load_run,
     new_run_id,
 )
+from cmux.events import Status
 
 
 def _record(key="a"):

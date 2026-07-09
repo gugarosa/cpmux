@@ -3,7 +3,7 @@
 
 import json
 
-from cmux.search import search_transcripts
+from cmux.ui.search import search_transcripts
 
 
 def _write(path, events):
