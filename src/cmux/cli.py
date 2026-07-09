@@ -95,6 +95,7 @@ def _plan_table(resolved: list[ResolvedItem]) -> Table:
     table.add_column("branch")
     table.add_column("perms")
     table.add_column("deps on")
+
     for item in resolved:
         table.add_row(
             item.key,
@@ -124,7 +125,7 @@ def up(
     ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
 ) -> None:
-    """Spawn one isolated Copilot session per item, each in its own worktree, branch, and PR."""
+    """Spawn one Copilot session per item, each in its own worktree, branch, and PR."""
     plan = _load(file)
     resolved = plan.resolve()
 
@@ -193,7 +194,7 @@ def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: 
                 _, records = load_run(root, run_id)
                 records = daemon.reconcile(paths, records)
                 live.update(_monitor_table(run_id, records, paths))
-                if all(r.status in TERMINAL for r in records):
+                if all(record.status in TERMINAL for record in records):
                     break
                 time.sleep(0.5)
     except KeyboardInterrupt:
@@ -290,7 +291,7 @@ def search(
 ) -> None:
     """Search across session transcripts for matching text."""
     root = Path(".")
-    run_ids = all_run_ids(root) if all_runs else [r for r in [run or latest_run_id(root)] if r]
+    run_ids = all_run_ids(root) if all_runs else [run_id for run_id in [run or latest_run_id(root)] if run_id]
     if not run_ids:
         logger.error("no cmux runs found here.")
         raise typer.Exit(1)
@@ -375,6 +376,7 @@ def _daemon_command(run_id: str = typer.Argument(...)) -> None:
 def _render_event(event: dict) -> None:
     event_type = event.get("type", "")
     data = event.get("data") if isinstance(event.get("data"), dict) else event
+
     if event_type == "user.message":
         console.print(f"[bold blue]🧑 user[/bold blue] {escape(str(data.get('content', '')).strip())}")
     elif event_type == "assistant.message":
@@ -458,12 +460,14 @@ def _print_summary(root: Path, run_id: str | None) -> None:
 
     _, records = load_run(root, run_id)
     records = daemon.reconcile(RunPaths(root, run_id), records)
+
     table = Table(title=f"cmux · run {run_id}", expand=True)
     table.add_column("item", style="bold")
     table.add_column("status")
     table.add_column("model")
     table.add_column("branch")
     table.add_column("PR")
+
     for record in records:
         color = _STATUS_COLOR.get(record.status, "cyan")
         table.add_row(

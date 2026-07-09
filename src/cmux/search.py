@@ -25,21 +25,21 @@ def _messages(transcript_path: str | Path) -> list[tuple[str, str]]:
     if not path.exists():
         return []
 
-    out: list[tuple[str, str]] = []
+    messages: list[tuple[str, str]] = []
     for line in path.read_text(encoding="utf-8").splitlines():
         event = parse_line(line)
         if event is None:
             continue
-        typ = event.get("type", "")
+        event_type = event.get("type", "")
         data = event.get("data") if isinstance(event.get("data"), dict) else event
-        if typ == "user.message":
-            out.append(("user", str(data.get("content", ""))))
-        elif typ == "assistant.message":
+        if event_type == "user.message":
+            messages.append(("user", str(data.get("content", ""))))
+        elif event_type == "assistant.message":
             text = str(data.get("content", ""))
             if text:
-                out.append(("assistant", text))
+                messages.append(("assistant", text))
 
-    return out
+    return messages
 
 
 def _match_index(text: str, query: str, regex: bool) -> int:

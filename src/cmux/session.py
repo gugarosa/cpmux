@@ -16,7 +16,7 @@ _STREAM_LIMIT = 1 << 20
 
 
 class SessionRunner:
-    """Own one ``copilot`` subprocess: spawn it, stream its JSONL, and track its state."""
+    """A single `copilot` subprocess: spawns it, streams its JSONL, and tracks its state."""
 
     def __init__(
         self,
@@ -37,11 +37,12 @@ class SessionRunner:
         """Spawn the session, stream its events to disk, and return the final state.
 
         Args:
-            on_update: Called with ``(key, state, event)`` after each applied event.
+            on_update: Called with `(key, state, event)` after each applied event.
             on_spawn: Called with the child PID once the subprocess starts.
 
         Returns:
             The session state after the subprocess exits.
+
         """
         self.transcript_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -89,7 +90,6 @@ class SessionRunner:
 
     async def _drain_stderr(self) -> str:
         data = await self.proc.stderr.read()
-
         return data.decode("utf-8", "replace")
 
     def terminate(self) -> None:

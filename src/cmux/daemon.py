@@ -16,13 +16,13 @@ logger = get_logger(__name__)
 
 
 def pid_alive(pid: int | None) -> bool:
-    """Check whether a process id is currently running.
+    """Check whether a process id is running.
 
     Args:
         pid: Process id to probe, or None.
 
     Returns:
-        True when a process with that id exists.
+        `True` when a process with that id exists.
 
     """
     if not pid:
@@ -59,7 +59,7 @@ def _terminate(pid: int | None, grace: float = 3.0) -> None:
 
 
 def write_owner(paths: RunPaths, pid: int) -> None:
-    """Record the pid that currently owns (manages) the run.
+    """Record the pid that owns the run.
 
     Args:
         paths: Run paths locating the owner file.
@@ -76,7 +76,7 @@ def read_owner(paths: RunPaths) -> int | None:
         paths: Run paths locating the owner file.
 
     Returns:
-        The recorded owner pid, or None when absent or unreadable.
+        The recorded owner pid, or `None` when absent or unreadable.
 
     """
     if not paths.daemon_file.exists():
@@ -105,7 +105,7 @@ def owner_alive(paths: RunPaths) -> bool:
         paths: Run paths locating the owner file.
 
     Returns:
-        True when a recorded owner pid is running.
+        `True` when a recorded owner pid is running.
 
     """
     return pid_alive(read_owner(paths))

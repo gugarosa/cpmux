@@ -11,14 +11,14 @@ class PRError(Exception):
 
 
 def gh_env(strip_token: bool = True) -> dict[str, str]:
-    """Build a subprocess environment for ``gh``/``git``.
+    """Build a subprocess environment for `gh`/`git`.
 
     Args:
-        strip_token: Whether to drop ambient ``GITHUB_TOKEN``/``GH_TOKEN`` so ``gh``
-            falls back to the keyring account.
+        strip_token: Drop ambient `GITHUB_TOKEN`/`GH_TOKEN` so `gh` uses the keyring account.
 
     Returns:
         The environment mapping for the subprocess.
+
     """
     env = os.environ.copy()
     env.setdefault("GH_PROMPT_DISABLED", "1")
@@ -46,10 +46,11 @@ def commit_all(worktree: str | Path, message: str, env: dict[str, str]) -> bool:
         env: Subprocess environment.
 
     Returns:
-        ``True`` if a commit was made, ``False`` if there was nothing to commit.
+        `True` if a commit was made, `False` if there was nothing to commit.
 
     Raises:
-        PRError: If ``git commit`` fails.
+        PRError: If `git commit` fails.
+
     """
     _run(["git", "add", "-A"], worktree, env)
     if _run(["git", "diff", "--cached", "--quiet"], worktree, env).returncode == 0:
@@ -63,7 +64,7 @@ def commit_all(worktree: str | Path, message: str, env: dict[str, str]) -> bool:
 
 
 def push_branch(worktree: str | Path, remote: str, branch: str, env: dict[str, str]) -> None:
-    """Push the worktree's HEAD to ``branch`` on ``remote``.
+    """Push the worktree's HEAD to `branch` on `remote`.
 
     Args:
         worktree: Worktree to push from.
@@ -72,7 +73,8 @@ def push_branch(worktree: str | Path, remote: str, branch: str, env: dict[str, s
         env: Subprocess environment.
 
     Raises:
-        PRError: If ``git push`` fails.
+        PRError: If `git push` fails.
+
     """
     proc = _run(["git", "push", "-u", remote, f"HEAD:refs/heads/{branch}"], worktree, env)
     if proc.returncode != 0:
@@ -80,16 +82,17 @@ def push_branch(worktree: str | Path, remote: str, branch: str, env: dict[str, s
 
 
 def existing_pr_url(worktree: str | Path, base: str, branch: str, env: dict[str, str]) -> str | None:
-    """Return the URL of an open PR for ``branch``, or ``None`` if there is none.
+    """Return the URL of an open PR for `branch`, or `None` if there is none.
 
     Args:
-        worktree: Worktree used to run ``gh``.
+        worktree: Worktree used to run `gh`.
         base: Base branch of the PR.
         branch: Head branch of the PR.
         env: Subprocess environment.
 
     Returns:
-        The open PR URL, or ``None`` if none exists.
+        The open PR URL, or `None` if none exists.
+
     """
     proc = _run(
         [
@@ -126,10 +129,10 @@ def create_pr(
     draft: bool,
     env: dict[str, str],
 ) -> str:
-    """Create a pull request for ``branch`` and return its URL.
+    """Create a pull request for `branch` and return its URL.
 
     Args:
-        worktree: Worktree used to run ``gh``.
+        worktree: Worktree used to run `gh`.
         base: Base branch of the PR.
         branch: Head branch of the PR.
         title: PR title.
@@ -139,10 +142,11 @@ def create_pr(
         env: Subprocess environment.
 
     Returns:
-        The created PR URL, or an empty string if ``gh`` printed nothing.
+        The created PR URL, or an empty string if `gh` printed nothing.
 
     Raises:
-        PRError: If ``gh pr create`` fails.
+        PRError: If `gh pr create` fails.
+
     """
     cmd = ["gh", "pr", "create", "--base", base, "--head", branch, "--title", title, "--body-file", "-"]
     if draft:
@@ -188,6 +192,7 @@ def open_pull_request(
 
     Raises:
         PRError: If a commit, push, or create step fails.
+
     """
     env = gh_env(strip_token)
 

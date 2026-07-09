@@ -61,55 +61,55 @@ class SessionState:
         return text[:80]
 
 
-def apply_event(state: SessionState, ev: dict[str, Any]) -> SessionState:
+def apply_event(state: SessionState, event: dict[str, Any]) -> SessionState:
     """Fold one decoded JSONL event into the session state.
 
     Args:
         state: Session state to update in place.
-        ev: Decoded JSONL event.
+        event: Decoded JSONL event.
 
     Returns:
         The updated session state.
 
     """
-    typ = ev.get("type", "")
-    data = ev.get("data") if isinstance(ev.get("data"), dict) else ev
+    event_type = event.get("type", "")
+    data = event.get("data") if isinstance(event.get("data"), dict) else event
 
-    if typ == "user.message":
+    if event_type == "user.message":
         state.status = Status.STARTING
-    elif typ == "assistant.turn_start":
+    elif event_type == "assistant.turn_start":
         state.status = Status.RUNNING
-    elif typ == "assistant.message_delta":
+    elif event_type == "assistant.message_delta":
         state._delta_buf += _first(data, "deltaContent", "delta", "content", "text")
         state.status = Status.RUNNING
-    elif typ == "assistant.message":
+    elif event_type == "assistant.message":
         content = _first(data, "content", "text")
         if content:
             state.last_text = content
         state._delta_buf = ""
         state.status = Status.RUNNING
-    elif typ == "tool.execution_start":
+    elif event_type == "tool.execution_start":
         state.current_tool = _first(data, "toolName", "name", "tool")
         state.tool_count += 1
         state.status = Status.TOOL
-    elif typ == "tool.execution_complete":
+    elif event_type == "tool.execution_complete":
         state.current_tool = ""
         state.status = Status.RUNNING
-    elif typ == "assistant.idle":
+    elif event_type == "assistant.idle":
         state.status = Status.IDLE
-    elif typ == "session.error":
+    elif event_type == "session.error":
         state.error = _first(data, "message", "error") or "session error"
         state.status = Status.FAILED
-    elif typ == "result":
-        state.session_id = ev.get("sessionId") or state.session_id
-        state.exit_code = ev.get("exitCode", state.exit_code)
-        usage = ev.get("usage") if isinstance(ev.get("usage"), dict) else {}
+    elif event_type == "result":
+        state.session_id = event.get("sessionId") or state.session_id
+        state.exit_code = event.get("exitCode", state.exit_code)
+        usage = event.get("usage") if isinstance(event.get("usage"), dict) else {}
         if "premiumRequests" in usage:
             state.premium_requests = usage.get("premiumRequests")
         changes = usage.get("codeChanges") if isinstance(usage.get("codeChanges"), dict) else {}
         files = changes.get("filesModified")
         if isinstance(files, list):
-            state.files_modified = [str(f) for f in files]
+            state.files_modified = [str(path) for path in files]
         state.status = Status.DONE if state.exit_code == 0 else Status.FAILED
 
     return state
@@ -122,7 +122,7 @@ def parse_line(line: str) -> dict[str, Any] | None:
         line: Raw JSONL line.
 
     Returns:
-        The decoded object, or None for blank or non-JSON lines.
+        The decoded object, or `None` for blank or non-JSON lines.
 
     """
     line = line.strip()

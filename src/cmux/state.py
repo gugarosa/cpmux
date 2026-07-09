@@ -139,15 +139,7 @@ class RunPaths:
         self.record_file(record.key).write_text(record.model_dump_json(indent=2))
 
     def read_record(self, key: str) -> SessionRecord:
-        """Load a single session record from disk.
-
-        Args:
-            key: Item key whose record to load.
-
-        Returns:
-            The deserialised session record.
-
-        """
+        """Load and return an item's session record."""
         return SessionRecord.model_validate_json(self.record_file(key).read_text())
 
 
@@ -165,7 +157,7 @@ def all_run_ids(repo_root: str | Path) -> list[str]:
     if not runs.is_dir():
         return []
 
-    return sorted((p.name for p in runs.iterdir() if p.is_dir()), reverse=True)
+    return sorted((entry.name for entry in runs.iterdir() if entry.is_dir()), reverse=True)
 
 
 def latest_run_id(repo_root: str | Path) -> str | None:
@@ -175,7 +167,7 @@ def latest_run_id(repo_root: str | Path) -> str | None:
         repo_root: Repository root containing the `.cmux` directory.
 
     Returns:
-        The newest run id, or None when there are no runs.
+        The newest run id, or `None` when there are no runs.
 
     """
     ids = all_run_ids(repo_root)

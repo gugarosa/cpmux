@@ -62,12 +62,6 @@ class SearchScreen(ModalScreen[str | None]):
     BINDINGS = [Binding("escape", "close", "Close")]
 
     def __init__(self, items: list[tuple[str, Path]]) -> None:
-        """Store the searchable session items.
-
-        Args:
-            items: session key and transcript path pairs to search over.
-
-        """
         super().__init__()
         self.items = items
 
@@ -126,13 +120,6 @@ class CmuxApp(App):
     ]
 
     def __init__(self, start_path: str, run_id: str) -> None:
-        """Initialize the dashboard for a run.
-
-        Args:
-            start_path: repository root the run started from.
-            run_id: identifier of the run to display.
-
-        """
         super().__init__()
         self.start_path = Path(start_path)
         self.run_id = run_id

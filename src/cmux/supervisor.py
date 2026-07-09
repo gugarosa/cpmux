@@ -47,7 +47,7 @@ class Options:
 
 
 class Supervisor:
-    """Drives a run end to end: worktrees, the session pool, and pull requests."""
+    """A run's driver: worktrees, the session pool, and pull requests."""
 
     def __init__(
         self,
@@ -85,6 +85,7 @@ class Supervisor:
 
         Raises:
             gitutil.GitError: If start_path is not inside a git repository.
+
         """
         repo_root = gitutil.repo_root(start_path)
         concurrency = options.concurrency or plan.defaults.concurrency
@@ -101,6 +102,7 @@ class Supervisor:
 
         Returns:
             A supervisor rehydrated from the run manifest and records.
+
         """
         manifest = RunManifest.model_validate_json(RunPaths(start_path, run_id).manifest.read_text())
         options = Options(
@@ -173,6 +175,7 @@ class Supervisor:
 
         Returns:
             The final record for every item in the run.
+
         """
         sem = asyncio.Semaphore(self.concurrency)
         done_events = {item.key: asyncio.Event() for item in self.resolved}
@@ -205,7 +208,7 @@ class Supervisor:
                 return
 
             failed_dep = next(
-                (d for d in item.depends_on if self.records[d].status not in (Status.DONE, Status.NO_CHANGES)),
+                (dep for dep in item.depends_on if self.records[dep].status not in (Status.DONE, Status.NO_CHANGES)),
                 None,
             )
             if failed_dep is not None:

@@ -22,7 +22,7 @@ _ENV_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 
 
 class Effort(StrEnum):
-    """Reasoning effort passed to ``copilot --effort``."""
+    """Reasoning effort passed to `copilot --effort`."""
 
     none = "none"
     minimal = "minimal"
@@ -34,7 +34,7 @@ class Effort(StrEnum):
 
 
 class Preset(StrEnum):
-    """Friendly permission preset (``yolo`` is an alias of ``full``)."""
+    """Permission preset (`yolo` is an alias of `full`)."""
 
     readonly = "readonly"
     edit = "edit"
@@ -52,7 +52,7 @@ class Deps(StrEnum):
 
 
 def interpolate_env(value: str) -> str:
-    """Expand ``${VAR}`` and ``${VAR:-default}`` references in a string.
+    """Expand `${VAR}` and `${VAR:-default}` references in a string.
 
     Args:
         value: Text possibly containing environment-variable references.
@@ -62,6 +62,7 @@ def interpolate_env(value: str) -> str:
 
     Raises:
         ValueError: If a referenced variable is unset and has no fallback.
+
     """
 
     def repl(match: re.Match[str]) -> str:
@@ -81,9 +82,9 @@ def _walk_interpolate(obj: Any) -> Any:
     if isinstance(obj, str):
         return interpolate_env(obj)
     if isinstance(obj, list):
-        return [_walk_interpolate(v) for v in obj]
+        return [_walk_interpolate(value) for value in obj]
     if isinstance(obj, dict):
-        return {k: _walk_interpolate(v) for k, v in obj.items()}
+        return {key: _walk_interpolate(value) for key, value in obj.items()}
 
     return obj
 
@@ -96,6 +97,7 @@ def slugify(text: str) -> str:
 
     Returns:
         A lowercased, hyphenated slug of at most 50 characters.
+
     """
     text = text.strip().lower().splitlines()[0] if text.strip() else "task"
     text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
@@ -133,7 +135,8 @@ class Permissions(BaseModel):
         """Expand the preset, then append explicit allow/deny/network flags.
 
         Returns:
-            The ``copilot`` command-line flags for these permissions.
+            The `copilot` command-line flags for these permissions.
+
         """
         flags: list[str] = []
         if self.preset in (Preset.full, Preset.yolo):
@@ -224,7 +227,7 @@ class Item(BaseModel):
 
 
 class ResolvedItem(BaseModel):
-    """Fully merged, ready-to-spawn session spec (item > defaults > built-in)."""
+    """A resolved session spec ready to spawn (item > defaults > built-in)."""
 
     key: str
     name: str
@@ -245,7 +248,7 @@ class ResolvedItem(BaseModel):
     pr_body: str
 
     def spawn_argv(self, worktree: str | Path, session_id: str, log_dir: str | Path) -> list[str]:
-        """Build the headless ``copilot`` invocation for this session.
+        """Build the headless `copilot` invocation for this session.
 
         Args:
             worktree: Working directory for the session.
@@ -253,7 +256,8 @@ class ResolvedItem(BaseModel):
             log_dir: Directory where session logs are written.
 
         Returns:
-            The full ``copilot`` argv.
+            The full `copilot` argv.
+
         """
         argv = [
             "copilot",
@@ -303,7 +307,7 @@ class Plan(BaseModel):
     @classmethod
     def _unique_and_wired(cls, items: list[Item]) -> list[Item]:
         keys = [item.key for item in items]
-        dupes = {k for k in keys if keys.count(k) > 1}
+        dupes = {key for key in keys if keys.count(key) > 1}
         if dupes:
             raise ValueError(
                 f"`items` contain duplicate id/slug {sorted(dupes)}, "
@@ -312,7 +316,7 @@ class Plan(BaseModel):
 
         known = set(keys)
         for item in items:
-            missing = [d for d in item.depends_on if d not in known]
+            missing = [dep for dep in item.depends_on if dep not in known]
             if missing:
                 raise ValueError(
                     f"`depends_on` of item '{item.key}' references unknown id(s) {missing}, "
@@ -326,6 +330,7 @@ class Plan(BaseModel):
 
         Returns:
             One resolved item per plan item, in declaration order.
+
         """
         defaults = self.defaults
         resolved: list[ResolvedItem] = []
@@ -338,7 +343,7 @@ class Plan(BaseModel):
             prompt = item.prompt
             if item.include_system and self.system.strip():
                 prompt = f"{self.system.strip()}\n\n---\n\n{item.prompt.strip()}"
-            pr = defaults.pr
+            pr_settings = defaults.pr
             display_name = item.name or item.slug
             resolved.append(
                 ResolvedItem(
@@ -351,14 +356,16 @@ class Plan(BaseModel):
                     permissions=permissions,
                     branch=branch,
                     base=item.base or defaults.base,
-                    labels=list(dict.fromkeys([*pr.labels, *item.labels])),
-                    draft=pr.draft if item.draft is None else item.draft,
+                    labels=list(dict.fromkeys([*pr_settings.labels, *item.labels])),
+                    draft=pr_settings.draft if item.draft is None else item.draft,
                     depends_on=list(item.depends_on),
                     env=dict(item.env),
                     deps=defaults.deps,
                     remote=defaults.remote,
-                    pr_title=pr.title_template.format(name=display_name, slug=item.slug),
-                    pr_body=pr.body_template.format(name=display_name, slug=item.slug, prompt=item.prompt.strip()),
+                    pr_title=pr_settings.title_template.format(name=display_name, slug=item.slug),
+                    pr_body=pr_settings.body_template.format(
+                        name=display_name, slug=item.slug, prompt=item.prompt.strip()
+                    ),
                 )
             )
 
@@ -380,6 +387,7 @@ def load_plan(path: str | Path) -> Plan:
 
     Raises:
         ConfigError: If the file is missing, unparseable, or fails validation.
+
     """
     config_path = Path(path)
     if not config_path.exists():

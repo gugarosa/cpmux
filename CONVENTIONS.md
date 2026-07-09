@@ -14,7 +14,7 @@ These define how cmux stays composable. Crossing them turns one bug into many.
 - **One worktree per item.** Every item runs in its own `git worktree` on a unique
   `cmux/<slug>` branch off `origin/<base>`. Items never share a working tree.
 - **Agents are edit-only; the orchestrator ships.** Sessions run with `git push`
-  denied (`--deny-tool='shell(git push)'`). The orchestrator — never the agent —
+  denied (`--deny-tool='shell(git push)'`). The orchestrator, never the agent,
   commits the diff, pushes the branch, and opens exactly one draft PR per item.
 - **Monitor via JSONL, never PTY.** Session state is derived from
   `copilot --output-format json` (a JSONL event stream), tee'd to disk. Do not
@@ -24,7 +24,7 @@ These define how cmux stays composable. Crossing them turns one bug into many.
   resume, and recovery.
 - **cmux owns only `.cmux/`.** copilot keeps its own transcripts and resumable
   session store under `~/.copilot`; reuse it read-only rather than duplicating it.
-- **A run has one owner.** Its pid is recorded in `daemon.json` — the foreground `up`
+- **A run has one owner.** Its pid is recorded in `daemon.json`: the foreground `up`
   process, or the detached daemon. While the owner is alive the run is managed; a stale
   owner (present but dead) marks a crash, so non-terminal sessions reconcile to a terminal
   state instead of hanging as "running" forever.
@@ -74,7 +74,7 @@ Adopted from phitrain (rule ids in parentheses).
 - Inline first; extract a helper/constant/parameter only on a second call-site. (R16)
 - Double quotes for strings. Readable prose stays within 120 characters. (R9)
 
-**Deliberate divergence — config uses Pydantic v2, not `@dataclass`.** phitrain models
+**Deliberate divergence: config uses Pydantic v2, not `@dataclass`.** phitrain models
 config with `@dataclass` + `__post_init__` because it is driven by OmegaConf. cmux is a
 declarative-YAML tool whose value is string→item coercion, discriminated unions,
 `${ENV}` interpolation, and precise validation errors, all idiomatic in Pydantic v2.
@@ -87,7 +87,7 @@ Pydantic `BaseModel`s. Everything else follows phitrain.
 - Every `Option(...)` whose parameter name contains an underscore exposes both the
   `--snake_case` and `--kebab-case` aliases.
 - Validate inputs with `if/raise <SpecificError>`; surface operational failures with
-  `logger.error(...)` followed by `raise typer.Exit(1)` — no hand-rolled `"Error:"`
+  `logger.error(...)` followed by `raise typer.Exit(1)`, with no hand-rolled `"Error:"`
   prefix, no `typer.echo(..., err=True)`.
 - Presentation (status tables, transcripts) uses Rich; raw machine output uses
   `typer.echo`. Each `command()` carries a single-sentence docstring for `--help`.
@@ -99,7 +99,7 @@ Pydantic `BaseModel`s. Everything else follows phitrain.
 - Tests mirror the source layout: `tests/test_<module>.py`.
 - Test functions use `test_behavior_under_condition`, are plain functions, and carry no
   docstrings or type hints.
-- Asserts are bare `assert <expr>` — no failure-message strings; the test name carries
+- Asserts are bare `assert <expr>`, with no failure-message strings; the test name carries
   the intent. (R15)
 
 ## Tooling
