@@ -1,7 +1,10 @@
+# Copyright (c) 2026 Gustavo de Rosa.
+# Licensed under the MIT license.
+
 """Spawn a single headless ``copilot`` session and reduce its JSONL stream.
 
 Each session is a one-shot ``copilot -p ... --output-format json`` subprocess in
-its own process group. Its stdout (JSONL) is tee'd verbatim to the run's
+its own process group. Its stdout is tee'd verbatim to the run's
 ``transcript.jsonl`` and folded into a live :class:`~cmux.events.SessionState`.
 """
 
@@ -10,10 +13,10 @@ from __future__ import annotations
 import asyncio
 import os
 import signal
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
-from .events import SessionState, Status, apply_event, parse_line
+from cmux.events import SessionState, Status, apply_event, parse_line
 
 OnUpdate = Callable[[str, SessionState, dict], None]
 
@@ -21,6 +24,8 @@ _STREAM_LIMIT = 1 << 20
 
 
 class SessionRunner:
+    """Owns one ``copilot`` subprocess: spawns it, streams JSONL, tracks state."""
+
     def __init__(
         self,
         key: str,
@@ -37,6 +42,7 @@ class SessionRunner:
         self._stderr = ""
 
     async def run(self, on_update: OnUpdate | None = None) -> SessionState:
+        """Spawn the session, stream its events to disk and ``on_update``, and return the final state."""
         self.transcript_path.parent.mkdir(parents=True, exist_ok=True)
         self.proc = await asyncio.create_subprocess_exec(
             *self.argv,
@@ -48,6 +54,7 @@ class SessionRunner:
         )
         self.state.status = Status.STARTING
         stderr_task = asyncio.create_task(self._drain_stderr())
+
         with self.transcript_path.open("a", encoding="utf-8") as tf:
             try:
                 async for raw in self.proc.stdout:  # type: ignore[union-attr]
@@ -69,15 +76,16 @@ class SessionRunner:
             self.state.exit_code = rc
             self.state.status = Status.DONE if rc == 0 else Status.FAILED
         if self.state.status == Status.FAILED and not self.state.error:
-            self.state.error = (self._stderr.strip()[-500:]) or f"exit code {self.state.exit_code}"
+            self.state.error = self._stderr.strip()[-500:] or f"exit code {self.state.exit_code}"
+
         return self.state
 
     async def _drain_stderr(self) -> str:
-        assert self.proc is not None and self.proc.stderr is not None
         data = await self.proc.stderr.read()
         return data.decode("utf-8", "replace")
 
     def terminate(self) -> None:
+        """Send SIGTERM to the session's process group if it is still running."""
         if self.proc is not None and self.proc.returncode is None:
             try:
                 os.killpg(os.getpgid(self.proc.pid), signal.SIGTERM)

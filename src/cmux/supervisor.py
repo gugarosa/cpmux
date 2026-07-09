@@ -1,6 +1,9 @@
+# Copyright (c) 2026 Gustavo de Rosa.
+# Licensed under the MIT license.
+
 """The cmux supervisor: create worktrees, spawn the session pool, open PRs.
 
-v0 runs in the foreground with an asyncio pool (concurrency + ``depends_on``
+v0 runs in the foreground with an asyncio pool (concurrency plus ``depends_on``
 ordering) and a live Rich status table. A background daemon is planned for v1.
 """
 
@@ -14,11 +17,14 @@ from rich.console import Console
 from rich.live import Live
 from rich.table import Table
 
-from . import gitutil, pr
-from .config import Plan, ResolvedItem
-from .events import Status, SessionState
-from .session import SessionRunner
-from .state import RunManifest, RunPaths, SessionRecord, new_run_id
+from cmux import gitutil, pr
+from cmux.config import Plan, ResolvedItem
+from cmux.events import SessionState, Status
+from cmux.logging import get_logger
+from cmux.session import SessionRunner
+from cmux.state import RunManifest, RunPaths, SessionRecord, new_run_id
+
+logger = get_logger(__name__)
 
 _GLYPH = {
     Status.PENDING: ("○", "dim"),
@@ -39,6 +45,8 @@ _GLYPH = {
 
 @dataclass
 class Options:
+    """Runtime options for a single ``cmux up`` invocation."""
+
     concurrency: int | None = None
     open_pr: bool = True
     strip_github_token: bool = True
@@ -46,6 +54,8 @@ class Options:
 
 
 class Supervisor:
+    """Drives a run end to end: worktrees, the session pool, and pull requests."""
+
     def __init__(self, plan: Plan, start_path: str, options: Options) -> None:
         self.plan = plan
         self.options = options
@@ -60,9 +70,8 @@ class Supervisor:
         self.runners: dict[str, SessionRunner] = {}
         self._live: Live | None = None
 
-    # ---- setup -------------------------------------------------------------
-
     def prepare(self) -> None:
+        """Write the manifest and create one worktree and record per item."""
         self.paths.write_manifest(
             RunManifest(
                 run_id=self.run_id,
@@ -72,9 +81,8 @@ class Supervisor:
                 item_keys=[it.key for it in self.resolved],
             )
         )
+
         for it in self.resolved:
-            session_id = str(uuid4())
-            worktree = self.paths.worktree(it.key)
             record = SessionRecord(
                 key=it.key,
                 name=it.name,
@@ -82,8 +90,8 @@ class Supervisor:
                 branch=it.branch,
                 base=it.base,
                 model=it.model,
-                session_id=session_id,
-                worktree=str(worktree),
+                session_id=str(uuid4()),
+                worktree=str(self.paths.worktree(it.key)),
             )
             self.records[it.key] = record
             self.paths.ensure_session_dirs(it.key)
@@ -91,26 +99,25 @@ class Supervisor:
             try:
                 _, base_sha = gitutil.resolve_base(self.repo_root, it.remote, it.base)
                 self.base_sha[it.key] = base_sha
-                gitutil.add_worktree(self.repo_root, worktree, it.branch, base_sha)
-                strategy = self.options.deps_override or it.deps
-                gitutil.provision_deps(self.repo_root, worktree, strategy)
+                gitutil.add_worktree(self.repo_root, self.paths.worktree(it.key), it.branch, base_sha)
+                gitutil.provision_deps(
+                    self.repo_root, self.paths.worktree(it.key), self.options.deps_override or it.deps
+                )
             except gitutil.GitError as exc:
                 record.status = Status.FAILED
                 record.error = str(exc)
+                logger.warning(f"`{it.key}` worktree setup failed: {exc}.")
             self.paths.write_record(record)
 
-    # ---- run ---------------------------------------------------------------
-
     async def run(self) -> list[SessionRecord]:
+        """Spawn every item under the concurrency pool and return the final records."""
         concurrency = self.options.concurrency or self.plan.defaults.concurrency
         sem = asyncio.Semaphore(concurrency)
         done_events = {it.key: asyncio.Event() for it in self.resolved}
+
         with Live(self._render(), console=self.console, refresh_per_second=8) as live:
             self._live = live
-            tasks = [
-                asyncio.create_task(self._run_item(it, sem, done_events))
-                for it in self.resolved
-            ]
+            tasks = [asyncio.create_task(self._run_item(it, sem, done_events)) for it in self.resolved]
             try:
                 await asyncio.gather(*tasks)
             except asyncio.CancelledError:
@@ -118,11 +125,10 @@ class Supervisor:
                     runner.terminate()
                 raise
             live.update(self._render())
+
         return list(self.records.values())
 
-    async def _run_item(
-        self, it: ResolvedItem, sem: asyncio.Semaphore, done: dict[str, asyncio.Event]
-    ) -> None:
+    async def _run_item(self, it: ResolvedItem, sem: asyncio.Semaphore, done: dict[str, asyncio.Event]) -> None:
         record = self.records[it.key]
         try:
             for dep in it.depends_on:
@@ -130,13 +136,12 @@ class Supervisor:
             if record.status == Status.FAILED:
                 return
             failed_dep = next(
-                (d for d in it.depends_on
-                 if self.records[d].status not in (Status.DONE, Status.NO_CHANGES)),
+                (d for d in it.depends_on if self.records[d].status not in (Status.DONE, Status.NO_CHANGES)),
                 None,
             )
             if failed_dep is not None:
                 record.status = Status.FAILED
-                record.error = f"dependency '{failed_dep}' did not succeed"
+                record.error = f"dependency '{failed_dep}' did not succeed."
                 self.paths.write_record(record)
                 return
 
@@ -146,10 +151,7 @@ class Supervisor:
                 self.paths.write_record(record)
                 self._refresh()
 
-                worktree = self.paths.worktree(it.key)
-                argv = it.spawn_argv(
-                    worktree, record.session_id, self.paths.copilot_log_dir(it.key)
-                )
+                argv = it.spawn_argv(self.paths.worktree(it.key), record.session_id, self.paths.copilot_log_dir(it.key))
                 runner = SessionRunner(it.key, argv, self.paths.transcript(it.key))
                 self.runners[it.key] = runner
                 state = await runner.run(self._on_update)
@@ -159,7 +161,6 @@ class Supervisor:
                 record.files_modified = state.files_modified
                 record.error = state.error
                 record.status = state.status
-
                 if state.status == Status.DONE and self.options.open_pr:
                     await self._open_pr(it, record)
                 self.paths.write_record(record)
@@ -172,15 +173,14 @@ class Supervisor:
 
     async def _open_pr(self, it: ResolvedItem, record: SessionRecord) -> None:
         worktree = self.paths.worktree(it.key)
-        base_sha = self.base_sha.get(it.key, "")
         try:
-            changed = await asyncio.to_thread(gitutil.has_changes, worktree, base_sha)
-            if not changed:
+            if not await asyncio.to_thread(gitutil.has_changes, worktree, self.base_sha.get(it.key, "")):
                 record.status = Status.NO_CHANGES
                 return
+
             record.status = Status.OPENING_PR
             self._refresh()
-            url = await asyncio.to_thread(
+            record.pr_url = await asyncio.to_thread(
                 pr.open_pull_request,
                 worktree,
                 it.remote,
@@ -193,13 +193,11 @@ class Supervisor:
                 f"{it.pr_title}\n\ncmux item: {it.key}",
                 self.options.strip_github_token,
             )
-            record.pr_url = url
             record.status = Status.DONE
         except (pr.PRError, gitutil.GitError) as exc:
             record.status = Status.FAILED
             record.error = str(exc)
-
-    # ---- rendering ---------------------------------------------------------
+            logger.error(f"`{it.key}` pull request failed: {exc}.")
 
     def _on_update(self, key: str, state: SessionState, ev: dict) -> None:
         self.live_states[key] = state
@@ -216,6 +214,7 @@ class Supervisor:
         table.add_column("model", no_wrap=True)
         table.add_column("detail", overflow="ellipsis")
         table.add_column("branch / PR", no_wrap=True)
+
         for it in self.resolved:
             record = self.records[it.key]
             live = self.live_states.get(it.key)
@@ -227,12 +226,12 @@ class Supervisor:
                 detail += live.summary_line
             if record.error and status == Status.FAILED:
                 detail = record.error.splitlines()[0][:80]
-            branch_pr = record.pr_url or record.branch
             table.add_row(
                 it.key,
                 f"[{color}]{glyph} {status}[/{color}]",
                 it.model,
                 detail,
-                branch_pr,
+                record.pr_url or record.branch,
             )
+
         return table

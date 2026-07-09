@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Gustavo de Rosa.
+# Licensed under the MIT license.
+
 from cmux.events import SessionState, Status, apply_event, parse_line
 
 # A real copilot 1.0.70 JSONL sequence (from the "PONG" probe), trimmed.

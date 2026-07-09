@@ -1,4 +1,7 @@
-from .cli import main
+# Copyright (c) 2026 Gustavo de Rosa.
+# Licensed under the MIT license.
+
+from cmux.cli import main
 
 if __name__ == "__main__":
     main()

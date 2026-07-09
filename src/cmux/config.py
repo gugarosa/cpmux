@@ -1,10 +1,13 @@
+# Copyright (c) 2026 Gustavo de Rosa.
+# Licensed under the MIT license.
+
 """Declarative config model for cmux.
 
-A cmux run takes ONE input: a YAML file with a shared ``system`` prompt and a
+A cmux run takes one input: a YAML file with a shared ``system`` prompt and a
 list of ``items`` (each a plain string or a mapping of overrides). This module
-defines the validated schema (pydantic v2), string->item normalisation,
-``${ENV}`` interpolation, the ``item > defaults > built-in`` precedence merge,
-and the mapping from friendly permission presets to concrete ``copilot`` flags.
+defines the validated schema, string-to-item normalisation, ``${ENV}``
+interpolation, the ``item > defaults > built-in`` precedence merge, and the
+mapping from permission presets to concrete ``copilot`` flags.
 """
 
 from __future__ import annotations
@@ -26,8 +29,12 @@ from pydantic import (
     model_validator,
 )
 
+_ENV_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
+
 
 class Effort(StrEnum):
+    """Reasoning effort passed to ``copilot --effort``."""
+
     none = "none"
     minimal = "minimal"
     low = "low"
@@ -38,7 +45,7 @@ class Effort(StrEnum):
 
 
 class Preset(StrEnum):
-    """Friendly permission presets. ``yolo`` is an alias of ``full``."""
+    """Friendly permission preset (``yolo`` is an alias of ``full``)."""
 
     readonly = "readonly"
     edit = "edit"
@@ -47,7 +54,7 @@ class Preset(StrEnum):
 
 
 class Deps(StrEnum):
-    """How each worktree obtains its installed dependencies (e.g. node_modules)."""
+    """Strategy for seeding a fresh worktree's installed dependencies."""
 
     symlink = "symlink"
     copy = "copy"
@@ -55,19 +62,17 @@ class Deps(StrEnum):
     skip = "skip"
 
 
-_ENV_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
-
-
 def interpolate_env(value: str) -> str:
-    def repl(m: re.Match[str]) -> str:
-        name, default = m.group(1), m.group(2)
+    """Expand ``${VAR}`` and ``${VAR:-default}`` references in a string."""
+
+    def repl(match: re.Match[str]) -> str:
+        name, default = match.group(1), match.group(2)
         if name in os.environ:
             return os.environ[name]
         if default is not None:
             return default
         raise ValueError(
-            f"undefined environment variable ${{{name}}} "
-            f"(use ${{{name}:-default}} to supply a fallback)"
+            f"`{name}` environment variable is not set, " f"provide a fallback with `${{{name}:-default}}`."
         )
 
     return _ENV_RE.sub(repl, value)
@@ -80,22 +85,20 @@ def _walk_interpolate(obj: Any) -> Any:
         return [_walk_interpolate(v) for v in obj]
     if isinstance(obj, dict):
         return {k: _walk_interpolate(v) for k, v in obj.items()}
+
     return obj
 
 
 def slugify(text: str) -> str:
+    """Convert free text into a branch- and worktree-safe slug."""
     text = text.strip().lower().splitlines()[0] if text.strip() else "task"
     text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+
     return (text or "task")[:50]
 
 
 class Permissions(BaseModel):
-    """A permission preset plus escape-hatch allow/deny lists and network knobs.
-
-    Accepts either a bare preset string (``permissions: edit``) or a mapping
-    with a preset and fine-grained overrides. ``allow``/``deny`` are raw copilot
-    tool specs, e.g. ``shell(git:*)`` or ``shell(git push)``.
-    """
+    """A permission preset plus escape-hatch allow/deny lists and network knobs."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -115,6 +118,7 @@ class Permissions(BaseModel):
 
     @property
     def is_autonomous(self) -> bool:
+        """Whether the agent runs without pausing to ask the user questions."""
         if self.autonomous is not None:
             return self.autonomous
         return self.preset in (Preset.full, Preset.yolo)
@@ -125,11 +129,7 @@ class Permissions(BaseModel):
         if self.preset in (Preset.full, Preset.yolo):
             flags.append("--allow-all-tools")
         elif self.preset == Preset.edit:
-            flags += [
-                "--allow-tool=write",
-                "--allow-tool=shell",
-                "--deny-tool=shell(git push)",
-            ]
+            flags += ["--allow-tool=write", "--allow-tool=shell", "--deny-tool=shell(git push)"]
         elif self.preset == Preset.readonly:
             flags += ["--deny-tool=write", "--deny-tool=shell"]
 
@@ -137,16 +137,19 @@ class Permissions(BaseModel):
             flags.append(f"--allow-tool={spec}")
         for spec in self.deny:
             flags.append(f"--deny-tool={spec}")
-        for d in self.add_dir:
-            flags += ["--add-dir", d]
-        for u in self.allow_url:
-            flags += ["--allow-url", u]
+        for directory in self.add_dir:
+            flags += ["--add-dir", directory]
+        for url in self.allow_url:
+            flags += ["--allow-url", url]
         if self.is_autonomous:
             flags.append("--no-ask-user")
+
         return flags
 
 
 class PRSettings(BaseModel):
+    """Pull-request defaults applied to every item unless overridden."""
+
     model_config = ConfigDict(extra="forbid")
 
     draft: bool = True
@@ -156,6 +159,8 @@ class PRSettings(BaseModel):
 
 
 class Defaults(BaseModel):
+    """Run-wide defaults that each item inherits unless it overrides them."""
+
     model_config = ConfigDict(extra="forbid")
 
     model: str = "gpt-5.5"
@@ -170,6 +175,8 @@ class Defaults(BaseModel):
 
 
 class Item(BaseModel):
+    """One task, expressed as a bare prompt string or a mapping of overrides."""
+
     model_config = ConfigDict(extra="forbid")
 
     prompt: str = Field(min_length=1)
@@ -205,6 +212,8 @@ class Item(BaseModel):
 
 
 class Plan(BaseModel):
+    """A parsed cmux run: a shared system prompt, defaults, and a list of items."""
+
     model_config = ConfigDict(extra="forbid")
 
     version: Literal[1] = 1
@@ -227,59 +236,61 @@ class Plan(BaseModel):
         dupes = {k for k in keys if keys.count(k) > 1}
         if dupes:
             raise ValueError(
-                f"duplicate item id/slug(s): {sorted(dupes)}; "
-                f"give each conflicting item a distinct `name` or `id`"
+                f"`items` contain duplicate id/slug {sorted(dupes)}, "
+                f"give each conflicting item a distinct `name` or `id`."
             )
+
         known = set(keys)
         for it in items:
             missing = [d for d in it.depends_on if d not in known]
             if missing:
                 raise ValueError(
-                    f"item '{it.key}' depends_on unknown id(s) {missing}; "
-                    f"known ids: {sorted(known)}"
+                    f"`depends_on` of item '{it.key}' references unknown id(s) {missing}, "
+                    f"known ids are {sorted(known)}."
                 )
+
         return items
 
     def resolve(self) -> list[ResolvedItem]:
-        d = self.defaults
-        out: list[ResolvedItem] = []
+        """Apply precedence and compute the ready-to-spawn spec for every item."""
+        defaults = self.defaults
+        resolved: list[ResolvedItem] = []
         for it in self.items:
-            perms = it.permissions or d.permissions
+            permissions = it.permissions or defaults.permissions
             if it.paths:
-                perms = perms.model_copy(update={"add_dir": [*perms.add_dir, *it.paths]})
-            branch = it.branch or d.branch_template.format(slug=it.slug, id=it.key)
-            full_prompt = it.prompt
+                permissions = permissions.model_copy(update={"add_dir": [*permissions.add_dir, *it.paths]})
+            branch = it.branch or defaults.branch_template.format(slug=it.slug, id=it.key)
+            prompt = it.prompt
             if it.include_system and self.system.strip():
-                full_prompt = f"{self.system.strip()}\n\n---\n\n{it.prompt.strip()}"
-            pr = d.pr
-            out.append(
+                prompt = f"{self.system.strip()}\n\n---\n\n{it.prompt.strip()}"
+            pr = defaults.pr
+            resolved.append(
                 ResolvedItem(
                     key=it.key,
                     name=it.name or it.slug,
                     slug=it.slug,
-                    prompt=full_prompt,
-                    model=it.model or d.model,
-                    effort=it.effort or d.effort,
-                    permissions=perms,
+                    prompt=prompt,
+                    model=it.model or defaults.model,
+                    effort=it.effort or defaults.effort,
+                    permissions=permissions,
                     branch=branch,
-                    base=it.base or d.base,
+                    base=it.base or defaults.base,
                     labels=list(dict.fromkeys([*pr.labels, *it.labels])),
                     draft=pr.draft if it.draft is None else it.draft,
                     depends_on=list(it.depends_on),
                     env=dict(it.env),
-                    deps=d.deps,
-                    remote=d.remote,
+                    deps=defaults.deps,
+                    remote=defaults.remote,
                     pr_title=pr.title_template.format(name=it.name or it.slug, slug=it.slug),
-                    pr_body=pr.body_template.format(
-                        name=it.name or it.slug, slug=it.slug, prompt=it.prompt.strip()
-                    ),
+                    pr_body=pr.body_template.format(name=it.name or it.slug, slug=it.slug, prompt=it.prompt.strip()),
                 )
             )
-        return out
+
+        return resolved
 
 
 class ResolvedItem(BaseModel):
-    """Fully merged, ready-to-spawn session spec (item > defaults > built-in)."""
+    """A fully merged, ready-to-spawn session spec (item > defaults > built-in)."""
 
     key: str
     name: str
@@ -300,21 +311,30 @@ class ResolvedItem(BaseModel):
     pr_body: str
 
     def spawn_argv(self, worktree: str | Path, session_id: str, log_dir: str | Path) -> list[str]:
-        """The exact headless ``copilot`` invocation for this session."""
+        """Build the exact headless ``copilot`` invocation for this session."""
         argv = [
             "copilot",
-            "-C", str(worktree),
-            "-p", self.prompt,
-            "--model", self.model,
-            "--effort", str(self.effort),
-            "--output-format", "json",
-            "--session-id", session_id,
-            "--name", self.name,
-            "--log-dir", str(log_dir),
+            "-C",
+            str(worktree),
+            "-p",
+            self.prompt,
+            "--model",
+            self.model,
+            "--effort",
+            str(self.effort),
+            "--output-format",
+            "json",
+            "--session-id",
+            session_id,
+            "--name",
+            self.name,
+            "--log-dir",
+            str(log_dir),
         ]
         argv += self.permissions.to_flags()
         if "--no-ask-user" not in argv:
             argv.append("--no-ask-user")
+
         return argv
 
 
@@ -323,16 +343,19 @@ class ConfigError(Exception):
 
 
 def load_plan(path: str | Path) -> Plan:
+    """Load and validate a cmux YAML file into a :class:`Plan`."""
     p = Path(path)
     if not p.exists():
-        raise ConfigError(f"config file not found: {p}")
+        raise ConfigError(f"`{p}` config file does not exist.")
+
     try:
         raw = yaml.safe_load(p.read_text()) or {}
     except yaml.YAMLError as exc:
-        raise ConfigError(f"invalid YAML in {p}: {exc}") from exc
+        raise ConfigError(f"`{p}` is not valid YAML: {exc}.") from exc
     if not isinstance(raw, dict):
-        raise ConfigError(f"{p}: top-level YAML must be a mapping (got {type(raw).__name__})")
+        raise ConfigError(f"`{p}` top-level YAML must be a mapping, but got {type(raw).__name__}.")
+
     try:
         return Plan.model_validate(raw)
     except ValidationError as exc:
-        raise ConfigError(f"invalid cmux config in {p}:\n{exc}") from exc
+        raise ConfigError(f"`{p}` is not a valid cmux config:\n{exc}") from exc

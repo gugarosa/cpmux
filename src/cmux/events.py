@@ -1,11 +1,14 @@
+# Copyright (c) 2026 Gustavo de Rosa.
+# Licensed under the MIT license.
+
 """Parse and reduce the JSONL event stream emitted by ``copilot --output-format json``.
 
-Event catalogue (verified against copilot 1.0.70): a session emits, in order,
-``session.*`` setup events, ``user.message``, ``assistant.turn_start``,
-streamed ``assistant.message_delta``, a final ``assistant.message`` (with
-``toolRequests``/``outputTokens``), ``assistant.turn_end``, ``assistant.idle``,
-and a terminal ``result`` object carrying ``sessionId``, ``exitCode`` and
-``usage``. The session id and reliable token usage appear only in ``result``.
+A session emits, in order, ``session.*`` setup events, ``user.message``,
+``assistant.turn_start``, streamed ``assistant.message_delta``, a final
+``assistant.message`` (with ``toolRequests``/``outputTokens``),
+``assistant.turn_end``, ``assistant.idle``, and a terminal ``result`` object
+carrying ``sessionId``, ``exitCode`` and ``usage``. The session id and reliable
+token usage appear only in ``result``.
 """
 
 from __future__ import annotations
@@ -17,6 +20,8 @@ from typing import Any
 
 
 class Status(StrEnum):
+    """Lifecycle status of a single cmux session."""
+
     PENDING = "pending"
     STARTING = "starting"
     RUNNING = "running"
@@ -33,9 +38,7 @@ class Status(StrEnum):
 
 
 ACTIVE = frozenset({Status.STARTING, Status.RUNNING, Status.TOOL, Status.IDLE})
-TERMINAL = frozenset(
-    {Status.DONE, Status.NO_CHANGES, Status.FAILED, Status.TIMED_OUT, Status.KILLED}
-)
+TERMINAL = frozenset({Status.DONE, Status.NO_CHANGES, Status.FAILED, Status.TIMED_OUT, Status.KILLED})
 
 
 def _first(data: dict[str, Any], *keys: str, default: str = "") -> str:
@@ -63,12 +66,13 @@ class SessionState:
 
     @property
     def summary_line(self) -> str:
+        """The latest assistant text, truncated for single-line display."""
         text = (self.last_text or self._delta_buf).strip().replace("\n", " ")
         return text[:80]
 
 
 def apply_event(state: SessionState, ev: dict[str, Any]) -> SessionState:
-    """Fold a single decoded JSONL event into ``state`` (mutating and returning it)."""
+    """Fold a single decoded JSONL event into ``state`` and return it."""
     typ = ev.get("type", "")
     data = ev.get("data") if isinstance(ev.get("data"), dict) else ev
 
@@ -108,16 +112,19 @@ def apply_event(state: SessionState, ev: dict[str, Any]) -> SessionState:
         if isinstance(files, list):
             state.files_modified = [str(f) for f in files]
         state.status = Status.DONE if state.exit_code == 0 else Status.FAILED
+
     return state
 
 
 def parse_line(line: str) -> dict[str, Any] | None:
-    """Decode one JSONL line, returning ``None`` for blank/non-JSON lines."""
+    """Decode one JSONL line, returning ``None`` for blank or non-JSON lines."""
     line = line.strip()
     if not line:
         return None
+
     try:
         obj = json.loads(line)
     except json.JSONDecodeError:
         return None
+
     return obj if isinstance(obj, dict) else None

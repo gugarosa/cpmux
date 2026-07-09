@@ -1,5 +1,8 @@
-from pydantic import ValidationError
+# Copyright (c) 2026 Gustavo de Rosa.
+# Licensed under the MIT license.
+
 import pytest
+from pydantic import ValidationError
 
 from cmux.config import Plan, Preset
 
@@ -37,9 +40,7 @@ def test_precedence_and_labels_and_system_prompt():
 
 
 def test_include_system_false_opts_out():
-    plan = Plan.model_validate(
-        {"system": "SYS", "items": [{"prompt": "solo", "include_system": False}]}
-    )
+    plan = Plan.model_validate({"system": "SYS", "items": [{"prompt": "solo", "include_system": False}]})
     assert plan.resolve()[0].prompt == "solo"
 
 
@@ -58,9 +59,7 @@ def test_edit_preset_gates_push_but_allows_shell():
 
 
 def test_paths_feed_add_dir():
-    plan = Plan.model_validate(
-        {"items": [{"prompt": "x", "paths": ["src/settings"]}]}
-    )
+    plan = Plan.model_validate({"items": [{"prompt": "x", "paths": ["src/settings"]}]})
     flags = plan.resolve()[0].permissions.to_flags()
     assert "--add-dir" in flags and "src/settings" in flags
 

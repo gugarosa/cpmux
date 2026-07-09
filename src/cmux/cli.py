@@ -1,27 +1,28 @@
+# Copyright (c) 2026 Gustavo de Rosa.
+# Licensed under the MIT license.
+
 """cmux command-line interface (Typer).
 
 v0 verbs: ``up`` (spawn a run), ``ls`` (status of a run), ``logs`` (a session
 transcript), ``rm`` (clean up worktrees). A background daemon plus the
-interactive dashboard (``attach``/``enter``/``search``) arrive in v1.
+interactive dashboard arrive in v1.
 """
-
-from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Optional
 
 import typer
 from rich.console import Console
 from rich.markup import escape
 from rich.table import Table
 
-from . import __version__
-from .config import ConfigError, Deps, Plan, ResolvedItem, load_plan
-from .events import Status, parse_line
-from .gitutil import GitError, remove_worktree, prune_worktrees
-from .state import RunPaths, latest_run_id, load_run
-from .supervisor import Options, Supervisor
+from cmux import __version__
+from cmux.config import ConfigError, Deps, Plan, ResolvedItem, load_plan
+from cmux.events import parse_line
+from cmux.gitutil import GitError, prune_worktrees, remove_worktree
+from cmux.logging import get_logger
+from cmux.state import RunPaths, latest_run_id, load_run
+from cmux.supervisor import Options, Supervisor
 
 app = typer.Typer(
     add_completion=False,
@@ -29,6 +30,7 @@ app = typer.Typer(
     help="cmux — a declarative, guided multiplexer for GitHub Copilot CLI agents.",
 )
 console = Console()
+logger = get_logger(__name__)
 
 
 def _version(value: bool) -> None:
@@ -50,14 +52,14 @@ def _load(file: Path) -> Plan:
     try:
         return load_plan(file)
     except ConfigError as exc:
-        console.print(f"[red]config error:[/red] {exc}")
+        logger.error(str(exc))
         raise typer.Exit(1)
 
 
 def _display_argv(argv: list[str]) -> str:
     out: list[str] = []
     skip = False
-    for i, tok in enumerate(argv):
+    for tok in argv:
         if skip:
             out.append(f"<prompt {len(tok)} chars>")
             skip = False
@@ -78,12 +80,7 @@ def _plan_table(resolved: list[ResolvedItem]) -> Table:
     table.add_column("deps on")
     for it in resolved:
         table.add_row(
-            it.key,
-            it.model,
-            str(it.effort),
-            it.branch,
-            it.permissions.preset,
-            ", ".join(it.depends_on) or "-",
+            it.key, it.model, str(it.effort), it.branch, it.permissions.preset, ", ".join(it.depends_on) or "-"
         )
     return table
 
@@ -91,17 +88,19 @@ def _plan_table(resolved: list[ResolvedItem]) -> Table:
 @app.command()
 def up(
     file: Path = typer.Argument(..., exists=True, dir_okay=False, help="Path to the cmux YAML file."),
-    dry_run: bool = typer.Option(False, "--dry-run", help="Resolve and print the plan; spawn nothing."),
-    concurrency: Optional[int] = typer.Option(None, "--concurrency", "-j", help="Max parallel sessions."),
-    open_pr: bool = typer.Option(True, "--pr/--no-pr", help="Open one draft PR per item (default: on)."),
-    deps: Optional[Deps] = typer.Option(None, "--deps", help="Override the dependency strategy."),
+    dry_run: bool = typer.Option(False, "--dry-run", "--dry_run", help="Resolve and print the plan; spawn nothing."),
+    concurrency: int | None = typer.Option(None, "--concurrency", "-j", help="Max parallel sessions."),
+    pr: bool = typer.Option(True, "--pr/--no-pr", help="Open one draft PR per item (default: on)."),
+    deps: Deps | None = typer.Option(None, "--deps", help="Override the dependency strategy."),
     strip_github_token: bool = typer.Option(
-        True, "--strip-github-token/--no-strip-github-token",
+        True,
+        "--strip-github-token/--no-strip-github-token",
+        "--strip_github_token/--no-strip_github_token",
         help="Unset ambient GITHUB_TOKEN/GH_TOKEN for gh + git push (keyring fallback).",
     ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
 ) -> None:
-    """Spawn one isolated Copilot session per item (own worktree, branch, PR)."""
+    """Spawn one isolated Copilot session per item, each in its own worktree, branch, and PR."""
     plan = _load(file)
     resolved = plan.resolve()
 
@@ -115,18 +114,18 @@ def up(
 
     options = Options(
         concurrency=concurrency,
-        open_pr=open_pr,
+        open_pr=pr,
         strip_github_token=strip_github_token,
         deps_override=str(deps) if deps else None,
     )
     try:
         supervisor = Supervisor(plan, ".", options)
     except GitError as exc:
-        console.print(f"[red]error:[/red] {exc}")
+        logger.error(str(exc))
         raise typer.Exit(1)
 
     console.print(_plan_table(resolved))
-    action = "open a draft PR" if open_pr else "commit locally (no PR)"
+    action = "open a draft PR" if pr else "commit locally (no PR)"
     if not yes and not typer.confirm(
         f"Spawn {len(resolved)} Copilot session(s), each in its own worktree, and {action}?"
     ):
@@ -134,13 +133,11 @@ def up(
 
     supervisor.prepare()
     asyncio.run(supervisor.run())
-    _print_summary(supervisor.repo_root, supervisor.run_id)
+    _print_summary(Path("."), supervisor.run_id)
 
 
 @app.command()
-def ls(
-    run: Optional[str] = typer.Option(None, "--run", help="Run id (default: latest)."),
-) -> None:
+def ls(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
     """Show the status of a run."""
     _print_summary(Path("."), run)
 
@@ -148,46 +145,44 @@ def ls(
 @app.command()
 def logs(
     key: str = typer.Argument(..., help="Item key to show the transcript for."),
-    run: Optional[str] = typer.Option(None, "--run", help="Run id (default: latest)."),
+    run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
     raw: bool = typer.Option(False, "--raw", help="Print the raw JSONL transcript."),
 ) -> None:
     """Print a session's transcript."""
     run_id = run or latest_run_id(Path("."))
     if not run_id:
-        console.print("[yellow]no cmux runs found here.[/yellow]")
+        logger.error("no cmux runs found here.")
         raise typer.Exit(1)
+
     transcript = RunPaths(Path("."), run_id).transcript(key)
     if not transcript.exists():
-        console.print(f"[red]no transcript for '{key}' in run {run_id}.[/red]")
+        logger.error(f"no transcript for `{key}` in run `{run_id}`.")
         raise typer.Exit(1)
+
     for line in transcript.read_text(encoding="utf-8").splitlines():
         if raw:
-            print(line)
+            typer.echo(line)
             continue
         ev = parse_line(line)
-        if ev is None:
-            continue
-        _render_event(ev)
+        if ev is not None:
+            _render_event(ev)
 
 
 @app.command()
 def rm(
-    run: Optional[str] = typer.Option(None, "--run", help="Run id (default: latest)."),
+    run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation."),
 ) -> None:
     """Remove the git worktrees created for a run."""
-    root = Path(".")
-    run_id = run or latest_run_id(root)
+    run_id = run or latest_run_id(Path("."))
     if not run_id:
-        console.print("[yellow]no cmux runs found here.[/yellow]")
+        logger.error("no cmux runs found here.")
         raise typer.Exit(1)
-    try:
-        manifest, records = load_run(root, run_id)
-    except FileNotFoundError:
-        console.print(f"[red]run {run_id} not found.[/red]")
-        raise typer.Exit(1)
+
+    manifest, records = load_run(Path("."), run_id)
     if not force and not typer.confirm(f"Remove {len(records)} worktree(s) for run {run_id}?"):
         raise typer.Exit(1)
+
     for record in records:
         remove_worktree(manifest.repo_root, record.worktree, force=True)
     prune_worktrees(manifest.repo_root)
@@ -209,16 +204,13 @@ def _render_event(ev: dict) -> None:
         console.print(f"[dim]— result exit={ev.get('exitCode')}[/dim]")
 
 
-def _print_summary(root: Path, run_id: Optional[str]) -> None:
+def _print_summary(root: Path, run_id: str | None) -> None:
     run_id = run_id or latest_run_id(root)
     if not run_id:
-        console.print("[yellow]no cmux runs found here.[/yellow]")
+        logger.error("no cmux runs found here.")
         raise typer.Exit(1)
-    try:
-        _, records = load_run(root, run_id)
-    except FileNotFoundError:
-        console.print(f"[red]run {run_id} not found.[/red]")
-        raise typer.Exit(1)
+
+    _, records = load_run(root, run_id)
     table = Table(title=f"cmux · run {run_id}", expand=True)
     table.add_column("item", style="bold")
     table.add_column("status")
@@ -226,22 +218,15 @@ def _print_summary(root: Path, run_id: Optional[str]) -> None:
     table.add_column("branch")
     table.add_column("PR")
     for record in records:
-        color = {
-            Status.DONE: "green",
-            Status.NO_CHANGES: "dim",
-            Status.FAILED: "red",
-        }.get(record.status, "cyan")
+        color = {"done": "green", "no_changes": "dim", "failed": "red"}.get(record.status, "cyan")
         table.add_row(
-            record.key,
-            f"[{color}]{record.status}[/{color}]",
-            record.model,
-            record.branch,
-            record.pr_url or "-",
+            record.key, f"[{color}]{record.status}[/{color}]", record.model, record.branch, record.pr_url or "-"
         )
     console.print(table)
 
 
 def main() -> None:
+    """Entry point for the ``cmux`` command."""
     app()
 
 
