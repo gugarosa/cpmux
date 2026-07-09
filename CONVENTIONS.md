@@ -54,7 +54,7 @@ Adopted from phitrain (rule ids in parentheses).
 - Python 3.12+ syntax. Use `X | None`, never `Optional[X]`. Use builtin generics
   (`dict[str, Any]`, `list[str]`); import only `Any`, `Literal`, `Annotated`, … from
   `typing`. ABCs (`Callable`, `Iterable`, …) come from `collections.abc`. (R2)
-- Every `.py` file starts with the two-line copyright/licence header.
+- Every `.py` file starts with the two-line copyright/license header.
 - Imports are top-level and absolute (`from cmux.x import y`). Order: stdlib →
   third-party → local, blank-separated.
 - Public functions and classes carry Google-style docstrings (single-sentence

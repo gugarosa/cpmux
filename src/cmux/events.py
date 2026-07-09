@@ -15,8 +15,6 @@ class Status(StrEnum):
     RUNNING = "running"
     TOOL = "tool"
     IDLE = "idle"
-    COMMITTING = "committing"
-    PUSHING = "pushing"
     OPENING_PR = "opening_pr"
     DONE = "done"
     NO_CHANGES = "no_changes"

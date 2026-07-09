@@ -188,7 +188,7 @@ def open_pull_request(
         strip_token: Whether to strip ambient GitHub tokens from the environment.
 
     Returns:
-        The URL of the existing or newly created PR.
+        The existing or newly created PR URL, empty only if `gh` printed nothing.
 
     Raises:
         PRError: If a commit, push, or create step fails.

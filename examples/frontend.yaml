@@ -30,6 +30,7 @@ items:
   - The date picker breaks in Safari 16 — normalize to ISO strings
   - Paginate the notifications list for speed (currently renders 500 rows)
   - Add loading skeletons to the dashboard cards
+  - Debounce the global search input so it stops re-querying on every keystroke
 
   - name: Migrate the settings form to react-hook-form + zod
     prompt: >

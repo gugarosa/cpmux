@@ -27,12 +27,12 @@ from cmux.supervisor import Options, Supervisor
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
-    help="cmux — a declarative, guided multiplexer for GitHub Copilot CLI agents.",
+    help="cmux — a declarative multiplexer for GitHub Copilot CLI agents.",
 )
 console = Console()
 logger = get_logger(__name__)
 
-_STATUS_COLOR = {"done": "green", "no_changes": "dim", "failed": "red"}
+_STATUS_COLOR = {"done": "green", "no_changes": "dim", "failed": "red", "killed": "red", "timed_out": "red"}
 
 
 def _version(value: bool) -> None:

@@ -93,9 +93,9 @@ class RunPaths:
         return self.run_dir / "manifest.json"
 
     @property
-    def daemon_file(self) -> Path:
-        """Path to the detached daemon's pid file."""
-        return self.run_dir / "daemon.json"
+    def owner_file(self) -> Path:
+        """Path to the run's owner pid file."""
+        return self.run_dir / "owner.json"
 
     def session_dir(self, key: str) -> Path:
         """Directory holding an item's session artifacts."""
@@ -114,7 +114,7 @@ class RunPaths:
         return self.session_dir(key) / "transcript.jsonl"
 
     def record_file(self, key: str) -> Path:
-        """Path to an item's serialised session record."""
+        """Path to an item's serialized session record."""
         return self.session_dir(key) / "session.json"
 
     def copilot_log_dir(self, key: str) -> Path:

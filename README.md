@@ -3,10 +3,9 @@
 **A declarative multiplexer for GitHub Copilot CLI agents: "tmuxinator for `copilot` sessions."**
 
 You write one YAML file: a shared system prompt plus a list of items (tasks). cmux spawns one
-isolated headless `copilot` session per item, each in its own git worktree, on its own branch,
-opening its own draft PR. Hand a single agent 12–15 issues and it loses context between them; giving
-every issue its own session keeps them separate. cmux gives you one place to watch, search, and steer
-them all. v0 ships the foreground supervisor: `up`, `ls`, `logs`, `rm`.
+headless `copilot` session per item, each in its own git worktree, on its own branch, opening its
+own draft PR. Hand a single agent 12–15 issues and it loses context between them; giving every issue
+its own session keeps them separate. cmux gives you one place to watch, search, and steer them all.
 
 ## Installation
 

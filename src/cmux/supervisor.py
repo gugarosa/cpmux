@@ -25,8 +25,6 @@ _GLYPH = {
     Status.RUNNING: ("●", "cyan"),
     Status.TOOL: ("⚙", "cyan"),
     Status.IDLE: ("◑", "blue"),
-    Status.COMMITTING: ("◧", "magenta"),
-    Status.PUSHING: ("⬆", "magenta"),
     Status.OPENING_PR: ("⇪", "magenta"),
     Status.DONE: ("✔", "green"),
     Status.NO_CHANGES: ("∅", "dim"),
@@ -111,13 +109,15 @@ class Supervisor:
             strip_github_token=manifest.strip_github_token,
             deps_override=manifest.deps_override,
         )
-        sup = cls(manifest.repo_root, run_id, manifest.resolved, options, manifest.concurrency or 4, manifest.system)
+        supervisor = cls(
+            manifest.repo_root, run_id, manifest.resolved, options, manifest.concurrency or 4, manifest.system
+        )
 
         for key in manifest.item_keys:
-            if sup.paths.record_file(key).exists():
-                sup.records[key] = sup.paths.read_record(key)
+            if supervisor.paths.record_file(key).exists():
+                supervisor.records[key] = supervisor.paths.read_record(key)
 
-        return sup
+        return supervisor
 
     def prepare(self) -> None:
         """Write the manifest and create one worktree and record per item."""

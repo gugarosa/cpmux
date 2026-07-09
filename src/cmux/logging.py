@@ -18,7 +18,7 @@ def _console_handler() -> StreamHandler:
 
 
 def get_logger(logger_name: str) -> Logger:
-    """Create a cmux logger that writes to stderr.
+    """Return a cmux logger configured to write to stderr.
 
     Args:
         logger_name: Name of the logger.

@@ -66,7 +66,7 @@ def write_owner(paths: RunPaths, pid: int) -> None:
         pid: Owner process id to record.
 
     """
-    paths.daemon_file.write_text(json.dumps({"pid": pid}))
+    paths.owner_file.write_text(json.dumps({"pid": pid}))
 
 
 def read_owner(paths: RunPaths) -> int | None:
@@ -79,11 +79,11 @@ def read_owner(paths: RunPaths) -> int | None:
         The recorded owner pid, or `None` when absent or unreadable.
 
     """
-    if not paths.daemon_file.exists():
+    if not paths.owner_file.exists():
         return None
 
     try:
-        return int(json.loads(paths.daemon_file.read_text()).get("pid"))
+        return int(json.loads(paths.owner_file.read_text()).get("pid"))
     except (ValueError, TypeError, OSError):
         return None
 
@@ -95,7 +95,7 @@ def clear_owner(paths: RunPaths) -> None:
         paths: Run paths locating the owner file.
 
     """
-    paths.daemon_file.unlink(missing_ok=True)
+    paths.owner_file.unlink(missing_ok=True)
 
 
 def owner_alive(paths: RunPaths) -> bool:
@@ -175,8 +175,9 @@ def stop(paths: RunPaths, records: list[SessionRecord]) -> int:
     """
     signalled = 0
 
-    if pid_alive(read_owner(paths)):
-        _terminate(read_owner(paths))
+    owner = read_owner(paths)
+    if pid_alive(owner):
+        _terminate(owner)
         signalled += 1
 
     for record in records:
@@ -201,7 +202,7 @@ def kill_session(paths: RunPaths, record: SessionRecord) -> bool:
         record: Session record identifying the process to kill.
 
     Returns:
-        True when the session was still running.
+        `True` when the session was still running.
 
     """
     alive = pid_alive(record.pid)

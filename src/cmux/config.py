@@ -93,7 +93,7 @@ def slugify(text: str) -> str:
     """Convert free text into a branch- and worktree-safe slug.
 
     Args:
-        text: Free-form text to normalise.
+        text: Free-form text to normalize.
 
     Returns:
         A lowercased, hyphenated slug of at most 50 characters.
