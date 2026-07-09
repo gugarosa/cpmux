@@ -211,13 +211,15 @@ class CmuxApp(App):
         self._refresh_transcript(force=True)
 
     def action_cursor_down(self) -> None:
-        table = self.query_one("#sessions", DataTable)
+        """Move the session cursor down one row."""
 
+        table = self.query_one("#sessions", DataTable)
         table.move_cursor(row=min(table.cursor_row + 1, table.row_count - 1))
 
     def action_cursor_up(self) -> None:
-        table = self.query_one("#sessions", DataTable)
+        """Move the session cursor up one row."""
 
+        table = self.query_one("#sessions", DataTable)
         table.move_cursor(row=max(table.cursor_row - 1, 0))
 
     def action_refresh(self) -> None:

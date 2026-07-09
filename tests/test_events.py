@@ -22,7 +22,7 @@ SAMPLE = [
 ]
 
 
-def test_reduce_full_sequence():
+def test_reduce_marks_done_and_captures_session_and_usage():
     state = SessionState()
     for event in SAMPLE:
         apply_event(state, event)

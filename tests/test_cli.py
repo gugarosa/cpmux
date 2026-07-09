@@ -12,7 +12,6 @@ def test_version_reports_name_and_exits_zero():
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
     assert "cmux" in result.output
-    assert "cmux" in result.stdout
 
 
 def test_up_dry_run_resolves_plan_without_spawning(tmp_path):
@@ -20,6 +19,8 @@ def test_up_dry_run_resolves_plan_without_spawning(tmp_path):
     path.write_text("version: 1\nitems:\n  - fix the bug\n  - add a feature\n")
     result = runner.invoke(app, ["up", str(path), "--dry-run"])
     assert result.exit_code == 0
+    assert "spawn commands" in result.output
+    assert "fix-the-bug" in result.output
 
 
 def test_ls_without_cmux_dir_exits_one(tmp_path, monkeypatch):

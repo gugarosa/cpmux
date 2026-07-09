@@ -115,7 +115,6 @@ def add_worktree(root: str | Path, worktree: str | Path, branch: str, base_sha: 
     """
 
     Path(worktree).parent.mkdir(parents=True, exist_ok=True)
-
     run_git(["worktree", "add", "-b", branch, str(worktree), base_sha], cwd=root)
 
 

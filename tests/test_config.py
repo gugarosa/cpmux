@@ -4,7 +4,7 @@
 import pytest
 from pydantic import ValidationError
 
-from cmux.config import Plan, Preset
+from cmux.config import ConfigError, Plan, Preset, interpolate_env, load_plan
 
 
 def test_string_item_coercion():
@@ -89,7 +89,7 @@ def test_env_default_used_when_missing(monkeypatch):
     assert "v=def" in plan.items[0].prompt
 
 
-def test_spawn_argv_shape():
+def test_spawn_argv_targets_session_worktree_and_model():
     resolved = Plan.model_validate({"items": [{"name": "Fix X", "prompt": "do"}]}).resolve()[0]
     argv = resolved.spawn_argv("/wt/fix-x", "sid-123", "/logs")
 
@@ -98,3 +98,36 @@ def test_spawn_argv_shape():
     assert argv[argv.index("-C") + 1] == "/wt/fix-x"
     assert "--output-format" in argv and "json" in argv
     assert "--no-ask-user" in argv
+
+
+def test_interpolate_env_expands_and_falls_back(monkeypatch):
+    monkeypatch.setenv("CMUX_TEST_VAR", "hello")
+    assert interpolate_env("say ${CMUX_TEST_VAR}") == "say hello"
+    monkeypatch.delenv("CMUX_TEST_MISSING", raising=False)
+    assert interpolate_env("${CMUX_TEST_MISSING:-fallback}") == "fallback"
+
+
+def test_interpolate_env_raises_on_unset_var_without_default(monkeypatch):
+    monkeypatch.delenv("CMUX_TEST_MISSING", raising=False)
+    with pytest.raises(ValueError):
+        interpolate_env("${CMUX_TEST_MISSING}")
+
+
+def test_load_plan_missing_file_raises_config_error(tmp_path):
+    with pytest.raises(ConfigError):
+        load_plan(tmp_path / "nope.yaml")
+
+
+def test_load_plan_non_mapping_top_level_raises_config_error(tmp_path):
+    path = tmp_path / "bad.yaml"
+    path.write_text("- just\n- a\n- list\n")
+    with pytest.raises(ConfigError):
+        load_plan(path)
+
+
+def test_load_plan_reads_valid_file(tmp_path):
+    path = tmp_path / "ok.yaml"
+    path.write_text("version: 1\nitems:\n  - fix a thing\n")
+    plan = load_plan(path)
+    assert len(plan.items) == 1
+    assert plan.resolve()[0].prompt == "fix a thing"

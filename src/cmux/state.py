@@ -35,7 +35,7 @@ class SessionRecord(BaseModel):
     Attributes:
         key: Stable identifier of the config item this session runs.
         name: Human-readable item name.
-        slug: Filesystem-safe form of the name.
+        slug: Branch- and worktree-safe slug.
         branch: Git branch created for the session.
         base: Base branch the work branches from.
         model: Copilot model driving the session.
@@ -87,7 +87,7 @@ class SessionRecord(BaseModel):
 
 
 class RunManifest(BaseModel):
-    """Immutable snapshot of a run's resolved configuration (reconstructable from disk).
+    """A run's resolved configuration, persisted as `manifest.json`.
 
     Attributes:
         run_id: Identifier of the run.
@@ -100,7 +100,7 @@ class RunManifest(BaseModel):
         open_pr: Whether sessions open a pull request when done.
         concurrency: Maximum sessions to run at once, if capped.
         strip_github_token: Whether to strip the github token from sessions.
-        deps_override: Command overriding dependency installation.
+        deps_override: Dependency strategy overriding each item's, if set.
 
     """
 
@@ -118,17 +118,7 @@ class RunManifest(BaseModel):
 
 
 class RunPaths:
-    """Filesystem paths for a single run, rooted at `<repo_root>/.cmux`.
-
-    Attributes:
-        repo_root: Absolute path to the repository root.
-        run_id: Identifier of the run these paths belong to.
-        root: The `.cmux` directory under the repository root.
-        run_dir: Directory holding this run's artifacts.
-        sessions_dir: Directory holding per-session artifacts.
-        worktrees_dir: Directory holding this run's git worktrees.
-
-    """
+    """Filesystem paths for a single run, rooted at `<repo_root>/.cmux`."""
 
     def __init__(self, repo_root: str | Path, run_id: str) -> None:
         self.repo_root = Path(repo_root)
@@ -190,14 +180,12 @@ class RunPaths:
         """Persist the run manifest to disk."""
 
         self.run_dir.mkdir(parents=True, exist_ok=True)
-
         self.manifest.write_text(manifest.model_dump_json(indent=2))
 
     def write_record(self, record: SessionRecord) -> None:
         """Persist a single session record to disk."""
 
         self.ensure_session_dirs(record.key)
-
         self.record_file(record.key).write_text(record.model_dump_json(indent=2))
 
     def read_record(self, key: str) -> SessionRecord:

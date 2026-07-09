@@ -42,7 +42,7 @@ class Options:
         concurrency: Max sessions to run at once, or None for the plan default.
         open_pr: Whether to open a draft PR per item.
         strip_github_token: Whether to scrub the GitHub token from spawned session environments.
-        deps_override: Dependency provisioning command that overrides each item's `deps`, if set.
+        deps_override: Dependency strategy overriding each item's `deps`, if set.
 
     """
 

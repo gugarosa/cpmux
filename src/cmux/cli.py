@@ -300,7 +300,11 @@ def search(
     """Search session transcripts for matching text."""
 
     root = Path(".")
-    run_ids = all_run_ids(root) if all_runs else [run_id for run_id in [run or latest_run_id(root)] if run_id]
+    if all_runs:
+        run_ids = all_run_ids(root)
+    else:
+        latest = run or latest_run_id(root)
+        run_ids = [latest] if latest else []
     if not run_ids:
         logger.error("no cmux runs found here.")
         raise typer.Exit(1)

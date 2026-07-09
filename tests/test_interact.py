@@ -4,11 +4,11 @@
 from cmux.interact import followup_argv, resume_interactive_argv
 
 
-def test_resume_interactive_argv():
+def test_resume_argv_targets_session_and_worktree():
     assert resume_interactive_argv("sid", "/wt") == ["copilot", "--resume=sid", "-C", "/wt"]
 
 
-def test_followup_argv_shape():
+def test_followup_argv_carries_message_and_stays_non_interactive():
     argv = followup_argv("sid", "/wt", "gpt-5.5", ["--allow-tool=write"], "do it")
     assert argv[0] == "copilot"
     assert "--resume=sid" in argv
