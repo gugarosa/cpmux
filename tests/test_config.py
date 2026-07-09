@@ -51,7 +51,6 @@ def test_full_preset_flags():
     flags = plan.resolve()[0].permissions.to_flags()
 
     assert "--allow-all-tools" in flags
-    assert "--no-ask-user" in flags
 
 
 def test_edit_preset_gates_push_but_allows_shell():

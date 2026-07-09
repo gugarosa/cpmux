@@ -115,7 +115,6 @@ class Permissions(BaseModel):
     deny: list[str] = Field(default_factory=list)
     add_dir: list[str] = Field(default_factory=list)
     allow_url: list[str] = Field(default_factory=list)
-    autonomous: bool | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -123,13 +122,6 @@ class Permissions(BaseModel):
         if isinstance(data, str):
             return {"preset": data}
         return data
-
-    @property
-    def is_autonomous(self) -> bool:
-        """Whether the agent runs without pausing to ask the user questions."""
-        if self.autonomous is not None:
-            return self.autonomous
-        return self.preset in (Preset.full, Preset.yolo)
 
     def to_flags(self) -> list[str]:
         """Expand the preset, then append explicit allow/deny/network flags.
@@ -154,8 +146,6 @@ class Permissions(BaseModel):
             flags += ["--add-dir", directory]
         for url in self.allow_url:
             flags += ["--allow-url", url]
-        if self.is_autonomous:
-            flags.append("--no-ask-user")
 
         return flags
 
