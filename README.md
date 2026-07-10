@@ -131,7 +131,7 @@ Every read/monitor command accepts `--run <id>` and defaults to the latest run.
 
 | Group | Command | What it does |
 |---|---|---|
-| **Compose** | `cmux voice [FILE]` | Dictate a spoken task list into a cmux file. Flags: `--text`, `--audio`, `--transcribe-model`, `--endpoint`, `--model`, `--up`, `--detach/-d`, `--yes/-y`. |
+| **Compose** | `cmux voice [FILE]` | Dictate a spoken task list into a cmux file. Flags: `--text`, `--audio`, `--transcribe-model`, `--endpoint`, `--model`, `--up`, `--pr/--no-pr`, `--detach/-d`, `--yes/-y`. |
 | **Launch** | `cmux up FILE` | Spawn one session per item. Flags: `--dry-run`, `--detach/-d`, `--concurrency/-j`, `--pr/--no-pr`, `--deps`, `--yes/-y`. |
 | **Monitor** | `cmux ls` | Snapshot each item's status. |
 | | `cmux attach` | Live, read-only monitor; reconnects to a background run (Ctrl-C to detach). |

@@ -58,11 +58,23 @@ def test_voice_text_writes_generated_plan(tmp_path, monkeypatch):
 def test_voice_text_up_launches_generated_plan(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "synthesize_plan", lambda transcript, model: "items:\n  - fix the bug\n")
     launched = {}
-    monkeypatch.setattr(cli, "_launch_run", lambda file, options, detach, yes: launched.update(file=file))
+    monkeypatch.setattr(
+        cli, "_launch_run", lambda file, options, detach, yes: launched.update(file=file, open_pr=options.open_pr)
+    )
     out = tmp_path / "out.yml"
     result = runner.invoke(app, ["voice", str(out), "--text", "fix the bug", "--up"])
     assert result.exit_code == 0
     assert launched["file"] == out
+    assert launched["open_pr"] is True
+
+
+def test_voice_up_no_pr_disables_pull_requests(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "synthesize_plan", lambda transcript, model: "items:\n  - fix the bug\n")
+    launched = {}
+    monkeypatch.setattr(cli, "_launch_run", lambda file, options, detach, yes: launched.update(open_pr=options.open_pr))
+    result = runner.invoke(app, ["voice", str(tmp_path / "out.yml"), "--text", "fix the bug", "--up", "--no-pr"])
+    assert result.exit_code == 0
+    assert launched["open_pr"] is False
 
 
 def test_voice_synthesis_failure_exits_one(tmp_path, monkeypatch):

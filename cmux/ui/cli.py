@@ -209,6 +209,7 @@ def voice(
     ),
     model: str = typer.Option("gpt-5.5", "--model", help="Copilot model used to synthesize the plan."),
     up: bool = typer.Option(False, "--up", help="Launch the generated plan immediately."),
+    pr: bool = typer.Option(True, "--pr/--no-pr", help="With --up, open one draft PR per item (default: on)."),
     detach: bool = typer.Option(False, "--detach", "-d", help="With --up, run in the background."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt when launching."),
 ) -> None:
@@ -227,7 +228,7 @@ def voice(
     console.print(Syntax(yaml_text, "yaml", theme="ansi_dark", background_color="default"))
 
     if up:
-        _launch_run(output, Options(), detach, yes)
+        _launch_run(output, Options(open_pr=pr), detach, yes)
 
 
 def _transcript(text: str | None, audio: Path | None, transcribe_model: str, endpoint: str | None) -> str:
