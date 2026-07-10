@@ -33,7 +33,7 @@ These define how cmux stays composable. Crossing them turns one bug into many.
 
 ## Package structure
 
-Modules are grouped by responsibility into three subpackages, with the foundation
+Modules are grouped by responsibility into domain subpackages, with the foundation
 modules that everything shares kept at the package root.
 
 ```
@@ -41,15 +41,20 @@ cmux/
   config.py  events.py  logging.py      foundation: config model, JSONL/status, logging
   engine/    supervisor session daemon store interact   run lifecycle + state
   vcs/       git pr                       git worktrees + PR automation
+  voice/     recorder transcriber synthesizer   speech → transcript → cmux plan
   ui/        cli dashboard search render  Typer commands, TUI, transcript rendering
 ```
 
-- **Layering is one-directional:** `ui` → `engine` → `vcs` → foundation. A layer may
-  import the ones below it, never above; foundation imports no subpackage. Keeping
+- **Layering is one-directional:** `ui` → {`engine`, `voice`} → `vcs` → foundation. A layer
+  may import the ones below it, never above; foundation imports no subpackage. Keeping
   this acyclic is what lets `engine` run headless without the TUI. Shared code moves
   down to the lowest layer that needs it (status-to-colour lives in `ui/render.py`
   because only the UI reads it; the JSONL `event_data` unwrap lives in `events.py`
   because the engine needs it too).
+- **A subpackage earns its place by being a cohesive domain** with a few focused modules,
+  not by splitting one concern thinly. Heavy or optional third-party deps (`sounddevice`,
+  `foundry-local-sdk`, `httpx` behind the `voice` extra) are imported lazily inside the
+  function that needs them, so the core install and `--help` stay light.
 - **Absolute imports only**, and `__init__.py` stays empty apart from the header —
   import from the module, not the package.
 - **Tests mirror source 1:1**, so `engine/store.py` is tested by

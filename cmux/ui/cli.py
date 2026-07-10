@@ -4,6 +4,7 @@
 import asyncio
 import os
 import shutil
+import tempfile
 import time
 from pathlib import Path
 
@@ -11,6 +12,7 @@ import typer
 from rich.console import Console
 from rich.live import Live
 from rich.markup import escape
+from rich.syntax import Syntax
 from rich.table import Table
 
 from cmux import __version__
@@ -31,6 +33,9 @@ from cmux.logging import get_logger
 from cmux.ui.render import STATUS_COLOR, event_text
 from cmux.ui.search import search_transcripts
 from cmux.vcs.git import GitError, prune_worktrees, remove_worktree
+from cmux.voice.recorder import record_to_file
+from cmux.voice.synthesizer import synthesize_plan
+from cmux.voice.transcriber import DEFAULT_TRANSCRIBE_MODEL, VoiceError, transcribe
 
 app = typer.Typer(
     add_completion=False,
@@ -138,10 +143,8 @@ def up(
 ) -> None:
     """Spawn one Copilot session per item, each in its own worktree, branch, and PR."""
 
-    plan = _load(file)
-    resolved = plan.resolve()
-
     if dry_run:
+        resolved = _load(file).resolve()
         console.print(_plan_table(resolved))
         console.print("\n[bold]spawn commands:[/bold]")
         for item in resolved:
@@ -155,6 +158,13 @@ def up(
         strip_github_token=strip_github_token,
         deps_override=str(deps) if deps else None,
     )
+    _launch_run(file, options, detach, yes)
+
+
+def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
+    plan = _load(file)
+    resolved = plan.resolve()
+
     try:
         supervisor = Supervisor.create(plan, ".", options, str(file))
     except GitError as exc:
@@ -162,7 +172,7 @@ def up(
         raise typer.Exit(1)
 
     console.print(_plan_table(resolved))
-    action = "open a draft PR" if pr else "commit locally (no PR)"
+    action = "open a draft PR" if options.open_pr else "commit locally (no PR)"
     if not yes and not typer.confirm(
         f"Spawn {len(resolved)} Copilot session(s), each in its own worktree, and {action}?"
     ):
@@ -182,6 +192,57 @@ def up(
         daemon.clear_owner(supervisor.paths)
 
     _print_summary(Path("."), supervisor.run_id)
+
+
+@app.command()
+def voice(
+    output: Path = typer.Argument(Path("cmux.yml"), dir_okay=False, help="Where to write the generated cmux file."),
+    text: str | None = typer.Option(None, "--text", help="Skip transcription and synthesize from this text."),
+    audio: Path | None = typer.Option(
+        None, "--audio", exists=True, dir_okay=False, help="Transcribe this audio file instead of recording."
+    ),
+    transcribe_model: str = typer.Option(
+        DEFAULT_TRANSCRIBE_MODEL, "--transcribe-model", help="Foundry Local audio model."
+    ),
+    endpoint: str | None = typer.Option(
+        None, "--endpoint", envvar="CMUX_FOUNDRY_ENDPOINT", help="Foundry Local endpoint override."
+    ),
+    model: str = typer.Option("gpt-5.5", "--model", help="Copilot model used to synthesize the plan."),
+    up: bool = typer.Option(False, "--up", help="Launch the generated plan immediately."),
+    detach: bool = typer.Option(False, "--detach", "-d", help="With --up, run in the background."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt when launching."),
+) -> None:
+    """Dictate a spoken task list into a cmux plan, then optionally launch it."""
+
+    try:
+        transcript = _transcript(text, audio, transcribe_model, endpoint)
+        console.print(f"[dim]transcript:[/dim] {escape(transcript)}")
+        yaml_text = synthesize_plan(transcript, model)
+    except VoiceError as exc:
+        logger.error(str(exc))
+        raise typer.Exit(1)
+
+    output.write_text(yaml_text, encoding="utf-8")
+    console.print(f"[green]wrote {output}[/green]")
+    console.print(Syntax(yaml_text, "yaml", theme="ansi_dark", background_color="default"))
+
+    if up:
+        _launch_run(output, Options(), detach, yes)
+
+
+def _transcript(text: str | None, audio: Path | None, transcribe_model: str, endpoint: str | None) -> str:
+    if text:
+        return text
+    if audio is not None:
+        return transcribe(audio, transcribe_model, endpoint)
+
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
+        wav = Path(handle.name)
+    try:
+        record_to_file(wav)
+        return transcribe(wav, transcribe_model, endpoint)
+    finally:
+        wav.unlink(missing_ok=True)
 
 
 @app.command()

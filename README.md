@@ -100,12 +100,38 @@ item may set `include_system: false` to opt out of the shared prompt.
 `draft`, `paths` (extra directories the session may read), `depends_on` (keys that must finish
 first), `env`, and `include_system`.
 
+## Dictating a plan
+
+Rather than write the file by hand, dictate it:
+
+```bash
+cmux voice issues.yml            # record from the mic (Enter to stop) → cmux file
+cmux voice issues.yml --up       # …and launch it straight away
+cmux voice issues.yml --audio memo.wav   # transcribe an existing recording instead
+cmux voice issues.yml --text "fix the flaky login test and paginate the notifications"
+```
+
+`cmux voice` transcribes your speech, hands the transcript to `copilot` to synthesize a
+plan, validates it against the schema above, and writes the file (add `--up` to launch it).
+Speech-to-text runs through **Foundry Local** — the same on-device engine Copilot's own
+`/voice` uses — so audio never leaves your machine. Install the optional extra and pull a
+Whisper model once:
+
+```bash
+pip install "copilot-mux[voice]"     # sounddevice + foundry-local-sdk
+foundry model run whisper-large-v3   # one-time model download
+```
+
+Point elsewhere with `--endpoint`/`CMUX_FOUNDRY_ENDPOINT` (any OpenAI-compatible
+`/audio/transcriptions` server), or skip audio entirely with `--text`.
+
 ## Commands
 
 Every read/monitor command accepts `--run <id>` and defaults to the latest run.
 
 | Group | Command | What it does |
 |---|---|---|
+| **Compose** | `cmux voice [FILE]` | Dictate a spoken task list into a cmux file. Flags: `--text`, `--audio`, `--transcribe-model`, `--endpoint`, `--model`, `--up`, `--detach/-d`, `--yes/-y`. |
 | **Launch** | `cmux up FILE` | Spawn one session per item. Flags: `--dry-run`, `--detach/-d`, `--concurrency/-j`, `--pr/--no-pr`, `--deps`, `--yes/-y`. |
 | **Monitor** | `cmux ls` | Snapshot each item's status. |
 | | `cmux attach` | Live, read-only monitor; reconnects to a background run (Ctrl-C to detach). |
