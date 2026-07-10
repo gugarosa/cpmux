@@ -21,8 +21,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0", "httpx>=0.27"]
-voice = ["sounddevice>=0.4", "foundry-local-sdk>=0.4", "httpx>=0.27"]
+dev = ["pytest>=8.0"]
+voice = ["sounddevice>=0.4", "faster-whisper>=1.0"]
 
 [project.scripts]
 cmux = "cmux.ui.cli:main"

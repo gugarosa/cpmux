@@ -51,7 +51,7 @@ cmux/
   because the engine needs it too).
 - **A subpackage must be a cohesive domain** with a few focused modules,
   not a thin split of one concern. Heavy or optional third-party deps (`sounddevice`,
-  `foundry-local-sdk`, `httpx` behind the `voice` extra) are imported lazily inside the
+  `faster-whisper` behind the `voice` extra) are imported lazily inside the
   function that needs them, so the core install and `--help` stay light.
 - **Absolute imports only**, and `__init__.py` stays empty apart from the header —
   import from the module, not the package.

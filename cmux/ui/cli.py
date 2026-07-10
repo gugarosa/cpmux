@@ -211,10 +211,7 @@ def plan(
     voice: bool = typer.Option(False, "--voice", help="Record a spoken plan from the mic (Enter to stop)."),
     audio: Path | None = typer.Option(None, "--audio", exists=True, dir_okay=False, help="Audio file to transcribe."),
     transcribe_model: str = typer.Option(
-        DEFAULT_TRANSCRIBE_MODEL, "--transcribe-model", help="Foundry Local audio model."
-    ),
-    endpoint: str | None = typer.Option(
-        None, "--endpoint", envvar="CMUX_FOUNDRY_ENDPOINT", help="Foundry Local endpoint."
+        DEFAULT_TRANSCRIBE_MODEL, "--transcribe-model", help="faster-whisper model size (tiny…large-v3)."
     ),
     model: str = typer.Option("gpt-5.5", "--model", help="Copilot model for plan synthesis."),
     up: bool = typer.Option(False, "--up", help="Launch the generated plan."),
@@ -225,7 +222,7 @@ def plan(
     """Compose a cmux plan in your editor, or from text, speech, or audio."""
 
     try:
-        transcript = _resolve_transcript(text, audio, voice, transcribe_model, endpoint)
+        transcript = _resolve_transcript(text, audio, voice, transcribe_model)
         console.print(f"[dim]transcript:[/dim] {escape(transcript)}")
         yaml_text = synthesize_plan(transcript, model)
     except VoiceError as exc:
@@ -240,13 +237,11 @@ def plan(
         _launch_run(output, Options(open_pr=pr), detach, yes)
 
 
-def _resolve_transcript(
-    text: str | None, audio: Path | None, voice: bool, transcribe_model: str, endpoint: str | None
-) -> str:
+def _resolve_transcript(text: str | None, audio: Path | None, voice: bool, transcribe_model: str) -> str:
     if voice:
-        return _record_and_transcribe(transcribe_model, endpoint)
+        return _record_and_transcribe(transcribe_model)
     if audio is not None:
-        return transcribe(audio, transcribe_model, endpoint)
+        return transcribe(audio, transcribe_model)
     if text:
         return text
     return _compose_in_editor()
@@ -259,12 +254,12 @@ def _compose_in_editor() -> str:
     return composed.strip()
 
 
-def _record_and_transcribe(transcribe_model: str, endpoint: str | None) -> str:
+def _record_and_transcribe(transcribe_model: str) -> str:
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
         wav = Path(handle.name)
     try:
         record_to_file(wav)
-        return transcribe(wav, transcribe_model, endpoint)
+        return transcribe(wav, transcribe_model)
     finally:
         wav.unlink(missing_ok=True)
 

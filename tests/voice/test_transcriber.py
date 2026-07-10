@@ -1,42 +1,81 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
-import httpx
+import sys
+import types
+
 import pytest
 
-from cmux.voice.transcriber import VoiceError, _resolve_endpoint, transcribe
+from cmux.voice.transcriber import VoiceError, transcribe
 
 
-class _Response:
-    def __init__(self, payload):
-        self._payload = payload
-
-    def raise_for_status(self):
-        return None
-
-    def json(self):
-        return self._payload
+class _Segment:
+    def __init__(self, text):
+        self.text = text
 
 
-def test_transcribe_returns_text_from_endpoint(tmp_path, monkeypatch):
+def _raising_generator(error):
+    if error is not None:
+        raise error
+    yield
+
+
+def _install_fake_whisper(monkeypatch, segments=None, load_error=None, transcribe_error=None):
+    module = types.ModuleType("faster_whisper")
+
+    class _FakeModel:
+        def __init__(self, model, device, compute_type):
+            if load_error is not None:
+                raise load_error
+
+        def transcribe(self, path):
+            if transcribe_error is not None:
+                return _raising_generator(transcribe_error), object()
+            return list(segments or []), object()
+
+    module.WhisperModel = _FakeModel
+    monkeypatch.setitem(sys.modules, "faster_whisper", module)
+
+
+def test_transcribe_joins_and_strips_segments(tmp_path, monkeypatch):
     audio = tmp_path / "clip.wav"
     audio.write_bytes(b"RIFF")
-    monkeypatch.setattr(httpx, "post", lambda *a, **k: _Response({"text": "  fix the bug  "}))
-    assert transcribe(audio, endpoint="http://localhost:1234/v1") == "fix the bug"
+    _install_fake_whisper(monkeypatch, segments=[_Segment(" fix the bug ")])
+    assert transcribe(audio) == "fix the bug"
 
 
 def test_transcribe_missing_file_raises(tmp_path):
     with pytest.raises(VoiceError):
-        transcribe(tmp_path / "gone.wav", endpoint="http://localhost:1234/v1")
+        transcribe(tmp_path / "gone.wav")
+
+
+def test_transcribe_without_faster_whisper_raises(tmp_path, monkeypatch):
+    audio = tmp_path / "clip.wav"
+    audio.write_bytes(b"RIFF")
+    monkeypatch.setitem(sys.modules, "faster_whisper", None)
+    with pytest.raises(VoiceError):
+        transcribe(audio)
 
 
 def test_transcribe_empty_text_raises(tmp_path, monkeypatch):
     audio = tmp_path / "clip.wav"
     audio.write_bytes(b"RIFF")
-    monkeypatch.setattr(httpx, "post", lambda *a, **k: _Response({"text": "   "}))
+    _install_fake_whisper(monkeypatch, segments=[_Segment("   ")])
     with pytest.raises(VoiceError):
-        transcribe(audio, endpoint="http://localhost:1234/v1")
+        transcribe(audio)
 
 
-def test_resolve_endpoint_prefers_explicit_endpoint():
-    assert _resolve_endpoint("whisper", "http://host:9/v1/") == ("http://host:9/v1", None)
+def test_transcribe_model_load_failure_raises(tmp_path, monkeypatch):
+    audio = tmp_path / "clip.wav"
+    audio.write_bytes(b"RIFF")
+    _install_fake_whisper(monkeypatch, load_error=RuntimeError("no backend"))
+    with pytest.raises(VoiceError):
+        transcribe(audio)
+
+
+def test_transcribe_inference_failure_raises(tmp_path, monkeypatch):
+    audio = tmp_path / "clip.wav"
+    audio.write_bytes(b"RIFF")
+    _install_fake_whisper(monkeypatch, transcribe_error=RuntimeError("decode failed"))
+    with pytest.raises(VoiceError):
+        transcribe(audio)

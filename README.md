@@ -96,7 +96,7 @@ Every read/monitor command accepts `--run <id>` and defaults to the latest run.
 
 | Group | Command | What it does |
 |---|---|---|
-| **Compose** | `cmux plan [FILE]` | Compose a cmux file in your editor, or from text, speech, or audio. Flags: `--text`, `--voice`, `--audio`, `--transcribe-model`, `--endpoint`, `--model`, `--up`, `--pr/--no-pr`, `--detach/-d`, `--yes/-y`. |
+| **Compose** | `cmux plan [FILE]` | Compose a cmux file in your editor, or from text, speech, or audio. Flags: `--text`, `--voice`, `--audio`, `--transcribe-model`, `--model`, `--up`, `--pr/--no-pr`, `--detach/-d`, `--yes/-y`. |
 | **Launch** | `cmux up FILE` | Spawn one session per item. Flags: `--dry-run`, `--detach/-d`, `--concurrency/-j`, `--pr/--no-pr`, `--deps`, `--yes/-y`. |
 | **Monitor** | `cmux ls` | Snapshot each item's status. |
 | | `cmux attach` | Live, read-only monitor; reconnects to a background run (Ctrl-C to detach). |
@@ -123,36 +123,19 @@ cmux plan issues.yml --up               # …and launch it straight away
 
 `cmux plan` opens your `$EDITOR` to describe the work (or takes `--text`), asks `copilot` to
 synthesize a plan, validates it, and writes the file. Add `--up` to launch it. With `--voice`
-or `--audio`, speech-to-text runs through **Foundry Local**, the same on-device engine
-Copilot's `/voice` uses, so audio stays on your machine.
+or `--audio`, speech-to-text runs on-device through [faster-whisper](https://github.com/SYSTRAN/faster-whisper),
+so audio never leaves your machine.
 
-For `--voice` or `--audio`, set up Foundry Local once (`--text` and the editor need nothing):
+For `--voice` or `--audio`, install the optional extra (`--text` and the editor need nothing):
 
-1. Install the Python extra — microphone capture plus the Foundry Local SDK:
+```bash
+pip install "cmux[voice]"
+brew install portaudio     # macOS only: sounddevice needs PortAudio
+```
 
-   ```bash
-   pip install "cmux[voice]"
-   brew install portaudio     # macOS only: sounddevice needs PortAudio
-   ```
-
-2. Install the Foundry Local runtime — this provides the `foundry` command, which the extra
-   above does not:
-
-   ```bash
-   brew trust microsoft/foundrylocal && brew tap microsoft/foundrylocal && brew install foundrylocal   # macOS
-   winget install Microsoft.FoundryLocal                          # Windows
-   ```
-
-   Other platforms: see the [Foundry Local docs](https://aka.ms/foundry-local-docs).
-
-3. Download and serve the Whisper model once — cmux finds the endpoint automatically:
-
-   ```bash
-   foundry model run whisper-large-v3   # `foundry model list` shows other audio models
-   ```
-
-To transcribe against a remote server instead, point `--endpoint`/`CMUX_FOUNDRY_ENDPOINT` at any
-OpenAI-compatible `/audio/transcriptions` endpoint.
+The Whisper model downloads automatically on first use and is cached afterward. Pick a size
+with `--transcribe-model` (`tiny`, `base` (default), `small`, `medium`, `large-v3`); larger is
+more accurate but slower.
 
 ## How it works
 
