@@ -4,7 +4,7 @@
 import asyncio
 import json
 
-from textual.widgets import DataTable
+from textual.widgets import DataTable, RichLog
 
 from cmux.config import Plan
 from cmux.engine.store import RunManifest, RunPaths, SessionRecord
@@ -67,6 +67,51 @@ def test_dashboard_shows_selected_transcript(tmp_path):
         app = CmuxApp(str(tmp_path), "run1")
         async with app.run_test():
             assert app._shown_key == "alpha"
+
+    asyncio.run(scenario())
+
+
+def _write_transcript(paths, key, count):
+    lines = [json.dumps({"type": "assistant.message", "data": {"content": f"line {index}"}}) for index in range(count)]
+    paths.transcript(key).write_text("\n".join(lines) + "\n")
+
+
+def test_dashboard_keeps_scroll_position_across_reload(tmp_path):
+    paths = _build_run(tmp_path, ["alpha"])
+    _write_transcript(paths, "alpha", 60)
+
+    async def scenario():
+        app = CmuxApp(str(tmp_path), "run1")
+        async with app.run_test(size=(100, 24)) as pilot:
+            await pilot.pause()
+            log = app.query_one("#transcript", RichLog)
+            log.scroll_to(y=0, animate=False)
+            await pilot.pause()
+            assert log.scroll_y == 0
+            app.reload()
+            await pilot.pause()
+            assert log.scroll_y == 0
+
+    asyncio.run(scenario())
+
+
+def test_dashboard_follows_live_output_at_bottom(tmp_path):
+    paths = _build_run(tmp_path, ["alpha"])
+    _write_transcript(paths, "alpha", 60)
+
+    async def scenario():
+        app = CmuxApp(str(tmp_path), "run1")
+        async with app.run_test(size=(100, 24)) as pilot:
+            await pilot.pause()
+            log = app.query_one("#transcript", RichLog)
+            assert log.is_vertical_scroll_end
+            before = log.max_scroll_y
+            with paths.transcript("alpha").open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps({"type": "assistant.message", "data": {"content": "tail"}}) + "\n")
+            app.reload()
+            await pilot.pause()
+            assert log.max_scroll_y > before
+            assert log.is_vertical_scroll_end
 
     asyncio.run(scenario())
 

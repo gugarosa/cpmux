@@ -130,7 +130,7 @@ class CmuxApp(App):
 
         with Horizontal():
             yield DataTable(id="sessions")
-            yield RichLog(id="transcript", wrap=True)
+            yield RichLog(id="transcript", wrap=True, auto_scroll=False)
 
         yield Footer()
 
@@ -194,13 +194,17 @@ class CmuxApp(App):
         if force or record.key != self._shown_key:
             log.clear()
             self._write_events(log, text)
+            log.scroll_end(animate=False)
             self._shown_key = record.key
-            self._transcript_len = len(text)
+            self._transcript_len = text.rfind("\n") + 1
         elif len(text) > self._transcript_len:
             boundary = text.rfind("\n", self._transcript_len) + 1
             if boundary > self._transcript_len:
+                following = log.is_vertical_scroll_end and not log.is_vertical_scrollbar_grabbed
                 self._write_events(log, text[self._transcript_len : boundary])
                 self._transcript_len = boundary
+                if following:
+                    log.scroll_end(animate=False)
 
     def _write_events(self, log: RichLog, text: str) -> None:
         for line in text.splitlines():
@@ -212,7 +216,9 @@ class CmuxApp(App):
                 log.write(renderable)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        self._refresh_transcript(force=True)
+        record = self._selected_record()
+        if record is not None and record.key != self._shown_key:
+            self._refresh_transcript(force=True)
 
     def action_cursor_down(self) -> None:
         """Move down one row."""
