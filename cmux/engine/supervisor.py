@@ -6,10 +6,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
-from rich.console import Console
 from rich.live import Live
 from rich.table import Table
 
+from cmux import theme
 from cmux.config import Plan, ResolvedItem
 from cmux.engine.session import SessionRunner
 from cmux.engine.store import RunManifest, RunPaths, SessionRecord, new_run_id
@@ -18,21 +18,6 @@ from cmux.logging import get_logger
 from cmux.vcs import git, pr
 
 logger = get_logger(__name__)
-
-_STATUS_GLYPH = {
-    Status.PENDING: ("○", "dim"),
-    Status.STARTING: ("◐", "yellow"),
-    Status.RUNNING: ("●", "cyan"),
-    Status.TOOL: ("⚙", "cyan"),
-    Status.IDLE: ("◑", "blue"),
-    Status.FINALIZING: ("◆", "cyan"),
-    Status.OPENING_PR: ("⇪", "magenta"),
-    Status.DONE: ("✔", "green"),
-    Status.NO_CHANGES: ("∅", "dim"),
-    Status.FAILED: ("✖", "red"),
-    Status.TIMED_OUT: ("⏱", "red"),
-    Status.KILLED: ("✖", "red"),
-}
 
 
 @dataclass
@@ -88,7 +73,7 @@ class Supervisor:
         self.config_path = config_path
 
         self.paths = RunPaths(self.repo_root, run_id)
-        self.console = Console()
+        self.console = theme.err
         self.records: dict[str, SessionRecord] = {}
         self.live_states: dict[str, SessionState] = {}
         self.runners: dict[str, SessionRunner] = {}
@@ -359,7 +344,7 @@ class Supervisor:
             self._live.update(self._render())
 
     def _render(self) -> Table:
-        table = Table(title=f"cmux · run {self.run_id}", expand=True)
+        table = theme.table(title=f"cmux · run {self.run_id}")
         table.add_column("item", style="bold", no_wrap=True)
         table.add_column("status", no_wrap=True)
         table.add_column("model", no_wrap=True)
@@ -370,7 +355,6 @@ class Supervisor:
             record = self.records[item.key]
             live = self.live_states.get(item.key)
             status = record.status
-            glyph, color = _STATUS_GLYPH.get(status, ("?", "white"))
 
             detail = ""
             if live and status in ACTIVE:
@@ -381,7 +365,7 @@ class Supervisor:
 
             table.add_row(
                 item.key,
-                f"[{color}]{glyph} {status}[/{color}]",
+                theme.status_text(status),
                 item.model,
                 detail,
                 record.pr_url or record.branch,

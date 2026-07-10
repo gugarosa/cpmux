@@ -10,13 +10,12 @@ from pathlib import Path
 
 import click
 import typer
-from rich.console import Console
 from rich.live import Live
 from rich.markup import escape
 from rich.syntax import Syntax
 from rich.table import Table
 
-from cmux import __version__
+from cmux import __version__, theme
 from cmux.config import ConfigError, Deps, Plan, ResolvedItem, load_plan
 from cmux.engine import daemon
 from cmux.engine.copilot_store import (
@@ -34,9 +33,8 @@ from cmux.engine.store import (
     load_run,
 )
 from cmux.engine.supervisor import Options, Supervisor
-from cmux.events import TERMINAL, TERMINAL_FAILURE, Status, event_data, parse_line
-from cmux.logging import get_logger
-from cmux.ui.render import STATUS_COLOR, event_text
+from cmux.events import TERMINAL, TERMINAL_FAILURE, event_data, parse_line
+from cmux.ui.render import event_text
 from cmux.ui.search import search_transcripts
 from cmux.vcs.git import GitError, prune_worktrees, remove_worktree
 from cmux.voice.recorder import record_to_file
@@ -48,8 +46,7 @@ app = typer.Typer(
     no_args_is_help=True,
     help="Run GitHub Copilot CLI agents from YAML.",
 )
-console = Console()
-logger = get_logger(__name__)
+console = theme.out
 
 
 def _version(value: bool) -> None:
@@ -71,14 +68,14 @@ def _load(file: Path) -> Plan:
     try:
         return load_plan(file)
     except ConfigError as exc:
-        logger.error(str(exc))
+        theme.print_error(str(exc))
         raise typer.Exit(1)
 
 
 def _run_id_or_exit(run: str | None, root: Path = Path(".")) -> str:
     run_id = run or latest_run_id(root)
     if not run_id:
-        logger.error("no cmux runs found here.")
+        theme.print_error("no cmux runs found here.")
         raise typer.Exit(1)
 
     return run_id
@@ -88,7 +85,7 @@ def _resolve_record(run: str | None, key: str) -> tuple[RunPaths, SessionRecord]
     run_id = _run_id_or_exit(run)
     paths = RunPaths(Path("."), run_id)
     if not paths.record_file(key).exists():
-        logger.error(f"no session `{key}` in run `{run_id}`.")
+        theme.print_error(f"no session `{key}` in run `{run_id}`.")
         raise typer.Exit(1)
 
     return paths, paths.read_record(key)
@@ -111,7 +108,7 @@ def _display_argv(argv: list[str]) -> str:
 
 def _plan_table(resolved: list[ResolvedItem]) -> Table:
     show_env = any(item.env for item in resolved)
-    table = Table(title="resolved plan", expand=True)
+    table = theme.table(title="resolved plan")
     table.add_column("item", style="bold")
     table.add_column("model")
     table.add_column("effort")
@@ -180,7 +177,7 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
     try:
         supervisor = Supervisor.create(plan, ".", options, str(file))
     except GitError as exc:
-        logger.error(str(exc))
+        theme.print_error(str(exc))
         raise typer.Exit(1)
 
     console.print(_plan_table(resolved))
@@ -191,7 +188,7 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
     supervisor.prepare()
     if detach:
         daemon.launch_detached(supervisor.run_id, str(supervisor.repo_root))
-        console.print(f"[green]run {supervisor.run_id} started in background.[/green]")
+        theme.print_success(f"run {supervisor.run_id} started in background.")
         console.print("[dim]monitor with:[/dim] cmux attach")
         return
 
@@ -228,11 +225,11 @@ def plan(
         console.print(f"[dim]transcript:[/dim] {escape(transcript)}")
         yaml_text = synthesize_plan(transcript, model)
     except VoiceError as exc:
-        logger.error(str(exc))
+        theme.print_error(str(exc))
         raise typer.Exit(1)
 
     output.write_text(yaml_text, encoding="utf-8")
-    console.print(f"[green]wrote {output}[/green]")
+    theme.print_success(f"wrote {output}.")
     console.print(Syntax(yaml_text, "yaml", theme="ansi_dark", background_color="default"))
 
     if up:
@@ -318,10 +315,10 @@ def enter(
 
     _, record = _resolve_record(run, key)
     if shutil.which("copilot") is None:
-        logger.error("`copilot` is not on PATH.")
+        theme.print_error("`copilot` is not on PATH.")
         raise typer.Exit(1)
     if not Path(record.worktree).exists():
-        logger.error(f"`{record.worktree}` worktree is gone, the run may have been cleaned.")
+        theme.print_error(f"`{record.worktree}` worktree is gone, the run may have been cleaned.")
         raise typer.Exit(1)
 
     os.execvp("copilot", resume_interactive_argv(record.session_id, record.worktree))
@@ -337,7 +334,7 @@ def send(
 
     paths, record = _resolve_record(run, key)
     if not Path(record.worktree).exists():
-        logger.error(f"`{record.worktree}` worktree is gone, the run may have been cleaned.")
+        theme.print_error(f"`{record.worktree}` worktree is gone, the run may have been cleaned.")
         raise typer.Exit(1)
 
     argv = followup_argv(record.session_id, record.worktree, record.model, record.permission_flags, message)
@@ -369,7 +366,7 @@ def logs(
 
     transcript = RunPaths(Path("."), run_id).transcript(key)
     if not transcript.exists():
-        logger.error(f"no transcript for `{key}` in run `{run_id}`.")
+        theme.print_error(f"no transcript for `{key}` in run `{run_id}`.")
         raise typer.Exit(1)
 
     consumed = _emit_transcript(transcript.read_text(encoding="utf-8"), raw)
@@ -388,7 +385,7 @@ def search(
     """Search session transcripts."""
 
     if fts and regex:
-        logger.error("`--regex` cannot be combined with `--fts`.")
+        theme.print_error("`--regex` cannot be combined with `--fts`.")
         raise typer.Exit(1)
 
     root = Path(".")
@@ -398,7 +395,7 @@ def search(
         latest = run or latest_run_id(root)
         run_ids = [latest] if latest else []
     if not run_ids:
-        logger.error("no cmux runs found here.")
+        theme.print_error("no cmux runs found here.")
         raise typer.Exit(1)
 
     items: list[tuple[str, Path]] = []
@@ -425,7 +422,7 @@ def _search_fts(query: str, label_by_session: dict[str, str]) -> None:
     try:
         hits = search_sessions(list(label_by_session), query)
     except (InvalidFtsQuery, CopilotStoreUnavailable) as exc:
-        logger.error(str(exc))
+        theme.print_error(str(exc))
         raise typer.Exit(1)
 
     for hit in hits:
@@ -452,10 +449,10 @@ def rm(
 
     if failed:
         for key in failed:
-            logger.error(f"could not remove worktree for `{key}`; remove it manually and retry.")
+            theme.print_error(f"could not remove worktree for `{key}`; remove it manually and retry.")
         raise typer.Exit(1)
 
-    console.print(f"[green]removed {len(records)} worktree(s) for run {run_id}.[/green]")
+    theme.print_success(f"removed {len(records)} worktree(s) for run {run_id}.")
 
 
 @app.command()
@@ -473,7 +470,7 @@ def down(
         raise typer.Exit(1)
 
     signalled = daemon.stop(RunPaths(root, run_id), records)
-    console.print(f"[green]stopped {signalled} process(es) for run {run_id}.[/green]")
+    theme.print_success(f"stopped {signalled} process(es) for run {run_id}.")
 
 
 @app.command()
@@ -485,7 +482,7 @@ def kill(
 
     paths, record = _resolve_record(run, key)
     if daemon.kill_session(paths, record):
-        console.print(f"[green]killed session {key}.[/green]")
+        theme.print_success(f"killed session {key}.")
     else:
         console.print(f"[dim]session {key} was not running.[/dim]")
 
@@ -549,7 +546,7 @@ def _tail_last_assistant(transcript: Path) -> str:
 
 
 def _monitor_table(run_id: str, records: list[SessionRecord], paths: RunPaths) -> Table:
-    table = Table(title=f"cmux · run {run_id}", expand=True)
+    table = theme.table(title=f"cmux · run {run_id}")
     table.add_column("item", style="bold", no_wrap=True)
     table.add_column("status", no_wrap=True)
     table.add_column("model", no_wrap=True)
@@ -557,13 +554,12 @@ def _monitor_table(run_id: str, records: list[SessionRecord], paths: RunPaths) -
     table.add_column("branch / PR", no_wrap=True)
 
     for record in records:
-        color = STATUS_COLOR.get(record.status, "cyan")
-        detail = record.error.splitlines()[0][:80] if record.status == Status.FAILED and record.error else ""
+        detail = record.error.splitlines()[0][:80] if record.status in TERMINAL_FAILURE and record.error else ""
         if record.status not in TERMINAL:
             detail = _tail_last_assistant(paths.transcript(record.key))
         table.add_row(
             record.key,
-            f"[{color}]{record.status}[/{color}]",
+            theme.status_text(record.status),
             record.model,
             detail,
             record.pr_url or record.branch,
@@ -578,7 +574,7 @@ def _print_summary(root: Path, run_id: str | None) -> None:
     _, records = load_run(root, run_id)
     records = daemon.reconcile(RunPaths(root, run_id), records, persist=False)
 
-    table = Table(title=f"cmux · run {run_id}", expand=True)
+    table = theme.table(title=f"cmux · run {run_id}")
     table.add_column("item", style="bold")
     table.add_column("status")
     table.add_column("model")
@@ -586,10 +582,7 @@ def _print_summary(root: Path, run_id: str | None) -> None:
     table.add_column("PR")
 
     for record in records:
-        color = STATUS_COLOR.get(record.status, "cyan")
-        table.add_row(
-            record.key, f"[{color}]{record.status}[/{color}]", record.model, record.branch, record.pr_url or "-"
-        )
+        table.add_row(record.key, theme.status_text(record.status), record.model, record.branch, record.pr_url or "-")
 
     console.print(table)
 

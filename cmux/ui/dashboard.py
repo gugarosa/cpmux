@@ -6,7 +6,6 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from rich.text import Text
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
@@ -23,12 +22,13 @@ from textual.widgets import (
     RichLog,
 )
 
+from cmux import theme
 from cmux.engine import daemon
 from cmux.engine.interact import followup_argv, resume_interactive_argv
 from cmux.engine.session import SessionRunner
 from cmux.engine.store import RunPaths, SessionRecord, load_run
 from cmux.events import parse_line
-from cmux.ui.render import STATUS_COLOR, deps_cell, event_text
+from cmux.ui.render import deps_cell, event_text
 from cmux.ui.search import search_transcripts
 
 
@@ -163,10 +163,9 @@ class CmuxApp(App):
 
         status_by_key = {record.key: record.status for record in self.records}
         for record in self.records:
-            style = STATUS_COLOR.get(record.status, "cyan")
             table.add_row(
                 record.key,
-                Text(record.status, style=style),
+                theme.status_text(record.status),
                 record.model,
                 deps_cell(self.deps_by_key.get(record.key, []), status_by_key),
                 record.pr_url or record.branch,

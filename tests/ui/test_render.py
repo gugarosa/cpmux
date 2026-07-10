@@ -2,13 +2,7 @@
 # Licensed under the MIT license.
 
 from cmux.events import Status
-from cmux.ui.render import STATUS_COLOR, deps_cell, event_text
-
-
-def test_status_color_maps_terminal_and_defaults_others():
-    assert STATUS_COLOR[Status.DONE] == "green"
-    assert STATUS_COLOR[Status.FAILED] == "red"
-    assert STATUS_COLOR.get(Status.RUNNING, "cyan") == "cyan"
+from cmux.ui.render import deps_cell, event_text
 
 
 def test_deps_cell_is_dash_without_dependencies():

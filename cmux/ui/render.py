@@ -5,14 +5,6 @@ from rich.text import Text
 
 from cmux.events import SUCCESS, TERMINAL_FAILURE, Status, event_data
 
-STATUS_COLOR: dict[Status, str] = {
-    Status.DONE: "green",
-    Status.NO_CHANGES: "dim",
-    Status.FAILED: "red",
-    Status.KILLED: "red",
-    Status.TIMED_OUT: "red",
-}
-
 
 def deps_cell(deps: list[str], status_by_key: dict[str, Status]) -> Text:
     """Render an item's dependencies, colored by whether each still blocks it.

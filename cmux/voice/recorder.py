@@ -8,9 +8,9 @@ import wave
 from array import array
 from pathlib import Path
 
-from rich.console import Console
 from rich.text import Text
 
+from cmux import theme
 from cmux.voice.transcriber import VoiceError
 
 _SAMPLE_RATE = 16000
@@ -90,7 +90,7 @@ def _wait_until_stopped(level: _Level) -> None:
         input("🎙  Recording — press Enter to stop")
         return
 
-    console = Console()
+    console = theme.err
     stopped = threading.Event()
     threading.Thread(target=_wait_for_enter, args=(stopped,), daemon=True).start()
 
