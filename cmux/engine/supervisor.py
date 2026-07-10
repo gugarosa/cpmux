@@ -13,7 +13,7 @@ from rich.table import Table
 from cmux.config import Plan, ResolvedItem
 from cmux.engine.session import SessionRunner
 from cmux.engine.store import RunManifest, RunPaths, SessionRecord, new_run_id
-from cmux.events import SessionState, Status
+from cmux.events import SUCCESS, SessionState, Status
 from cmux.logging import get_logger
 from cmux.vcs import git, pr
 
@@ -243,7 +243,7 @@ class Supervisor:
                 return
 
             failed_dep = next(
-                (dep for dep in item.depends_on if self.records[dep].status not in (Status.DONE, Status.NO_CHANGES)),
+                (dep for dep in item.depends_on if self.records[dep].status not in SUCCESS),
                 None,
             )
             if failed_dep is not None:

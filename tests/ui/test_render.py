@@ -2,13 +2,26 @@
 # Licensed under the MIT license.
 
 from cmux.events import Status
-from cmux.ui.render import STATUS_COLOR, event_text
+from cmux.ui.render import STATUS_COLOR, deps_cell, event_text
 
 
 def test_status_color_maps_terminal_and_defaults_others():
     assert STATUS_COLOR[Status.DONE] == "green"
     assert STATUS_COLOR[Status.FAILED] == "red"
     assert STATUS_COLOR.get(Status.RUNNING, "cyan") == "cyan"
+
+
+def test_deps_cell_is_dash_without_dependencies():
+    cell = deps_cell([], {})
+    assert cell.plain == "-"
+
+
+def test_deps_cell_colors_each_dependency_by_status():
+    status_by_key = {"a": Status.DONE, "b": Status.RUNNING, "c": Status.FAILED}
+    cell = deps_cell(["a", "b", "c", "gone"], status_by_key)
+    assert cell.plain == "a, b, c, gone"
+    styles = {span.style for span in cell.spans if cell.plain[span.start : span.end] != ", "}
+    assert {"green", "yellow", "red", "magenta"} <= styles
 
 
 def test_event_text_renders_known_events():

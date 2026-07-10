@@ -3,7 +3,7 @@
 
 from rich.text import Text
 
-from cmux.events import Status, event_data
+from cmux.events import SUCCESS, TERMINAL_FAILURE, Status, event_data
 
 STATUS_COLOR: dict[Status, str] = {
     Status.DONE: "green",
@@ -12,6 +12,40 @@ STATUS_COLOR: dict[Status, str] = {
     Status.KILLED: "red",
     Status.TIMED_OUT: "red",
 }
+
+
+def deps_cell(deps: list[str], status_by_key: dict[str, Status]) -> Text:
+    """Render an item's dependencies, colored by whether each still blocks it.
+
+    Args:
+        deps: Keys this item depends on.
+        status_by_key: Current status of every item in the run.
+
+    Returns:
+        Styled text: green when satisfied, red when failed, yellow when still
+        pending, magenta when the dependency key is unknown.
+
+    """
+
+    if not deps:
+        return Text("-", style="dim")
+
+    cell = Text()
+    for index, dep in enumerate(deps):
+        if index:
+            cell.append(", ", style="dim")
+        status = status_by_key.get(dep)
+        if status is None:
+            style = "magenta"
+        elif status in SUCCESS:
+            style = "green"
+        elif status in TERMINAL_FAILURE:
+            style = "red"
+        else:
+            style = "yellow"
+        cell.append(dep, style=style)
+
+    return cell
 
 
 def event_text(event: dict) -> Text | None:

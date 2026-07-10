@@ -6,6 +6,7 @@ import json
 
 from textual.widgets import DataTable
 
+from cmux.config import Plan
 from cmux.engine.store import RunManifest, RunPaths, SessionRecord
 from cmux.events import Status
 from cmux.ui.dashboard import CmuxApp
@@ -66,5 +67,41 @@ def test_dashboard_shows_selected_transcript(tmp_path):
         app = CmuxApp(str(tmp_path), "run1")
         async with app.run_test():
             assert app._shown_key == "alpha"
+
+    asyncio.run(scenario())
+
+
+def test_dashboard_surfaces_item_dependencies(tmp_path):
+    resolved = Plan.model_validate(
+        {"items": [{"name": "alpha", "prompt": "x"}, {"name": "beta", "prompt": "y", "depends_on": ["alpha"]}]}
+    ).resolve()
+    paths = RunPaths(tmp_path, "run1")
+    paths.write_manifest(
+        RunManifest(
+            run_id="run1", repo_root=str(tmp_path), config_path="", item_keys=["alpha", "beta"], resolved=resolved
+        )
+    )
+    for item in resolved:
+        record = SessionRecord(
+            key=item.key,
+            name=item.name,
+            slug=item.slug,
+            branch=item.branch,
+            base="main",
+            model="gpt-5.5",
+            session_id="sid",
+            worktree=str(tmp_path / item.key),
+            status=Status.RUNNING,
+        )
+        paths.write_record(record)
+        paths.transcript(item.key).write_text("")
+
+    async def scenario():
+        app = CmuxApp(str(tmp_path), "run1")
+        async with app.run_test():
+            assert app.deps_by_key == {"alpha": [], "beta": ["alpha"]}
+            table = app.query_one("#sessions", DataTable)
+            deps_col = [table.get_row_at(row)[3].plain for row in range(table.row_count)]
+            assert deps_col == ["-", "alpha"]
 
     asyncio.run(scenario())

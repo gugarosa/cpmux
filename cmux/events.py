@@ -25,6 +25,8 @@ class Status(StrEnum):
 
 ACTIVE = frozenset({Status.STARTING, Status.RUNNING, Status.TOOL, Status.IDLE})
 TERMINAL = frozenset({Status.DONE, Status.NO_CHANGES, Status.FAILED, Status.TIMED_OUT, Status.KILLED})
+SUCCESS = frozenset({Status.DONE, Status.NO_CHANGES})
+TERMINAL_FAILURE = TERMINAL - SUCCESS
 
 
 def _first_str(data: dict[str, Any], *keys: str, default: str = "") -> str:

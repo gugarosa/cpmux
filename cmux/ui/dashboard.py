@@ -28,7 +28,7 @@ from cmux.engine.interact import followup_argv, resume_interactive_argv
 from cmux.engine.session import SessionRunner
 from cmux.engine.store import RunPaths, SessionRecord, load_run
 from cmux.events import parse_line
-from cmux.ui.render import STATUS_COLOR, event_text
+from cmux.ui.render import STATUS_COLOR, deps_cell, event_text
 from cmux.ui.search import search_transcripts
 
 
@@ -121,6 +121,7 @@ class CmuxApp(App):
         self.run_id = run_id
         self.paths = RunPaths(start_path, run_id)
         self.records: list[SessionRecord] = []
+        self.deps_by_key: dict[str, list[str]] = {}
         self._shown_key: str | None = None
         self._transcript_len = 0
 
@@ -137,7 +138,7 @@ class CmuxApp(App):
         self.title = f"cmux · {self.run_id}"
         table = self.query_one("#sessions", DataTable)
         table.cursor_type = "row"
-        table.add_columns("item", "status", "model", "branch / PR")
+        table.add_columns("item", "status", "model", "deps", "branch / PR")
 
         self.reload()
         self.set_interval(1.0, self.reload)
@@ -146,10 +147,11 @@ class CmuxApp(App):
         """Reload records, reconcile crashes, and refresh panes."""
 
         try:
-            _, records = load_run(self.start_path, self.run_id)
+            manifest, records = load_run(self.start_path, self.run_id)
         except FileNotFoundError:
             return
 
+        self.deps_by_key = {item.key: list(item.depends_on) for item in manifest.resolved}
         self.records = daemon.reconcile(self.paths, records)
         self._refresh_table()
         self._refresh_transcript()
@@ -159,9 +161,16 @@ class CmuxApp(App):
         cursor = table.cursor_row
         table.clear()
 
+        status_by_key = {record.key: record.status for record in self.records}
         for record in self.records:
             style = STATUS_COLOR.get(record.status, "cyan")
-            table.add_row(record.key, Text(record.status, style=style), record.model, record.pr_url or record.branch)
+            table.add_row(
+                record.key,
+                Text(record.status, style=style),
+                record.model,
+                deps_cell(self.deps_by_key.get(record.key, []), status_by_key),
+                record.pr_url or record.branch,
+            )
 
         if table.row_count:
             table.move_cursor(row=min(cursor, table.row_count - 1))
