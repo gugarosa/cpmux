@@ -204,7 +204,7 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
 
 
 @app.command()
-def voice(
+def plan(
     output: Path = typer.Argument(Path("cmux.yml"), dir_okay=False, help="Output cmux file."),
     text: str | None = typer.Option(None, "--text", help="Text to turn into a plan."),
     audio: Path | None = typer.Option(None, "--audio", exists=True, dir_okay=False, help="Audio file to transcribe."),

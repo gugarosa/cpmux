@@ -96,7 +96,7 @@ Every read/monitor command accepts `--run <id>` and defaults to the latest run.
 
 | Group | Command | What it does |
 |---|---|---|
-| **Compose** | `cmux voice [FILE]` | Dictate tasks into a cmux file. Flags: `--text`, `--audio`, `--transcribe-model`, `--endpoint`, `--model`, `--up`, `--pr/--no-pr`, `--detach/-d`, `--yes/-y`. |
+| **Compose** | `cmux plan [FILE]` | Generate a cmux file from speech or text. Flags: `--text`, `--audio`, `--transcribe-model`, `--endpoint`, `--model`, `--up`, `--pr/--no-pr`, `--detach/-d`, `--yes/-y`. |
 | **Launch** | `cmux up FILE` | Spawn one session per item. Flags: `--dry-run`, `--detach/-d`, `--concurrency/-j`, `--pr/--no-pr`, `--deps`, `--yes/-y`. |
 | **Monitor** | `cmux ls` | Snapshot each item's status. |
 | | `cmux attach` | Live, read-only monitor; reconnects to a background run (Ctrl-C to detach). |
@@ -114,13 +114,13 @@ Every read/monitor command accepts `--run <id>` and defaults to the latest run.
 Create a cmux file from speech or text:
 
 ```bash
-cmux voice issues.yml            # record from the mic (Enter to stop) → cmux file
-cmux voice issues.yml --up       # …and launch it straight away
-cmux voice issues.yml --audio memo.wav   # transcribe an existing recording instead
-cmux voice issues.yml --text "fix the flaky login test and paginate the notifications"
+cmux plan issues.yml            # record from the mic (Enter to stop) → cmux file
+cmux plan issues.yml --up       # …and launch it straight away
+cmux plan issues.yml --audio memo.wav   # transcribe an existing recording instead
+cmux plan issues.yml --text "fix the flaky login test and paginate the notifications"
 ```
 
-`cmux voice` transcribes speech, asks `copilot` to synthesize a plan, validates it, and writes
+`cmux plan` transcribes speech, asks `copilot` to synthesize a plan, validates it, and writes
 the file. Add `--up` to launch it. Speech-to-text runs through **Foundry Local**, the same
 on-device engine Copilot's `/voice` uses, so audio stays on your machine.
 
