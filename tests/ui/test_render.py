@@ -28,3 +28,13 @@ def test_event_text_renders_known_events():
 def test_event_text_is_none_for_empty_or_unknown():
     assert event_text({"type": "assistant.message", "data": {"content": "   "}}) is None
     assert event_text({"type": "session.idle", "data": {}}) is None
+
+
+def test_event_text_surfaces_session_errors():
+    text = event_text({"type": "session.error", "data": {"message": "token expired"}})
+    assert text.plain == "✖ error token expired"
+
+
+def test_event_text_marks_failed_result_red():
+    assert event_text({"type": "result", "exitCode": 1}).style == "red"
+    assert event_text({"type": "result", "exitCode": 0}).style == "dim"

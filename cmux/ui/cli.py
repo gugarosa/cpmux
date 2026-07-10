@@ -34,7 +34,14 @@ from cmux.engine.store import (
     load_run,
 )
 from cmux.engine.supervisor import Options, Supervisor
-from cmux.events import SUCCESS, TERMINAL, TERMINAL_FAILURE, event_data, parse_line
+from cmux.events import (
+    ACTIVE,
+    SUCCESS,
+    TERMINAL,
+    TERMINAL_FAILURE,
+    event_data,
+    parse_line,
+)
 from cmux.ui.render import event_text
 from cmux.ui.search import search_transcripts
 from cmux.vcs.git import GitError, prune_worktrees, remove_worktree
@@ -380,7 +387,7 @@ def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: 
             while True:
                 _, records = load_run(root, run_id)
                 records = daemon.reconcile(paths, records, persist=False)
-                live.update(_monitor_table(run_id, records, paths))
+                live.update(_run_table(run_id, records, paths))
                 if all(record.status in TERMINAL for record in records):
                     break
                 time.sleep(0.5)
@@ -459,13 +466,23 @@ def logs(
     """Print a session transcript."""
 
     run_id = _run_id_or_exit(run)
-
-    transcript = RunPaths(Path("."), run_id).transcript(key)
-    if not transcript.exists():
-        theme.print_error(f"no transcript for `{key}` in run `{run_id}`.")
+    paths = RunPaths(Path("."), run_id)
+    if not paths.record_file(key).exists():
+        theme.print_error(
+            f"no session `{key}` in run `{run_id}`.",
+            hint=f"list the run's items with `cmux ls --run {run_id}`.",
+        )
         raise typer.Exit(1)
 
-    consumed = _emit_transcript(transcript.read_text(encoding="utf-8"), raw)
+    transcript = paths.transcript(key)
+    if not transcript.exists() and not follow:
+        theme.print_hint(f"no transcript events yet for `{key}` — add `-f` to wait for them.")
+        return
+
+    if follow and theme.err.is_terminal:
+        theme.err.print(f"[dim]following {run_id}/{key} — Ctrl-C to stop[/dim]")
+
+    consumed = _emit_transcript(transcript.read_text(encoding="utf-8"), raw) if transcript.exists() else 0
     if follow:
         _follow_transcript(transcript, raw, consumed)
 
@@ -650,11 +667,13 @@ def _emit_transcript(text: str, raw: bool) -> int:
 def _follow_transcript(transcript: Path, raw: bool, consumed: int) -> None:
     try:
         while True:
-            text = transcript.read_text(encoding="utf-8")
-            consumed += _emit_transcript(text[consumed:], raw)
+            if transcript.exists():
+                text = transcript.read_text(encoding="utf-8")
+                consumed += _emit_transcript(text[consumed:], raw)
             time.sleep(0.5)
     except KeyboardInterrupt:
-        pass
+        if theme.err.is_terminal:
+            theme.err.print("[dim]stopped following; the session continues.[/dim]")
 
 
 def _tail_last_assistant(transcript: Path) -> str:
@@ -673,23 +692,31 @@ def _tail_last_assistant(transcript: Path) -> str:
     return " ".join(last.split())[:80]
 
 
-def _monitor_table(run_id: str, records: list[SessionRecord], paths: RunPaths) -> Table:
-    table = theme.table(title=f"cmux · run {run_id}")
+def _run_table(run_id: str, records: list[SessionRecord], paths: RunPaths) -> Table:
+    done = sum(record.status in SUCCESS for record in records)
+    active = sum(record.status in ACTIVE for record in records)
+    failed = sum(record.status in TERMINAL_FAILURE for record in records)
+    title = f"cmux · run {run_id} · {done}/{len(records)} done · {active} active · {failed} failed"
+
+    table = theme.table(title=title)
     table.add_column("item", style="bold", no_wrap=True)
     table.add_column("status", no_wrap=True)
-    table.add_column("model", no_wrap=True)
-    table.add_column("detail", overflow="ellipsis")
+    table.add_column("elapsed", justify="right", no_wrap=True)
+    table.add_column("activity", overflow="ellipsis")
     table.add_column("branch / PR", no_wrap=True)
 
     for record in records:
-        detail = record.error.splitlines()[0][:80] if record.status in TERMINAL_FAILURE and record.error else ""
-        if record.status not in TERMINAL:
-            detail = _tail_last_assistant(paths.transcript(record.key))
+        activity = ""
+        if record.status in ACTIVE:
+            activity = _tail_last_assistant(paths.transcript(record.key))
+        elif record.status in TERMINAL_FAILURE and record.error:
+            activity = record.error.splitlines()[0][:80]
+        elapsed = record.elapsed_seconds
         table.add_row(
             record.key,
             theme.status_text(record.status),
-            record.model,
-            detail,
+            theme.format_duration(elapsed) if elapsed is not None else "-",
+            activity,
             record.pr_url or record.branch,
         )
 
@@ -698,21 +725,14 @@ def _monitor_table(run_id: str, records: list[SessionRecord], paths: RunPaths) -
 
 def _print_summary(root: Path, run_id: str | None) -> None:
     run_id = _run_id_or_exit(run_id, root)
+    paths = RunPaths(root, run_id)
 
     _, records = load_run(root, run_id)
-    records = daemon.reconcile(RunPaths(root, run_id), records, persist=False)
+    records = daemon.reconcile(paths, records, persist=False)
 
-    table = theme.table(title=f"cmux · run {run_id}")
-    table.add_column("item", style="bold")
-    table.add_column("status")
-    table.add_column("model")
-    table.add_column("branch")
-    table.add_column("PR")
-
-    for record in records:
-        table.add_row(record.key, theme.status_text(record.status), record.model, record.branch, record.pr_url or "-")
-
-    console.print(table)
+    console.print(_run_table(run_id, records, paths))
+    if any(record.status in ACTIVE for record in records):
+        theme.print_hint(f"live view: cmux attach --run {run_id}")
 
 
 def main() -> None:

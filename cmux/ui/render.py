@@ -61,7 +61,11 @@ def event_text(event: dict) -> Text | None:
         return Text.assemble(("🤖 assistant ", "bold green"), text) if text else None
     if event_type == "tool.execution_start":
         return Text.assemble(("🔧 tool ", "cyan"), str(data.get("toolName") or data.get("name") or ""))
+    if event_type == "session.error":
+        message = str(data.get("message") or data.get("error") or "session error").strip()
+        return Text.assemble(("✖ error ", "bold red"), message)
     if event_type == "result":
-        return Text(f"— result exit={event.get('exitCode')}", style="dim")
+        exit_code = event.get("exitCode")
+        return Text(f"— result exit={exit_code}", style="dim" if exit_code == 0 else "red")
 
     return None
