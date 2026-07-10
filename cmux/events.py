@@ -27,7 +27,7 @@ ACTIVE = frozenset({Status.STARTING, Status.RUNNING, Status.TOOL, Status.IDLE})
 TERMINAL = frozenset({Status.DONE, Status.NO_CHANGES, Status.FAILED, Status.TIMED_OUT, Status.KILLED})
 
 
-def _first(data: dict[str, Any], *keys: str, default: str = "") -> str:
+def _first_str(data: dict[str, Any], *keys: str, default: str = "") -> str:
     for key in keys:
         value = data.get(key)
         if isinstance(value, str) and value:
@@ -109,16 +109,16 @@ def apply_event(state: SessionState, event: dict[str, Any]) -> SessionState:
     elif event_type == "assistant.turn_start":
         state.status = Status.RUNNING
     elif event_type == "assistant.message_delta":
-        state._delta_buf += _first(data, "deltaContent", "delta", "content", "text")
+        state._delta_buf += _first_str(data, "deltaContent", "delta", "content", "text")
         state.status = Status.RUNNING
     elif event_type == "assistant.message":
-        content = _first(data, "content", "text")
+        content = _first_str(data, "content", "text")
         if content:
             state.last_text = content
         state._delta_buf = ""
         state.status = Status.RUNNING
     elif event_type == "tool.execution_start":
-        state.current_tool = _first(data, "toolName", "name", "tool")
+        state.current_tool = _first_str(data, "toolName", "name", "tool")
         state.tool_count += 1
         state.status = Status.TOOL
     elif event_type == "tool.execution_complete":
@@ -127,7 +127,7 @@ def apply_event(state: SessionState, event: dict[str, Any]) -> SessionState:
     elif event_type == "assistant.idle":
         state.status = Status.IDLE
     elif event_type == "session.error":
-        state.error = _first(data, "message", "error") or "session error"
+        state.error = _first_str(data, "message", "error") or "session error"
         state.status = Status.FAILED
     elif event_type == "result":
         state.session_id = event.get("sessionId") or state.session_id

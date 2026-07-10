@@ -27,7 +27,7 @@ class Hit:
     snippet: str
 
 
-def _messages(transcript_path: str | Path) -> list[tuple[str, str]]:
+def _read_messages(transcript_path: str | Path) -> list[tuple[str, str]]:
     path = Path(transcript_path)
     if not path.exists():
         return []
@@ -57,7 +57,7 @@ def _match_index(text: str, query: str, regex: bool) -> int:
     return text.lower().find(query.lower())
 
 
-def _snippet(text: str, index: int) -> str:
+def _build_snippet(text: str, index: int) -> str:
     start = max(0, index - _SNIPPET_BEFORE)
     window = " ".join(text[start : index + _SNIPPET_AFTER].split())
     prefix = "…" if start > 0 else ""
@@ -81,9 +81,9 @@ def search_transcripts(items: list[tuple[str, Path]], query: str, regex: bool = 
 
     hits: list[Hit] = []
     for label, transcript_path in items:
-        for role, text in _messages(transcript_path):
+        for role, text in _read_messages(transcript_path):
             index = _match_index(text, query, regex)
             if index >= 0:
-                hits.append(Hit(label=label, role=role, snippet=_snippet(text, index)))
+                hits.append(Hit(label=label, role=role, snippet=_build_snippet(text, index)))
 
     return hits

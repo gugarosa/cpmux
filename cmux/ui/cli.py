@@ -212,7 +212,7 @@ def voice(
     """Create a cmux plan from speech or text."""
 
     try:
-        transcript = _transcript(text, audio, transcribe_model, endpoint)
+        transcript = _resolve_transcript(text, audio, transcribe_model, endpoint)
         console.print(f"[dim]transcript:[/dim] {escape(transcript)}")
         yaml_text = synthesize_plan(transcript, model)
     except VoiceError as exc:
@@ -227,7 +227,7 @@ def voice(
         _launch_run(output, Options(open_pr=pr), detach, yes)
 
 
-def _transcript(text: str | None, audio: Path | None, transcribe_model: str, endpoint: str | None) -> str:
+def _resolve_transcript(text: str | None, audio: Path | None, transcribe_model: str, endpoint: str | None) -> str:
     if text:
         return text
     if audio is not None:

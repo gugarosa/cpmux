@@ -19,7 +19,7 @@ from cmux.vcs import git, pr
 
 logger = get_logger(__name__)
 
-_GLYPH = {
+_STATUS_GLYPH = {
     Status.PENDING: ("○", "dim"),
     Status.STARTING: ("◐", "yellow"),
     Status.RUNNING: ("●", "cyan"),
@@ -349,7 +349,7 @@ class Supervisor:
             record = self.records[item.key]
             live = self.live_states.get(item.key)
             status = live.status if live else record.status
-            glyph, color = _GLYPH.get(status, ("?", "white"))
+            glyph, color = _STATUS_GLYPH.get(status, ("?", "white"))
 
             detail = ""
             if live:
