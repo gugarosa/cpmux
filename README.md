@@ -126,15 +126,33 @@ synthesize a plan, validates it, and writes the file. Add `--up` to launch it. W
 or `--audio`, speech-to-text runs through **Foundry Local**, the same on-device engine
 Copilot's `/voice` uses, so audio stays on your machine.
 
-For `--voice` or `--audio`, install the optional extra and pull a Whisper model once:
+For `--voice` or `--audio`, set up Foundry Local once (`--text` and the editor need nothing):
 
-```bash
-pip install "cmux[voice]"     # sounddevice + foundry-local-sdk
-foundry model run whisper-large-v3   # one-time model download
-```
+1. Install the Python extra — microphone capture plus the Foundry Local SDK:
 
-Override the OpenAI-compatible `/audio/transcriptions` endpoint with
-`--endpoint`/`CMUX_FOUNDRY_ENDPOINT`.
+   ```bash
+   pip install "cmux[voice]"
+   brew install portaudio     # macOS only: sounddevice needs PortAudio
+   ```
+
+2. Install the Foundry Local runtime — this provides the `foundry` command, which the extra
+   above does not:
+
+   ```bash
+   brew trust microsoft/foundrylocal && brew tap microsoft/foundrylocal && brew install foundrylocal   # macOS
+   winget install Microsoft.FoundryLocal                          # Windows
+   ```
+
+   Other platforms: see the [Foundry Local docs](https://aka.ms/foundry-local-docs).
+
+3. Download and serve the Whisper model once — cmux finds the endpoint automatically:
+
+   ```bash
+   foundry model run whisper-large-v3   # `foundry model list` shows other audio models
+   ```
+
+To transcribe against a remote server instead, point `--endpoint`/`CMUX_FOUNDRY_ENDPOINT` at any
+OpenAI-compatible `/audio/transcriptions` endpoint.
 
 ## How it works
 
