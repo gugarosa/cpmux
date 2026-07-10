@@ -96,7 +96,7 @@ Every read/monitor command accepts `--run <id>` and defaults to the latest run.
 
 | Group | Command | What it does |
 |---|---|---|
-| **Compose** | `cmux plan [FILE]` | Generate a cmux file from speech or text. Flags: `--text`, `--audio`, `--transcribe-model`, `--endpoint`, `--model`, `--up`, `--pr/--no-pr`, `--detach/-d`, `--yes/-y`. |
+| **Compose** | `cmux plan [FILE]` | Compose a cmux file in your editor, or from text, speech, or audio. Flags: `--text`, `--voice`, `--audio`, `--transcribe-model`, `--endpoint`, `--model`, `--up`, `--pr/--no-pr`, `--detach/-d`, `--yes/-y`. |
 | **Launch** | `cmux up FILE` | Spawn one session per item. Flags: `--dry-run`, `--detach/-d`, `--concurrency/-j`, `--pr/--no-pr`, `--deps`, `--yes/-y`. |
 | **Monitor** | `cmux ls` | Snapshot each item's status. |
 | | `cmux attach` | Live, read-only monitor; reconnects to a background run (Ctrl-C to detach). |
@@ -109,22 +109,24 @@ Every read/monitor command accepts `--run <id>` and defaults to the latest run.
 | **Teardown** | `cmux down` | Stop a run's background daemon and any live sessions. |
 | | `cmux rm` | Remove the run's git worktrees. |
 
-## Dictating a plan
+## Composing a plan
 
-Create a cmux file from speech or text:
+Compose a cmux file in your editor by default, or from text, speech, or audio:
 
 ```bash
-cmux plan issues.yml            # record from the mic (Enter to stop) → cmux file
-cmux plan issues.yml --up       # …and launch it straight away
-cmux plan issues.yml --audio memo.wav   # transcribe an existing recording instead
+cmux plan issues.yml                    # compose in $EDITOR → cmux file
 cmux plan issues.yml --text "fix the flaky login test and paginate the notifications"
+cmux plan issues.yml --voice            # record from the mic (Enter to stop) instead
+cmux plan issues.yml --audio memo.wav   # transcribe an existing recording instead
+cmux plan issues.yml --up               # …and launch it straight away
 ```
 
-`cmux plan` transcribes speech, asks `copilot` to synthesize a plan, validates it, and writes
-the file. Add `--up` to launch it. Speech-to-text runs through **Foundry Local**, the same
-on-device engine Copilot's `/voice` uses, so audio stays on your machine.
+`cmux plan` opens your `$EDITOR` to describe the work (or takes `--text`), asks `copilot` to
+synthesize a plan, validates it, and writes the file. Add `--up` to launch it. With `--voice`
+or `--audio`, speech-to-text runs through **Foundry Local**, the same on-device engine
+Copilot's `/voice` uses, so audio stays on your machine.
 
-Install the optional extra and pull a Whisper model once:
+For `--voice` or `--audio`, install the optional extra and pull a Whisper model once:
 
 ```bash
 pip install "cmux[voice]"     # sounddevice + foundry-local-sdk
@@ -132,7 +134,7 @@ foundry model run whisper-large-v3   # one-time model download
 ```
 
 Override the OpenAI-compatible `/audio/transcriptions` endpoint with
-`--endpoint`/`CMUX_FOUNDRY_ENDPOINT`, or skip audio with `--text`.
+`--endpoint`/`CMUX_FOUNDRY_ENDPOINT`.
 
 ## How it works
 

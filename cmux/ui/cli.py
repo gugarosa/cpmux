@@ -8,6 +8,7 @@ import tempfile
 import time
 from pathlib import Path
 
+import click
 import typer
 from rich.console import Console
 from rich.live import Live
@@ -206,7 +207,8 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
 @app.command()
 def plan(
     output: Path = typer.Argument(Path("cmux.yml"), dir_okay=False, help="Output cmux file."),
-    text: str | None = typer.Option(None, "--text", help="Text to turn into a plan."),
+    text: str | None = typer.Option(None, "--text", help="Plan text (skips the editor)."),
+    voice: bool = typer.Option(False, "--voice", help="Record a spoken plan from the mic (Enter to stop)."),
     audio: Path | None = typer.Option(None, "--audio", exists=True, dir_okay=False, help="Audio file to transcribe."),
     transcribe_model: str = typer.Option(
         DEFAULT_TRANSCRIBE_MODEL, "--transcribe-model", help="Foundry Local audio model."
@@ -220,10 +222,10 @@ def plan(
     detach: bool = typer.Option(False, "--detach", "-d", help="With --up, run in background."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip launch confirmation."),
 ) -> None:
-    """Create a cmux plan from speech or text."""
+    """Compose a cmux plan in your editor, or from text, speech, or audio."""
 
     try:
-        transcript = _resolve_transcript(text, audio, transcribe_model, endpoint)
+        transcript = _resolve_transcript(text, audio, voice, transcribe_model, endpoint)
         console.print(f"[dim]transcript:[/dim] {escape(transcript)}")
         yaml_text = synthesize_plan(transcript, model)
     except VoiceError as exc:
@@ -238,12 +240,26 @@ def plan(
         _launch_run(output, Options(open_pr=pr), detach, yes)
 
 
-def _resolve_transcript(text: str | None, audio: Path | None, transcribe_model: str, endpoint: str | None) -> str:
-    if text:
-        return text
+def _resolve_transcript(
+    text: str | None, audio: Path | None, voice: bool, transcribe_model: str, endpoint: str | None
+) -> str:
+    if voice:
+        return _record_and_transcribe(transcribe_model, endpoint)
     if audio is not None:
         return transcribe(audio, transcribe_model, endpoint)
+    if text:
+        return text
+    return _compose_in_editor()
 
+
+def _compose_in_editor() -> str:
+    composed = click.edit(extension=".md")
+    if composed is None or not composed.strip():
+        raise VoiceError("no plan text provided.")
+    return composed.strip()
+
+
+def _record_and_transcribe(transcribe_model: str, endpoint: str | None) -> str:
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
         wav = Path(handle.name)
     try:

@@ -86,6 +86,31 @@ def test_plan_synthesis_failure_exits_one(tmp_path, monkeypatch):
     assert result.exit_code == 1
 
 
+def test_plan_without_input_composes_in_editor(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli.click, "edit", lambda **kwargs: "fix the bug")
+    monkeypatch.setattr(cli, "synthesize_plan", lambda transcript, model: f"items:\n  - {transcript}\n")
+    out = tmp_path / "out.yml"
+    result = runner.invoke(app, ["plan", str(out)])
+    assert result.exit_code == 0
+    assert out.read_text() == "items:\n  - fix the bug\n"
+
+
+def test_plan_empty_editor_exits_one(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli.click, "edit", lambda **kwargs: None)
+    result = runner.invoke(app, ["plan", str(tmp_path / "out.yml")])
+    assert result.exit_code == 1
+
+
+def test_plan_voice_records_instead_of_editor(tmp_path, monkeypatch):
+    monkeypatch.setattr(cli, "record_to_file", lambda wav: wav)
+    monkeypatch.setattr(cli, "transcribe", lambda *args, **kwargs: "spoken plan")
+    monkeypatch.setattr(cli, "synthesize_plan", lambda transcript, model: f"items:\n  - {transcript}\n")
+    out = tmp_path / "out.yml"
+    result = runner.invoke(app, ["plan", str(out), "--voice"])
+    assert result.exit_code == 0
+    assert out.read_text() == "items:\n  - spoken plan\n"
+
+
 def test_up_dry_run_shows_assigned_ports(tmp_path):
     path = tmp_path / "p.yaml"
     path.write_text("defaults:\n  port_base: 3000\nitems:\n  - fix a\n  - fix b\n")
