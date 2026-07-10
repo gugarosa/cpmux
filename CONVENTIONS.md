@@ -37,7 +37,7 @@ Modules are grouped by responsibility into three subpackages, with the foundatio
 modules that everything shares kept at the package root.
 
 ```
-src/cmux/
+cmux/
   config.py  events.py  logging.py      foundation: config model, JSONL/status, logging
   engine/    supervisor session daemon store interact   run lifecycle + state
   vcs/       git pr                       git worktrees + PR automation
@@ -141,7 +141,7 @@ black + isort (`profile = black`) + flake8, all at line-length 120, wired throug
 `.pre-commit-config.yaml`.
 
 ```bash
-isort src tests && black src tests && flake8 src tests
+isort cmux tests && black cmux tests && flake8 cmux tests
 pytest
 ```
 

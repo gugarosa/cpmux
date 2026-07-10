@@ -30,7 +30,7 @@ Homepage = "https://github.com/gugarosa/cmux"
 Repository = "https://github.com/gugarosa/cmux"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/cmux"]
+packages = ["cmux"]
 
 [tool.black]
 line-length = 120
