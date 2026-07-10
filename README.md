@@ -19,7 +19,8 @@ pip install -e .
 
 ## Quickstart
 
-From the root of the GitHub repository you want to change, create `cmux.yml`:
+From the root of the GitHub repository you want to change, create `cmux.yml` (or run
+`cmux init` for a starter):
 
 ```yaml
 system: |
@@ -35,8 +36,8 @@ items:
 Preview the plan, start the sessions in the background, and watch the run:
 
 ```bash
-cmux up cmux.yml --dry-run
-cmux up cmux.yml --detach --yes
+cmux up --dry-run          # cmux.yml is the default
+cmux up --detach --yes
 cmux attach
 ```
 
@@ -96,18 +97,19 @@ Every read/monitor command accepts `--run <id>` and defaults to the latest run.
 
 | Group | Command | What it does |
 |---|---|---|
-| **Compose** | `cmux plan [FILE]` | Compose a cmux file in your editor, or from text, speech, or audio. Flags: `--text`, `--voice`, `--audio`, `--transcribe-model`, `--model`, `--up`, `--pr/--no-pr`, `--detach/-d`, `--yes/-y`. |
-| **Launch** | `cmux up FILE` | Spawn one session per item. Flags: `--dry-run`, `--detach/-d`, `--concurrency/-j`, `--pr/--no-pr`, `--deps`, `--yes/-y`. |
-| **Monitor** | `cmux ls` | Snapshot each item's status. |
+| **Create** | `cmux init [FILE]` | Write a starter plan (defaults to `cmux.yml`). Flag: `--force/-f`. |
+| | `cmux plan [FILE]` | Compose a plan in your editor, or from text, speech, or audio. Flags: `--text`, `--voice`, `--audio` (mutually exclusive), `--transcribe-model`, `--model`, `--force/-f`, `--up`, `--pr/--no-pr`, `--detach/-d`, `--yes/-y`. |
+| **Launch** | `cmux up [FILE]` | Spawn one session per item (defaults to `cmux.yml`). Flags: `--dry-run`, `--detach/-d`, `--concurrency/-j`, `--pr/--no-pr`, `--deps`, `--yes/-y`. |
+| **Monitor** | `cmux ls` | Snapshot each item's status, elapsed time, and activity. |
 | | `cmux attach` | Live, read-only monitor; reconnects to a background run (Ctrl-C to detach). |
 | | `cmux dash` | Interactive TUI: session list, live transcript, search. |
 | | `cmux logs KEY` | Print a transcript; `--follow/-f` to stream, `--raw` for the JSONL. |
-| | `cmux search QUERY` | Full-text search across transcripts; `--all` for every run, `--regex`, `--fts` to rank via copilot's index. |
+| | `cmux search QUERY` | Search across transcripts; `--all` for every run, `--regex`, `--fts` to rank via Copilot's index. |
 | **Steer** | `cmux enter KEY` | Drop into an interactive copilot session, resumed in place. |
 | | `cmux send KEY "…"` | Append a follow-up turn and print the reply. |
-| | `cmux kill KEY` | Stop one running session. |
-| **Teardown** | `cmux down` | Stop a run's background daemon and any live sessions. |
-| | `cmux rm` | Remove the run's git worktrees. |
+| | `cmux kill KEY` | Stop one running session. Flag: `--yes/-y`. |
+| **Teardown** | `cmux down` | Stop a run's background daemon and any live sessions. Flag: `--yes/-y`. |
+| | `cmux rm` | Remove the run's git worktrees. Flags: `--yes/-y`, `--force/-f` (delete uncommitted work). |
 
 ## Composing a plan
 

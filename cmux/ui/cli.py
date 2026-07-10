@@ -3,6 +3,7 @@
 
 import asyncio
 import os
+import re
 import shlex
 import shutil
 import tempfile
@@ -50,9 +51,18 @@ from cmux.voice.synthesizer import synthesize_plan
 from cmux.voice.transcriber import DEFAULT_TRANSCRIBE_MODEL, VoiceError, transcribe
 
 app = typer.Typer(
-    add_completion=False,
+    add_completion=True,
     no_args_is_help=True,
-    help="Run GitHub Copilot CLI agents from YAML.",
+    rich_markup_mode="rich",
+    help=(
+        "Run parallel GitHub Copilot CLI agents from one YAML plan. Each item gets an isolated "
+        "git worktree and branch, and opens a draft PR by default."
+    ),
+    epilog=(
+        "[bold]Quick start[/bold]\n\n"
+        "cmux init → cmux up cmux.yml --dry-run → cmux up cmux.yml → cmux dash\n\n"
+        "Run-scoped commands target the latest run in the current repository unless --run is given."
+    ),
 )
 console = theme.out
 
@@ -161,7 +171,7 @@ items:
 """
 
 
-@app.command()
+@app.command(rich_help_panel="Create & run")
 def init(
     output: Path = typer.Argument(Path("cmux.yml"), dir_okay=False, help="Plan file to create."),
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite an existing file."),
@@ -177,10 +187,10 @@ def init(
     theme.print_hint(f"edit it, then preview with `cmux up {output} --dry-run`.")
 
 
-@app.command()
+@app.command(rich_help_panel="Create & run")
 def up(
     file: Path = typer.Argument(Path("cmux.yml"), dir_okay=False, help="cmux plan file (default: cmux.yml)."),
-    dry_run: bool = typer.Option(False, "--dry-run", "--dry_run", help="Resolve and print the plan; spawn nothing."),
+    dry_run: bool = typer.Option(False, "--dry-run", help="Resolve and print the plan; spawn nothing."),
     detach: bool = typer.Option(False, "--detach", "-d", help="Run in background and return."),
     concurrency: int | None = typer.Option(None, "--concurrency", "-j", help="Max parallel sessions."),
     pr: bool = typer.Option(True, "--pr/--no-pr", help="Open one draft PR per item (default: on)."),
@@ -188,7 +198,6 @@ def up(
     strip_github_token: bool = typer.Option(
         True,
         "--strip-github-token/--no-strip-github-token",
-        "--strip_github_token/--no-strip_github_token",
         help="Unset ambient GITHUB_TOKEN/GH_TOKEN for gh + git push (keyring fallback).",
     ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
@@ -293,7 +302,7 @@ def _print_completion_summary(run_id: str, records: list[SessionRecord]) -> None
         theme.print_success(f"run {run_id} finished: {done} item(s) completed.")
 
 
-@app.command()
+@app.command(rich_help_panel="Create & run")
 def plan(
     output: Path = typer.Argument(Path("cmux.yml"), dir_okay=False, help="Output cmux file."),
     text: str | None = typer.Option(None, "--text", help="Plan text (skips the editor)."),
@@ -310,6 +319,10 @@ def plan(
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip launch confirmation."),
 ) -> None:
     """Compose a cmux plan in your editor, or from text, speech, or audio."""
+
+    if sum([bool(text), voice, audio is not None]) > 1:
+        theme.print_error("`--text`, `--voice`, and `--audio` are mutually exclusive; choose one.")
+        raise typer.Exit(1)
 
     if output.exists() and not force:
         theme.print_error(f"`{output}` already exists.", hint="pass `--force` to overwrite it.")
@@ -360,7 +373,7 @@ def _record_and_transcribe(transcribe_model: str) -> str:
         wav.unlink(missing_ok=True)
 
 
-@app.command()
+@app.command(rich_help_panel="Monitor")
 def ls(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
     """Show run status."""
 
@@ -373,7 +386,7 @@ def ls(run: str | None = typer.Option(None, "--run", help="Run id (default: late
     _print_summary(root, run_id)
 
 
-@app.command()
+@app.command(rich_help_panel="Monitor")
 def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
     """Monitor a run read-only (Ctrl-C to exit)."""
 
@@ -398,7 +411,7 @@ def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: 
         raise typer.Exit(1)
 
 
-@app.command()
+@app.command(rich_help_panel="Monitor")
 def dash(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
     """Open a run dashboard."""
 
@@ -409,7 +422,7 @@ def dash(run: str | None = typer.Option(None, "--run", help="Run id (default: la
     CmuxApp(".", run_id).run()
 
 
-@app.command()
+@app.command(rich_help_panel="Interact")
 def enter(
     key: str = typer.Argument(..., help="Item key to open."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
@@ -427,7 +440,7 @@ def enter(
     os.execvp("copilot", resume_interactive_argv(record.session_id, record.worktree))
 
 
-@app.command()
+@app.command(rich_help_panel="Interact")
 def send(
     key: str = typer.Argument(..., help="Item key to message."),
     message: str = typer.Argument(..., help="Follow-up prompt."),
@@ -456,7 +469,7 @@ def send(
         console.print(f"[dim]session {record.status}[/dim]")
 
 
-@app.command()
+@app.command(rich_help_panel="Monitor")
 def logs(
     key: str = typer.Argument(..., help="Item key to show."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
@@ -487,19 +500,28 @@ def logs(
         _follow_transcript(transcript, raw, consumed)
 
 
-@app.command()
+@app.command(rich_help_panel="Monitor")
 def search(
-    query: str = typer.Argument(..., help="Text to find; regex with --regex."),
+    query: str = typer.Argument(..., help="Text to find (literal; use --regex for a regular expression)."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
-    all_runs: bool = typer.Option(False, "--all", help="Search every run."),
-    regex: bool = typer.Option(False, "--regex", help="Treat query as regex."),
-    fts: bool = typer.Option(False, "--fts", help="Rank matches via copilot's full-text index."),
+    all_runs: bool = typer.Option(False, "--all", help="Search every run (cannot be combined with --run)."),
+    regex: bool = typer.Option(False, "--regex", help="Interpret QUERY as a regular expression."),
+    fts: bool = typer.Option(False, "--fts", help="Rank matches via Copilot's full-text index."),
 ) -> None:
     """Search session transcripts."""
 
     if fts and regex:
-        theme.print_error("`--regex` cannot be combined with `--fts`.")
+        theme.print_error("`--regex` and `--fts` cannot be combined; choose one.")
         raise typer.Exit(1)
+    if all_runs and run:
+        theme.print_error("`--all` and `--run` cannot be combined; choose one.")
+        raise typer.Exit(1)
+    if regex:
+        try:
+            re.compile(query)
+        except re.error as exc:
+            theme.print_error(f"`{query}` is not a valid regex: {exc}.", hint="omit `--regex` for a literal search.")
+            raise typer.Exit(1)
 
     root = Path(".")
     if all_runs:
@@ -547,7 +569,7 @@ def _search_fts(query: str, label_by_session: dict[str, str]) -> None:
     console.print(f"[dim]{len(hits)} hit(s)[/dim]")
 
 
-@app.command()
+@app.command(rich_help_panel="Stop & clean up")
 def rm(
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
@@ -586,7 +608,7 @@ def rm(
     theme.print_success(f"removed {len(records)} worktree(s) for run {run_id}.")
 
 
-@app.command()
+@app.command(rich_help_panel="Stop & clean up")
 def down(
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
@@ -613,7 +635,7 @@ def down(
     theme.print_hint(f"remove the worktrees later with `cmux rm --run {run_id}`.")
 
 
-@app.command()
+@app.command(rich_help_panel="Stop & clean up")
 def kill(
     key: str = typer.Argument(..., help="Item key to stop."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),

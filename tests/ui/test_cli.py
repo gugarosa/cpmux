@@ -213,3 +213,23 @@ def test_plan_refuses_to_overwrite_existing_output(tmp_path, monkeypatch):
     result = runner.invoke(app, ["plan", "out.yml", "--text", "x"])
     assert result.exit_code == 1
     assert "ran" not in called
+
+
+def test_plan_rejects_multiple_input_modes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["plan", "out.yml", "--text", "x", "--voice"])
+    assert result.exit_code == 1
+
+
+def test_search_rejects_invalid_regex(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["search", "[", "--regex"])
+    assert result.exit_code == 1
+    assert "regex" in result.output
+
+
+def test_help_groups_commands_into_panels():
+    result = runner.invoke(app, ["--help"])
+    assert result.exit_code == 0
+    assert "Create & run" in result.output
+    assert "Monitor" in result.output
