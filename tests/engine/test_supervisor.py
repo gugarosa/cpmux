@@ -124,3 +124,29 @@ def test_on_update_persists_live_status_to_disk(git_repo):
     sup._on_update(key, SessionState(status=Status.RUNNING), {})
 
     assert sup.paths.read_record(key).status == Status.RUNNING
+
+
+def test_on_update_maps_session_done_to_finalizing(git_repo):
+    sup = Supervisor.create(_plan(), str(git_repo), Options())
+    sup.prepare()
+    key = sup.resolved[0].key
+
+    sup._on_update(key, SessionState(status=Status.DONE), {})
+
+    assert sup.paths.read_record(key).status == Status.FINALIZING
+
+
+def test_finalize_marks_failed_on_unexpected_error(git_repo):
+    sup = Supervisor.create(_plan(), str(git_repo), Options())
+    sup.prepare()
+    item = sup.resolved[0]
+    record = sup.records[item.key]
+
+    async def _boom(_item, _record):
+        raise OSError("gh not found")
+
+    sup._open_pr = _boom
+    asyncio.run(sup._finalize(item, record))
+
+    assert record.status == Status.FAILED
+    assert record.error

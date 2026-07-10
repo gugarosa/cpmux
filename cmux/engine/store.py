@@ -1,6 +1,7 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
+import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -194,10 +195,13 @@ class RunPaths:
         self.manifest.write_text(manifest.model_dump_json(indent=2))
 
     def write_record(self, record: SessionRecord) -> None:
-        """Persist a session record."""
+        """Persist a session record atomically."""
 
         self.ensure_session_dirs(record.key)
-        self.record_file(record.key).write_text(record.model_dump_json(indent=2))
+        target = self.record_file(record.key)
+        tmp = target.with_suffix(f".{os.getpid()}.tmp")
+        tmp.write_text(record.model_dump_json(indent=2))
+        os.replace(tmp, target)
 
     def read_record(self, key: str) -> SessionRecord:
         """Load an item session record."""

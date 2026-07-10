@@ -13,7 +13,7 @@ from rich.table import Table
 from cmux.config import Plan, ResolvedItem
 from cmux.engine.session import SessionRunner
 from cmux.engine.store import RunManifest, RunPaths, SessionRecord, new_run_id
-from cmux.events import SUCCESS, SessionState, Status
+from cmux.events import ACTIVE, SUCCESS, TERMINAL_FAILURE, SessionState, Status
 from cmux.logging import get_logger
 from cmux.vcs import git, pr
 
@@ -25,6 +25,7 @@ _STATUS_GLYPH = {
     Status.RUNNING: ("●", "cyan"),
     Status.TOOL: ("⚙", "cyan"),
     Status.IDLE: ("◑", "blue"),
+    Status.FINALIZING: ("◆", "cyan"),
     Status.OPENING_PR: ("⇪", "magenta"),
     Status.DONE: ("✔", "green"),
     Status.NO_CHANGES: ("∅", "dim"),
@@ -270,12 +271,13 @@ class Supervisor:
                 record.premium_requests = state.premium_requests
                 record.files_modified = state.files_modified
                 record.error = state.error
-                record.status = state.status
                 if state.status == Status.DONE:
-                    if self.options.open_pr:
-                        await self._open_pr(item, record)
-                    else:
-                        await self._commit_local(item, record)
+                    record.status = Status.FINALIZING
+                    self.paths.write_record(record)
+                    self._refresh()
+                    await self._finalize(item, record)
+                else:
+                    record.status = state.status
                 self.paths.write_record(record)
                 self._refresh()
         finally:
@@ -288,6 +290,17 @@ class Supervisor:
         record.pid = pid
         self.paths.write_record(record)
 
+    async def _finalize(self, item: ResolvedItem, record: SessionRecord) -> None:
+        try:
+            if self.options.open_pr:
+                await self._open_pr(item, record)
+            else:
+                await self._commit_local(item, record)
+        except Exception as exc:
+            record.status = Status.FAILED
+            record.error = record.error or str(exc)
+            logger.error(f"`{item.key}` finalization failed: {exc}.")
+
     async def _open_pr(self, item: ResolvedItem, record: SessionRecord) -> None:
         worktree = self.paths.worktree(item.key)
         try:
@@ -296,6 +309,7 @@ class Supervisor:
                 return
 
             record.status = Status.OPENING_PR
+            self.paths.write_record(record)
             self._refresh()
             record.pr_url = await asyncio.to_thread(
                 pr.open_pull_request,
@@ -334,8 +348,9 @@ class Supervisor:
     def _on_update(self, key: str, state: SessionState, event: dict) -> None:
         self.live_states[key] = state
         record = self.records[key]
-        if state.status != record.status:
-            record.status = state.status
+        status = Status.FINALIZING if state.status == Status.DONE else state.status
+        if status != record.status:
+            record.status = status
             self.paths.write_record(record)
         self._refresh()
 
@@ -354,14 +369,14 @@ class Supervisor:
         for item in self.resolved:
             record = self.records[item.key]
             live = self.live_states.get(item.key)
-            status = live.status if live else record.status
+            status = record.status
             glyph, color = _STATUS_GLYPH.get(status, ("?", "white"))
 
             detail = ""
-            if live:
+            if live and status in ACTIVE:
                 detail = f"[{live.current_tool}] " if live.current_tool else ""
                 detail += live.summary_line
-            if record.error and status == Status.FAILED:
+            if record.error and status in TERMINAL_FAILURE:
                 detail = record.error.splitlines()[0][:80]
 
             table.add_row(
