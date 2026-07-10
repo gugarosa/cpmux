@@ -20,7 +20,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "httpx>=0.27"]
 voice = ["sounddevice>=0.4", "foundry-local-sdk>=0.4", "httpx>=0.27"]
 
 [project.scripts]
