@@ -34,7 +34,7 @@ from cmux.engine.store import (
     load_run,
 )
 from cmux.engine.supervisor import Options, Supervisor
-from cmux.events import TERMINAL, Status, event_data, parse_line
+from cmux.events import TERMINAL, TERMINAL_FAILURE, Status, event_data, parse_line
 from cmux.logging import get_logger
 from cmux.ui.render import STATUS_COLOR, event_text
 from cmux.ui.search import search_transcripts
@@ -197,11 +197,13 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
 
     daemon.write_owner(supervisor.paths, os.getpid())
     try:
-        asyncio.run(supervisor.run())
+        records = asyncio.run(supervisor.run())
     finally:
         daemon.clear_owner(supervisor.paths)
 
     _print_summary(Path("."), supervisor.run_id)
+    if any(record.status in TERMINAL_FAILURE for record in records):
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -279,17 +281,21 @@ def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: 
     run_id = _run_id_or_exit(run, root)
     paths = RunPaths(root, run_id)
 
+    records: list[SessionRecord] = []
     try:
         with Live(console=console, refresh_per_second=4) as live:
             while True:
                 _, records = load_run(root, run_id)
-                records = daemon.reconcile(paths, records)
+                records = daemon.reconcile(paths, records, persist=False)
                 live.update(_monitor_table(run_id, records, paths))
                 if all(record.status in TERMINAL for record in records):
                     break
                 time.sleep(0.5)
     except KeyboardInterrupt:
-        pass
+        return
+
+    if any(record.status in TERMINAL_FAILURE for record in records):
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -441,10 +447,15 @@ def rm(
     if not force and not typer.confirm(f"Remove {len(records)} worktree(s) for run {run_id}?"):
         raise typer.Exit(1)
 
-    for record in records:
-        remove_worktree(manifest.repo_root, record.worktree, force=True)
+    failed = [record.key for record in records if not remove_worktree(manifest.repo_root, record.worktree, force=True)]
     prune_worktrees(manifest.repo_root)
-    console.print(f"[green]removed worktrees for run {run_id}.[/green]")
+
+    if failed:
+        for key in failed:
+            logger.error(f"could not remove worktree for `{key}`; remove it manually and retry.")
+        raise typer.Exit(1)
+
+    console.print(f"[green]removed {len(records)} worktree(s) for run {run_id}.[/green]")
 
 
 @app.command()
@@ -483,9 +494,12 @@ def kill(
 def _daemon_command(run_id: str = typer.Argument(...)) -> None:
     supervisor = Supervisor.from_run(".", run_id)
     try:
-        asyncio.run(supervisor.run(headless=True))
+        records = asyncio.run(supervisor.run(headless=True))
     finally:
         daemon.clear_owner(supervisor.paths)
+
+    if any(record.status in TERMINAL_FAILURE for record in records):
+        raise typer.Exit(1)
 
 
 def _render_event(event: dict) -> None:
@@ -562,7 +576,7 @@ def _print_summary(root: Path, run_id: str | None) -> None:
     run_id = _run_id_or_exit(run_id, root)
 
     _, records = load_run(root, run_id)
-    records = daemon.reconcile(RunPaths(root, run_id), records)
+    records = daemon.reconcile(RunPaths(root, run_id), records, persist=False)
 
     table = Table(title=f"cmux · run {run_id}", expand=True)
     table.add_column("item", style="bold")

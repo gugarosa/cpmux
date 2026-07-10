@@ -153,3 +153,26 @@ def test_search_fts_reports_store_unavailable(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["search", "login", "--fts"])
     assert result.exit_code == 1
+
+
+def test_rm_exits_nonzero_when_a_worktree_cannot_be_removed(monkeypatch):
+    from cmux.engine.store import RunManifest, SessionRecord
+
+    record = SessionRecord(
+        key="alpha",
+        name="alpha",
+        slug="alpha",
+        branch="cmux/alpha",
+        base="main",
+        model="m",
+        session_id="sid",
+        worktree="/tmp/alpha",
+    )
+    manifest = RunManifest(run_id="run1", repo_root="/tmp", config_path="", item_keys=["alpha"])
+    monkeypatch.setattr(cli, "_run_id_or_exit", lambda run, *a: "run1")
+    monkeypatch.setattr(cli, "load_run", lambda root, run_id: (manifest, [record]))
+    monkeypatch.setattr(cli, "remove_worktree", lambda *a, **k: False)
+    monkeypatch.setattr(cli, "prune_worktrees", lambda *a, **k: None)
+
+    result = runner.invoke(app, ["rm", "--force"])
+    assert result.exit_code == 1

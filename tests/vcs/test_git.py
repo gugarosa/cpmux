@@ -80,8 +80,12 @@ def test_remove_worktree_removes_dir(git_repo):
     _, sha = resolve_base(repo, "origin", "main")
     worktree = git_repo / "wt"
     add_worktree(repo, worktree, "feature/x", sha)
-    remove_worktree(repo, worktree)
+    assert remove_worktree(repo, worktree) is True
     assert not worktree.exists()
+
+
+def test_remove_worktree_absent_is_success(git_repo):
+    assert remove_worktree(git_repo, git_repo / "never-existed") is True
 
 
 def test_run_git_raises_on_bad_subcommand(git_repo):

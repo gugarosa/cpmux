@@ -135,21 +135,27 @@ def branch_exists(root: str | Path, branch: str) -> bool:
     return proc.returncode == 0
 
 
-def remove_worktree(root: str | Path, worktree: str | Path, force: bool = True) -> None:
-    """Remove a worktree, ignoring failures.
+def remove_worktree(root: str | Path, worktree: str | Path, force: bool = True) -> bool:
+    """Remove a worktree.
 
     Args:
         root: Repository root.
         worktree: Worktree to remove.
         force: Pass `--force`.
 
+    Returns:
+        `True` when the worktree was removed or is already absent.
+
     """
+
+    if not Path(worktree).exists():
+        return True
 
     args = ["worktree", "remove", str(worktree)]
     if force:
         args.append("--force")
 
-    run_git(args, cwd=root, check=False)
+    return run_git(args, cwd=root, check=False).returncode == 0
 
 
 def prune_worktrees(root: str | Path) -> None:

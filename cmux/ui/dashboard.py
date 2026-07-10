@@ -152,7 +152,7 @@ class CmuxApp(App):
             return
 
         self.deps_by_key = {item.key: list(item.depends_on) for item in manifest.resolved}
-        self.records = daemon.reconcile(self.paths, records)
+        self.records = daemon.reconcile(self.paths, records, persist=False)
         self._refresh_table()
         self._refresh_transcript()
 

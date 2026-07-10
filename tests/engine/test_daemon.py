@@ -73,6 +73,18 @@ def test_reconcile_leaves_terminal_records_untouched(tmp_path):
     assert record.status == Status.DONE
 
 
+def test_reconcile_without_persist_leaves_disk_untouched(tmp_path):
+    paths = RunPaths(tmp_path, "run4")
+    record = _record("a", Status.RUNNING)
+    paths.write_record(record)
+    write_owner(paths, _dead_pid())
+
+    reconcile(paths, [record], persist=False)
+
+    assert record.status == Status.FAILED
+    assert paths.read_record("a").status == Status.RUNNING
+
+
 def test_manifest_roundtrips_resolved_items(tmp_path):
     resolved = Plan.model_validate({"system": "S", "items": ["do a thing"]}).resolve()
     paths = RunPaths(tmp_path, "r")

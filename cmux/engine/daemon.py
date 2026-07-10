@@ -145,12 +145,13 @@ def launch_detached(run_id: str, repo_root: str) -> int:
     return proc.pid
 
 
-def reconcile(paths: RunPaths, records: list[SessionRecord]) -> list[SessionRecord]:
+def reconcile(paths: RunPaths, records: list[SessionRecord], persist: bool = True) -> list[SessionRecord]:
     """Mark non-terminal sessions failed after owner exit.
 
     Args:
         paths: Run paths for the run being reconciled.
         records: Session records to update.
+        persist: Write failed records to disk, or pass `False` for read-only inspection.
 
     Returns:
         Records with abandoned sessions marked failed.
@@ -165,7 +166,8 @@ def reconcile(paths: RunPaths, records: list[SessionRecord]) -> list[SessionReco
             record.status = Status.FAILED
             record.error = record.error or "run owner exited."
             record.mark_ended()
-            paths.write_record(record)
+            if persist:
+                paths.write_record(record)
 
     return records
 
