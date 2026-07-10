@@ -75,7 +75,10 @@ def _load(file: Path) -> Plan:
 def _run_id_or_exit(run: str | None, root: Path = Path(".")) -> str:
     run_id = run or latest_run_id(root)
     if not run_id:
-        theme.print_error("no cmux runs found here.")
+        theme.print_error(
+            f"no cmux runs found in `{root.resolve()}`.",
+            hint="start one with `cmux up <plan.yml>`, or preview it with `--dry-run`.",
+        )
         raise typer.Exit(1)
 
     return run_id
@@ -85,7 +88,10 @@ def _resolve_record(run: str | None, key: str) -> tuple[RunPaths, SessionRecord]
     run_id = _run_id_or_exit(run)
     paths = RunPaths(Path("."), run_id)
     if not paths.record_file(key).exists():
-        theme.print_error(f"no session `{key}` in run `{run_id}`.")
+        theme.print_error(
+            f"no session `{key}` in run `{run_id}`.",
+            hint=f"list the run's items with `cmux ls --run {run_id}`.",
+        )
         raise typer.Exit(1)
 
     return paths, paths.read_record(key)
@@ -181,15 +187,23 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
         raise typer.Exit(1)
 
     console.print(_plan_table(resolved))
-    action = "open a draft PR" if options.open_pr else "commit locally (no PR)"
-    if not yes and not typer.confirm(f"Spawn {len(resolved)} Copilot session(s) in separate worktrees and {action}?"):
-        raise typer.Exit(1)
+    action = f"open {len(resolved)} draft PR(s)" if options.open_pr else "commit locally (no PR)"
+    prompt = (
+        f"Start {len(resolved)} Copilot session(s) (max {supervisor.concurrency} concurrent) in separate "
+        f"worktrees and {action}? Premium requests may be consumed."
+    )
+    if not yes and not typer.confirm(prompt):
+        theme.print_hint("cancelled; nothing was started.")
+        return
 
     supervisor.prepare()
     if detach:
         daemon.launch_detached(supervisor.run_id, str(supervisor.repo_root))
-        theme.print_success(f"run {supervisor.run_id} started in background.")
-        console.print("[dim]monitor with:[/dim] cmux attach")
+        run_id = supervisor.run_id
+        theme.print_success(f"started run {run_id} in the background ({len(resolved)} item(s)).")
+        theme.print_hint(f"watch:     cmux dash --run {run_id}")
+        theme.print_hint(f"or:        cmux attach --run {run_id}")
+        theme.print_hint(f"stop:      cmux down --run {run_id}")
         return
 
     daemon.write_owner(supervisor.paths, os.getpid())
@@ -234,6 +248,8 @@ def plan(
 
     if up:
         _launch_run(output, Options(open_pr=pr), detach, yes)
+    else:
+        theme.print_hint(f"review it, then launch with `cmux up {output}` (add `--dry-run` to preview).")
 
 
 def _resolve_transcript(text: str | None, audio: Path | None, voice: bool, transcribe_model: str) -> str:
@@ -267,7 +283,13 @@ def _record_and_transcribe(transcribe_model: str) -> str:
 def ls(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
     """Show run status."""
 
-    _print_summary(Path("."), run)
+    root = Path(".")
+    run_id = run or latest_run_id(root)
+    if not run_id:
+        theme.print_hint("no cmux runs yet — start one with `cmux up <plan.yml>`.")
+        return
+
+    _print_summary(root, run_id)
 
 
 @app.command()
@@ -395,7 +417,10 @@ def search(
         latest = run or latest_run_id(root)
         run_ids = [latest] if latest else []
     if not run_ids:
-        theme.print_error("no cmux runs found here.")
+        theme.print_error(
+            "no cmux runs found here.",
+            hint="start one with `cmux up <plan.yml>`.",
+        )
         raise typer.Exit(1)
 
     items: list[tuple[str, Path]] = []
@@ -434,22 +459,37 @@ def _search_fts(query: str, label_by_session: dict[str, str]) -> None:
 @app.command()
 def rm(
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
-    force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
+    force: bool = typer.Option(False, "--force", "-f", help="Delete worktrees with uncommitted changes."),
 ) -> None:
     """Remove a run's git worktrees."""
 
-    run_id = _run_id_or_exit(run)
+    root = Path(".")
+    run_id = _run_id_or_exit(run, root)
 
-    manifest, records = load_run(Path("."), run_id)
-    if not force and not typer.confirm(f"Remove {len(records)} worktree(s) for run {run_id}?"):
+    if daemon.owner_alive(RunPaths(root, run_id)):
+        theme.print_error(
+            f"run {run_id} is still active.",
+            hint=f"stop it first with `cmux down --run {run_id}`.",
+        )
         raise typer.Exit(1)
 
-    failed = [record.key for record in records if not remove_worktree(manifest.repo_root, record.worktree, force=True)]
+    manifest, records = load_run(root, run_id)
+    if not yes and not typer.confirm(
+        f"Remove {len(records)} worktree(s) for run {run_id}? Branches, PRs, and run history are kept."
+    ):
+        theme.print_hint("cancelled; nothing was removed.")
+        raise typer.Exit()
+
+    failed = [record.key for record in records if not remove_worktree(manifest.repo_root, record.worktree, force=force)]
     prune_worktrees(manifest.repo_root)
 
     if failed:
         for key in failed:
-            theme.print_error(f"could not remove worktree for `{key}`; remove it manually and retry.")
+            theme.print_error(
+                f"could not remove worktree for `{key}`; it may have uncommitted changes.",
+                hint="commit or discard them, or pass `--force` to delete anyway.",
+            )
         raise typer.Exit(1)
 
     theme.print_success(f"removed {len(records)} worktree(s) for run {run_id}.")
@@ -464,27 +504,41 @@ def down(
 
     root = Path(".")
     run_id = _run_id_or_exit(run, root)
+    paths = RunPaths(root, run_id)
 
     _, records = load_run(root, run_id)
-    if not yes and not typer.confirm(f"Stop run {run_id}?"):
-        raise typer.Exit(1)
+    live = [record.key for record in records if daemon.pid_alive(record.pid)]
+    scope = (["daemon"] if daemon.owner_alive(paths) else []) + ([f"{len(live)} live session(s)"] if live else [])
+    if not scope:
+        theme.print_hint(f"run {run_id} is already stopped.")
+        return
 
-    signalled = daemon.stop(RunPaths(root, run_id), records)
+    if not yes and not typer.confirm(f"Stop run {run_id} ({', '.join(scope)})? Worktrees are kept."):
+        theme.print_hint("cancelled; nothing was stopped.")
+        raise typer.Exit()
+
+    signalled = daemon.stop(paths, records)
     theme.print_success(f"stopped {signalled} process(es) for run {run_id}.")
+    theme.print_hint(f"remove the worktrees later with `cmux rm --run {run_id}`.")
 
 
 @app.command()
 def kill(
     key: str = typer.Argument(..., help="Item key to stop."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
 ) -> None:
     """Stop a running session."""
 
     paths, record = _resolve_record(run, key)
+    if not yes and not typer.confirm(f"Stop session {key}? Its worktree is kept."):
+        theme.print_hint("cancelled; nothing was stopped.")
+        raise typer.Exit()
+
     if daemon.kill_session(paths, record):
-        theme.print_success(f"killed session {key}.")
+        theme.print_success(f"stopped session {key}.")
     else:
-        console.print(f"[dim]session {key} was not running.[/dim]")
+        theme.print_hint(f"session {key} was not running.")
 
 
 @app.command(name="_daemon", hidden=True)

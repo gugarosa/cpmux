@@ -24,10 +24,11 @@ def test_up_dry_run_resolves_plan_without_spawning(tmp_path):
     assert "fix-the-bug" in result.output
 
 
-def test_ls_without_cmux_dir_exits_one(tmp_path, monkeypatch):
+def test_ls_without_any_run_is_an_empty_state(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["ls"])
-    assert result.exit_code == 1
+    assert result.exit_code == 0
+    assert "no cmux runs yet" in result.output
 
 
 def test_logs_without_cmux_dir_exits_one(tmp_path, monkeypatch):
@@ -170,9 +171,18 @@ def test_rm_exits_nonzero_when_a_worktree_cannot_be_removed(monkeypatch):
     )
     manifest = RunManifest(run_id="run1", repo_root="/tmp", config_path="", item_keys=["alpha"])
     monkeypatch.setattr(cli, "_run_id_or_exit", lambda run, *a: "run1")
+    monkeypatch.setattr(cli.daemon, "owner_alive", lambda paths: False)
     monkeypatch.setattr(cli, "load_run", lambda root, run_id: (manifest, [record]))
     monkeypatch.setattr(cli, "remove_worktree", lambda *a, **k: False)
     monkeypatch.setattr(cli, "prune_worktrees", lambda *a, **k: None)
 
-    result = runner.invoke(app, ["rm", "--force"])
+    result = runner.invoke(app, ["rm", "--yes"])
+    assert result.exit_code == 1
+
+
+def test_rm_refuses_active_run(monkeypatch):
+    monkeypatch.setattr(cli, "_run_id_or_exit", lambda run, *a: "run1")
+    monkeypatch.setattr(cli.daemon, "owner_alive", lambda paths: True)
+
+    result = runner.invoke(app, ["rm", "--yes"])
     assert result.exit_code == 1

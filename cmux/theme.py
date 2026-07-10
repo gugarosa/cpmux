@@ -110,10 +110,12 @@ def table(title: str | None = None) -> Table:
     )
 
 
-def print_error(message: str) -> None:
-    """Print an actionable error to stderr."""
+def print_error(message: str, hint: str | None = None) -> None:
+    """Print an actionable error, with an optional recovery hint, to stderr."""
 
     err.print(Text.assemble((f"{_icon(_ICON_ERROR)} ", STYLE_DANGER), message))
+    if hint:
+        err.print(Text(f"  {hint}", style=STYLE_MUTED))
 
 
 def print_warning(message: str) -> None:
