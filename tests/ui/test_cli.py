@@ -84,3 +84,12 @@ def test_voice_synthesis_failure_exits_one(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "synthesize_plan", _boom)
     result = runner.invoke(app, ["voice", str(tmp_path / "out.yml"), "--text", "fix the bug"])
     assert result.exit_code == 1
+
+
+def test_up_dry_run_shows_assigned_ports(tmp_path):
+    path = tmp_path / "p.yaml"
+    path.write_text("defaults:\n  port_base: 3000\nitems:\n  - fix a\n  - fix b\n")
+    result = runner.invoke(app, ["up", str(path), "--dry-run"])
+    assert result.exit_code == 0
+    assert "PORT=3000" in result.output
+    assert "PORT=3001" in result.output

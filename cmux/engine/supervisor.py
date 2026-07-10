@@ -181,6 +181,7 @@ class Supervisor:
                 session_id=str(uuid4()),
                 worktree=str(self.paths.worktree(item.key)),
                 permission_flags=item.permissions.to_flags(),
+                env=dict(item.env),
             )
             self.records[item.key] = record
             self.paths.ensure_session_dirs(item.key)
@@ -261,7 +262,7 @@ class Supervisor:
                 argv = item.spawn_argv(
                     self.paths.worktree(item.key), record.session_id, self.paths.copilot_log_dir(item.key)
                 )
-                runner = SessionRunner(item.key, argv, self.paths.transcript(item.key))
+                runner = SessionRunner(item.key, argv, self.paths.transcript(item.key), env=item.env)
                 self.runners[item.key] = runner
                 state = await runner.run(self._on_update, on_spawn=lambda pid: self._on_spawn(record, pid))
 

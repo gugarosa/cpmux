@@ -43,6 +43,7 @@ class SessionRecord(BaseModel):
         worktree: Session git worktree path.
         base_sha: Base branch commit sha.
         permission_flags: Extra copilot permission flags.
+        env: Environment overrides for the session subprocess.
         pid: Running session process id, if any.
         status: Current lifecycle status.
         exit_code: Process exit code after finish.
@@ -65,6 +66,7 @@ class SessionRecord(BaseModel):
     worktree: str
     base_sha: str = ""
     permission_flags: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
     pid: int | None = None
     status: Status = Status.PENDING
     exit_code: int | None = None

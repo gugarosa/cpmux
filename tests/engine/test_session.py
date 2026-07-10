@@ -72,3 +72,18 @@ def test_run_invokes_on_update_callback(tmp_path):
 
     assert len(events) >= 1
     assert any(event.get("type") == "assistant.message" for event in events)
+
+
+def test_run_merges_env_overrides_and_keeps_parent_environment(tmp_path):
+    transcript = tmp_path / "transcript.jsonl"
+    script = (
+        "import json, os\n"
+        "print(json.dumps({'type': 'assistant.message', 'data': "
+        "{'content': os.environ.get('PORT', '') + '|' + ('yes' if os.environ.get('PATH') else 'no')}}))\n"
+        "print(json.dumps({'type': 'result', 'sessionId': 's', 'exitCode': 0}))"
+    )
+    runner = SessionRunner("k", [sys.executable, "-c", script], transcript, env={"PORT": "3005"})
+
+    state = asyncio.run(runner.run())
+
+    assert state.last_text == "3005|yes"

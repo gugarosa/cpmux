@@ -63,7 +63,7 @@ class SessionRunner:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             start_new_session=True,
-            env=self.env,
+            env={**os.environ, **self.env} if self.env else None,
             limit=_STREAM_LIMIT,
         )
         self.state.status = Status.STARTING

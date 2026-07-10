@@ -100,6 +100,33 @@ def test_spawn_argv_targets_session_worktree_and_model():
     assert "--no-ask-user" in argv
 
 
+def test_port_base_assigns_a_port_per_item():
+    resolved = Plan.model_validate({"defaults": {"port_base": 3000}, "items": ["a", "b", "c"]}).resolve()
+    assert [item.env["PORT"] for item in resolved] == ["3000", "3001", "3002"]
+
+
+def test_explicit_env_port_wins_over_assignment():
+    resolved = Plan.model_validate(
+        {"defaults": {"port_base": 3000}, "items": [{"name": "a", "prompt": "x", "env": {"PORT": "9999"}}]}
+    ).resolve()
+    assert resolved[0].env["PORT"] == "9999"
+
+
+def test_port_env_names_the_injected_variable():
+    resolved = Plan.model_validate({"defaults": {"port_base": 4000, "port_env": "DEV_PORT"}, "items": ["a"]}).resolve()
+    assert resolved[0].env == {"DEV_PORT": "4000"}
+
+
+def test_no_port_base_leaves_env_untouched():
+    resolved = Plan.model_validate({"items": [{"name": "a", "prompt": "x", "env": {"FOO": "bar"}}]}).resolve()
+    assert resolved[0].env == {"FOO": "bar"}
+
+
+def test_invalid_port_env_name_is_rejected():
+    with pytest.raises(ValidationError):
+        Plan.model_validate({"defaults": {"port_base": 4000, "port_env": "1bad"}, "items": ["a"]})
+
+
 def test_interpolate_env_expands_and_falls_back(monkeypatch):
     monkeypatch.setenv("CMUX_TEST_VAR", "hello")
     assert interpolate_env("say ${CMUX_TEST_VAR}") == "say hello"

@@ -104,6 +104,7 @@ def _display_argv(argv: list[str]) -> str:
 
 
 def _plan_table(resolved: list[ResolvedItem]) -> Table:
+    show_env = any(item.env for item in resolved)
     table = Table(title="resolved plan", expand=True)
     table.add_column("item", style="bold")
     table.add_column("model")
@@ -111,16 +112,21 @@ def _plan_table(resolved: list[ResolvedItem]) -> Table:
     table.add_column("branch")
     table.add_column("perms")
     table.add_column("deps on")
+    if show_env:
+        table.add_column("env")
 
     for item in resolved:
-        table.add_row(
+        row = [
             item.key,
             item.model,
             str(item.effort),
             item.branch,
             item.permissions.preset,
             ", ".join(item.depends_on) or "-",
-        )
+        ]
+        if show_env:
+            row.append(", ".join(f"{name}={value}" for name, value in item.env.items()) or "-")
+        table.add_row(*row)
 
     return table
 
@@ -313,7 +319,7 @@ def send(
         raise typer.Exit(1)
 
     argv = followup_argv(record.session_id, record.worktree, record.model, record.permission_flags, message)
-    state = asyncio.run(SessionRunner(key, argv, paths.transcript(key)).run())
+    state = asyncio.run(SessionRunner(key, argv, paths.transcript(key), env=record.env).run())
 
     record.status = state.status
     record.exit_code = state.exit_code

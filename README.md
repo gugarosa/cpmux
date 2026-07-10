@@ -60,6 +60,7 @@ defaults:
   base: main               # branch PRs are opened against
   concurrency: 6           # max sessions running at once (1–64)
   deps: symlink            # seed a worktree's node_modules: symlink | copy | install | skip
+  port_base: 3000          # give each item a unique port (3000, 3001, …) via $PORT
   pr:
     draft: true
     labels: [cmux]
@@ -84,6 +85,10 @@ An item's **key** is its `id` when set, otherwise a slug of its `name` or `promp
 to `enter`, `send`, `logs`, and `kill`; `cmux ls` and `--dry-run` print them. Any string field
 expands `${VAR}` and `${VAR:-default}` from the environment. Set `include_system: false` to
 omit the shared prompt for an item.
+
+Set `port_base` when items run dev servers: each item gets `port_base + index` in its
+environment (as `$PORT`, or `port_env` to rename it), so parallel servers do not collide. An
+item's own `env` takes precedence, and `env` values reach the session's subprocess.
 
 ## Commands
 

@@ -193,6 +193,8 @@ class Defaults(BaseModel):
         concurrency: Maximum number of sessions run at once.
         deps: Strategy for seeding a worktree's dependencies.
         remote: Git remote to push branches to.
+        port_base: First port assigned to items, or None to assign none.
+        port_env: Environment variable that carries each item's assigned port.
 
     """
 
@@ -207,6 +209,16 @@ class Defaults(BaseModel):
     concurrency: int = Field(default=4, ge=1, le=64)
     deps: Deps = Deps.symlink
     remote: str = "origin"
+    port_base: int | None = Field(default=None, ge=1, le=65535)
+    port_env: str = "PORT"
+
+    @field_validator("port_env")
+    @classmethod
+    def _valid_env_name(cls, value: str) -> str:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value):
+            raise ValueError(f"`port_env` must be a valid environment variable name, but got `{value}`.")
+
+        return value
 
 
 class Item(BaseModel):
@@ -408,7 +420,7 @@ class Plan(BaseModel):
         defaults = self.defaults
         resolved: list[ResolvedItem] = []
 
-        for item in self.items:
+        for index, item in enumerate(self.items):
             permissions = item.permissions or defaults.permissions
             if item.paths:
                 permissions = permissions.model_copy(update={"add_dir": [*permissions.add_dir, *item.paths]})
@@ -419,6 +431,10 @@ class Plan(BaseModel):
                 prompt = f"{self.system.strip()}\n\n---\n\n{item.prompt.strip()}"
             pr_settings = defaults.pr
             display_name = item.name or item.slug
+
+            env = dict(item.env)
+            if defaults.port_base is not None:
+                env = {defaults.port_env: str(defaults.port_base + index), **env}
 
             resolved.append(
                 ResolvedItem(
@@ -434,7 +450,7 @@ class Plan(BaseModel):
                     labels=list(dict.fromkeys([*pr_settings.labels, *item.labels])),
                     draft=pr_settings.draft if item.draft is None else item.draft,
                     depends_on=list(item.depends_on),
-                    env=dict(item.env),
+                    env=env,
                     deps=defaults.deps,
                     remote=defaults.remote,
                     pr_title=pr_settings.title_template.format(name=display_name, slug=item.slug),
