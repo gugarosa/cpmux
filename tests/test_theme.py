@@ -29,3 +29,9 @@ def test_print_error_writes_to_stderr(capsys):
     captured = capsys.readouterr()
     assert "copilot" in captured.err
     assert captured.out == ""
+
+
+def test_format_duration_uses_minutes_then_hours():
+    assert theme.format_duration(7) == "0:07"
+    assert theme.format_duration(65) == "1:05"
+    assert theme.format_duration(3725) == "1:02:05"

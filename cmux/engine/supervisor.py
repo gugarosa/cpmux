@@ -2,6 +2,7 @@
 # Licensed under the MIT license.
 
 import asyncio
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
@@ -78,6 +79,7 @@ class Supervisor:
         self.live_states: dict[str, SessionState] = {}
         self.runners: dict[str, SessionRunner] = {}
         self._live: Live | None = None
+        self._started_at: float | None = None
 
     @classmethod
     def create(cls, plan: Plan, start_path: str, options: Options, config_path: str = "") -> "Supervisor":
@@ -201,11 +203,12 @@ class Supervisor:
 
         sem = asyncio.Semaphore(self.concurrency)
         done_events = {item.key: asyncio.Event() for item in self.resolved}
+        self._started_at = time.monotonic()
 
         if headless:
             await self._run_all(sem, done_events)
         else:
-            with Live(self._render(), console=self.console, refresh_per_second=8) as live:
+            with Live(self._render(), console=self.console, refresh_per_second=8, transient=True) as live:
                 self._live = live
                 await self._run_all(sem, done_events)
                 live.update(self._render())
@@ -344,10 +347,10 @@ class Supervisor:
             self._live.update(self._render())
 
     def _render(self) -> Table:
-        table = theme.table(title=f"cmux · run {self.run_id}")
+        table = theme.table(title=self._title())
         table.add_column("item", style="bold", no_wrap=True)
         table.add_column("status", no_wrap=True)
-        table.add_column("model", no_wrap=True)
+        table.add_column("elapsed", no_wrap=True, justify="right")
         table.add_column("detail", overflow="ellipsis")
         table.add_column("branch / PR", no_wrap=True)
 
@@ -363,12 +366,22 @@ class Supervisor:
             if record.error and status in TERMINAL_FAILURE:
                 detail = record.error.splitlines()[0][:80]
 
+            elapsed = record.elapsed_seconds
             table.add_row(
                 item.key,
                 theme.status_text(status),
-                item.model,
+                theme.format_duration(elapsed) if elapsed is not None else "-",
                 detail,
                 record.pr_url or record.branch,
             )
 
         return table
+
+    def _title(self) -> str:
+        statuses = [record.status for record in self.records.values()]
+        done = sum(status in SUCCESS for status in statuses)
+        active = sum(status in ACTIVE for status in statuses)
+        failed = sum(status in TERMINAL_FAILURE for status in statuses)
+        wall = theme.format_duration(time.monotonic() - self._started_at) if self._started_at else "0:00"
+
+        return f"cmux · run {self.run_id} · {done}/{len(statuses)} done · {active} active · {failed} failed · {wall}"

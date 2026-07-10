@@ -3,6 +3,7 @@
 
 import asyncio
 import os
+import shlex
 import shutil
 import tempfile
 import time
@@ -33,7 +34,7 @@ from cmux.engine.store import (
     load_run,
 )
 from cmux.engine.supervisor import Options, Supervisor
-from cmux.events import TERMINAL, TERMINAL_FAILURE, event_data, parse_line
+from cmux.events import SUCCESS, TERMINAL, TERMINAL_FAILURE, event_data, parse_line
 from cmux.ui.render import event_text
 from cmux.ui.search import search_transcripts
 from cmux.vcs.git import GitError, prune_worktrees, remove_worktree
@@ -103,14 +104,14 @@ def _display_argv(argv: list[str]) -> str:
     redact_next = False
     for token in argv:
         if redact_next:
-            parts.append(f"<prompt {len(token)} chars>")
+            parts.append(f"<prompt:{len(token)} chars>")
             redact_next = False
             continue
         parts.append(token)
         if token == "-p":
             redact_next = True
 
-    return " ".join(parts)
+    return shlex.join(parts)
 
 
 def _plan_table(resolved: list[ResolvedItem]) -> Table:
@@ -189,8 +190,14 @@ def up(
 
     if dry_run:
         resolved = _load(file).resolve()
+        publish = "one draft PR per item" if pr else "local commits only"
+        parallel = str(concurrency) if concurrency else "plan default"
         console.print(_plan_table(resolved))
-        console.print("\n[bold]spawn commands:[/bold]")
+        theme.print_hint(
+            f"dry run — nothing is created · {len(resolved)} session(s) · max {parallel} concurrent "
+            f"· publish: {publish} · deps: {str(deps) if deps else 'per item'}"
+        )
+        console.print("\n[bold]spawn commands[/bold] (redacted, not executable):")
         for item in resolved:
             argv = item.spawn_argv(f"<worktree>/{item.key}", "<session-id>", "<log-dir>")
             console.print(f"  [cyan]{item.key}[/cyan]: {_display_argv(argv)}")
@@ -241,9 +248,42 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
     finally:
         daemon.clear_owner(supervisor.paths)
 
-    _print_summary(Path("."), supervisor.run_id)
+    _print_completion_summary(supervisor.run_id, records)
     if any(record.status in TERMINAL_FAILURE for record in records):
         raise typer.Exit(1)
+
+
+def _print_completion_summary(run_id: str, records: list[SessionRecord]) -> None:
+    done = sum(record.status in SUCCESS for record in records)
+    failed = sum(record.status in TERMINAL_FAILURE for record in records)
+
+    table = theme.table(title=f"cmux · run {run_id}")
+    table.add_column("item", style="bold")
+    table.add_column("result")
+    table.add_column("elapsed", justify="right")
+    table.add_column("PR / reason", overflow="fold")
+
+    for record in records:
+        detail = record.pr_url or ""
+        if record.status in TERMINAL_FAILURE and record.error:
+            detail = record.error.splitlines()[0]
+        elapsed = record.elapsed_seconds
+        table.add_row(
+            record.key,
+            theme.status_text(record.status),
+            theme.format_duration(elapsed) if elapsed is not None else "-",
+            detail or "-",
+        )
+
+    console.print(table)
+
+    if failed:
+        theme.print_error(
+            f"run {run_id} finished with {failed} failed item(s).",
+            hint=f"inspect a failure with `cmux logs <item> --run {run_id}`.",
+        )
+    else:
+        theme.print_success(f"run {run_id} finished: {done} item(s) completed.")
 
 
 @app.command()

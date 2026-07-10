@@ -88,6 +88,17 @@ class SessionRecord(BaseModel):
 
         self.ended_at = _now()
 
+    @property
+    def elapsed_seconds(self) -> float | None:
+        """Seconds from start to end, or to now while still running."""
+
+        if not self.started_at:
+            return None
+
+        end = datetime.fromisoformat(self.ended_at) if self.ended_at else datetime.now(timezone.utc)
+
+        return (end - datetime.fromisoformat(self.started_at)).total_seconds()
+
 
 class RunManifest(BaseModel):
     """Persist resolved run configuration as `manifest.json`.

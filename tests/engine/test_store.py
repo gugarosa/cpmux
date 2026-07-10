@@ -108,3 +108,14 @@ def test_latest_run_id_returns_newest(tmp_path):
     _write_manifest(tmp_path, "20260101-000000-aaaaaa")
     _write_manifest(tmp_path, "20260202-000000-bbbbbb")
     assert latest_run_id(tmp_path) == "20260202-000000-bbbbbb"
+
+
+def test_elapsed_seconds_is_none_before_start():
+    assert _record().elapsed_seconds is None
+
+
+def test_elapsed_seconds_spans_start_to_end():
+    record = _record()
+    record.started_at = "2026-07-10T17:00:00+00:00"
+    record.ended_at = "2026-07-10T17:01:30+00:00"
+    assert record.elapsed_seconds == 90.0

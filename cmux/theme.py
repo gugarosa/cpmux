@@ -87,6 +87,24 @@ def status_text(status: Status) -> Text:
     return Text(f"{glyph} {visual.label}", style=visual.style)
 
 
+def format_duration(seconds: float) -> str:
+    """Format a duration as `M:SS`, or `H:MM:SS` past an hour.
+
+    Args:
+        seconds: Duration in seconds.
+
+    Returns:
+        Compact duration string.
+
+    """
+
+    total = int(seconds)
+    hours, remainder = divmod(total, 3600)
+    minutes, secs = divmod(remainder, 60)
+
+    return f"{hours}:{minutes:02d}:{secs:02d}" if hours else f"{minutes}:{secs:02d}"
+
+
 def table(title: str | None = None) -> Table:
     """Build a table with the shared cmux style.
 
