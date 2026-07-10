@@ -333,6 +333,10 @@ class Supervisor:
 
     def _on_update(self, key: str, state: SessionState, event: dict) -> None:
         self.live_states[key] = state
+        record = self.records[key]
+        if state.status != record.status:
+            record.status = state.status
+            self.paths.write_record(record)
         self._refresh()
 
     def _refresh(self) -> None:

@@ -7,7 +7,7 @@ from pathlib import Path
 from cmux.config import Plan
 from cmux.engine.store import RunManifest
 from cmux.engine.supervisor import Options, Supervisor
-from cmux.events import Status
+from cmux.events import SessionState, Status
 from cmux.vcs import git
 
 
@@ -113,3 +113,14 @@ def test_commit_local_marks_no_changes_when_clean(git_repo):
     asyncio.run(sup._commit_local(item, record))
 
     assert record.status == Status.NO_CHANGES
+
+
+def test_on_update_persists_live_status_to_disk(git_repo):
+    sup = Supervisor.create(_plan(), str(git_repo), Options())
+    sup.prepare()
+    key = sup.resolved[0].key
+    assert sup.paths.read_record(key).status == Status.PENDING
+
+    sup._on_update(key, SessionState(status=Status.RUNNING), {})
+
+    assert sup.paths.read_record(key).status == Status.RUNNING
