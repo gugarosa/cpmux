@@ -81,13 +81,17 @@ Adopted from phitrain (rule ids in parentheses).
 - Every `.py` file starts with the two-line copyright/license header.
 - Imports are top-level and absolute (`from cmux.x import y`). Order: stdlib →
   third-party → local, blank-separated.
-- Public functions and classes carry Google-style docstrings (single-sentence
-  summary; one-line `Args:`/`Returns:`/`Raises:` entries). Private helpers (`_name`)
-  carry no docstring. No semicolons or `defaults to <X>` tails in entries. (R3, R13)
+- Public functions, classes, and their `__init__` carry Google-style docstrings
+  (single-sentence summary; one-line `Args:`/`Returns:`/`Raises:` entries). A regular
+  class keeps a one-line class summary and documents its constructor `Args:` on
+  `__init__`. Private helpers (`_name`) and framework-dispatched overrides (Textual
+  `compose`/`on_<event>`/lifecycle hooks) carry none. No semicolons or
+  `defaults to <X>` tails in entries. (R3, R13)
 - A docstring keeps one blank line before its closing `"""`, and one blank line
   after the closing `"""` before the first statement or field.
-- Data classes (Pydantic models and `@dataclass`) document every field in an
-  `Attributes:` section, one line per field (`name: what it holds.`).
+- Data classes (Pydantic models and `@dataclass`, which have no explicit `__init__`)
+  document every field in an `Attributes:` section, one line per field
+  (`name: what it holds.`).
 - Logging uses `get_logger(__name__)` from `cmux.logging`; **never `print()` in
   library code** (the CLI presentation layer uses Rich and `typer.echo`). Diagnostic
   `logger.warning`/`logger.error` use a backticked offender and trailing period:

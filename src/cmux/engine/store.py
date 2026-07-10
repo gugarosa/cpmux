@@ -121,6 +121,14 @@ class RunPaths:
     """Filesystem paths for a single run, rooted at `<repo_root>/.cmux`."""
 
     def __init__(self, repo_root: str | Path, run_id: str) -> None:
+        """Initialize the run paths.
+
+        Args:
+            repo_root: Root of the target git repository.
+            run_id: Identifier of the run whose paths to resolve.
+
+        """
+
         self.repo_root = Path(repo_root)
         self.run_id = run_id
         self.root = self.repo_root / CMUX_DIR

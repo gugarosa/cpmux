@@ -25,6 +25,16 @@ class SessionRunner:
         transcript_path: str | Path,
         env: dict[str, str] | None = None,
     ) -> None:
+        """Initialize the runner.
+
+        Args:
+            key: Unique identifier for the session.
+            argv: Arguments used to spawn the subprocess.
+            transcript_path: Path to write the JSONL transcript to.
+            env: Environment overrides for the subprocess.
+
+        """
+
         self.key = key
         self.argv = argv
         self.transcript_path = Path(transcript_path)

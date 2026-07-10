@@ -65,6 +65,19 @@ class Supervisor:
         system: str = "",
         config_path: str = "",
     ) -> None:
+        """Initialize the supervisor.
+
+        Args:
+            repo_root: Root of the target git repository.
+            run_id: Identifier for this run.
+            resolved: Fully resolved items to execute.
+            options: Runtime options for the run.
+            concurrency: Maximum sessions to run at once.
+            system: Shared system prompt prepended to each item.
+            config_path: Path of the config file the run resolved, recorded for provenance.
+
+        """
+
         self.repo_root = Path(repo_root)
         self.run_id = run_id
         self.resolved = resolved

@@ -38,6 +38,13 @@ class SearchScreen(ModalScreen[str | None]):
     BINDINGS = [Binding("escape", "close", "Close")]
 
     def __init__(self, items: list[tuple[str, Path]]) -> None:
+        """Initialize the search overlay.
+
+        Args:
+            items: `(label, transcript_path)` pairs to search.
+
+        """
+
         super().__init__()
         self.items = items
 
@@ -60,6 +67,8 @@ class SearchScreen(ModalScreen[str | None]):
         self.dismiss(event.item.name)
 
     def action_close(self) -> None:
+        """Close the search overlay."""
+
         self.dismiss(None)
 
 
@@ -75,6 +84,8 @@ class SendScreen(ModalScreen[str | None]):
         self.dismiss(event.value.strip() or None)
 
     def action_close(self) -> None:
+        """Close the message overlay."""
+
         self.dismiss(None)
 
 
@@ -96,6 +107,14 @@ class CmuxApp(App):
     ]
 
     def __init__(self, start_path: str, run_id: str) -> None:
+        """Initialize the dashboard.
+
+        Args:
+            start_path: Path inside the target git repository.
+            run_id: Identifier of the run to display.
+
+        """
+
         super().__init__()
 
         self.start_path = Path(start_path)

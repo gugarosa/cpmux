@@ -3,7 +3,6 @@
 
 from cmux.events import SessionState, Status, apply_event, event_data, parse_line
 
-# Real copilot JSONL sequence, trimmed
 SAMPLE = [
     {"type": "session.tools_updated", "data": {"model": "gpt-5.5"}},
     {"type": "user.message", "data": {"content": "Say PONG"}},
