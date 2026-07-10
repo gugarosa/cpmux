@@ -68,7 +68,8 @@ def _load(file: Path) -> Plan:
     try:
         return load_plan(file)
     except ConfigError as exc:
-        theme.print_error(str(exc))
+        hint = "create one with `cmux init`, or generate one with `cmux plan`." if not Path(file).exists() else None
+        theme.print_error(str(exc), hint=hint)
         raise typer.Exit(1)
 
 
@@ -140,9 +141,37 @@ def _plan_table(resolved: list[ResolvedItem]) -> Table:
     return table
 
 
+_STARTER_PLAN = """\
+# cmux plan: one Copilot session per item (see the README for all options)
+system: |
+  Shared guidance prepended to every item's prompt.
+defaults:
+  model: gpt-5.5
+items:
+  - fix the flaky login test
+  - add pagination to the notifications list
+"""
+
+
+@app.command()
+def init(
+    output: Path = typer.Argument(Path("cmux.yml"), dir_okay=False, help="Plan file to create."),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite an existing file."),
+) -> None:
+    """Write a starter cmux plan."""
+
+    if output.exists() and not force:
+        theme.print_error(f"`{output}` already exists.", hint="pass `--force` to overwrite it.")
+        raise typer.Exit(1)
+
+    output.write_text(_STARTER_PLAN, encoding="utf-8")
+    theme.print_success(f"wrote {output}.")
+    theme.print_hint(f"edit it, then preview with `cmux up {output} --dry-run`.")
+
+
 @app.command()
 def up(
-    file: Path = typer.Argument(..., exists=True, dir_okay=False, help="cmux YAML file."),
+    file: Path = typer.Argument(Path("cmux.yml"), dir_okay=False, help="cmux plan file (default: cmux.yml)."),
     dry_run: bool = typer.Option(False, "--dry-run", "--dry_run", help="Resolve and print the plan; spawn nothing."),
     detach: bool = typer.Option(False, "--detach", "-d", help="Run in background and return."),
     concurrency: int | None = typer.Option(None, "--concurrency", "-j", help="Max parallel sessions."),
@@ -227,12 +256,17 @@ def plan(
         DEFAULT_TRANSCRIBE_MODEL, "--transcribe-model", help="faster-whisper model size (tiny…large-v3)."
     ),
     model: str = typer.Option("gpt-5.5", "--model", help="Copilot model for plan synthesis."),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite an existing output file."),
     up: bool = typer.Option(False, "--up", help="Launch the generated plan."),
     pr: bool = typer.Option(True, "--pr/--no-pr", help="With --up, open one draft PR per item (default: on)."),
     detach: bool = typer.Option(False, "--detach", "-d", help="With --up, run in background."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip launch confirmation."),
 ) -> None:
     """Compose a cmux plan in your editor, or from text, speech, or audio."""
+
+    if output.exists() and not force:
+        theme.print_error(f"`{output}` already exists.", hint="pass `--force` to overwrite it.")
+        raise typer.Exit(1)
 
     try:
         transcript = _resolve_transcript(text, audio, voice, transcribe_model)

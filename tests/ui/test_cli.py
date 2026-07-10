@@ -186,3 +186,30 @@ def test_rm_refuses_active_run(monkeypatch):
 
     result = runner.invoke(app, ["rm", "--yes"])
     assert result.exit_code == 1
+
+
+def test_init_writes_a_valid_starter_plan(tmp_path, monkeypatch):
+    from cmux.config import load_plan
+
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 0
+    assert (tmp_path / "cmux.yml").exists()
+    assert load_plan(tmp_path / "cmux.yml").items
+
+
+def test_init_refuses_to_overwrite_without_force(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "cmux.yml").write_text("items: [do a thing]\n")
+    result = runner.invoke(app, ["init"])
+    assert result.exit_code == 1
+
+
+def test_plan_refuses_to_overwrite_existing_output(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "out.yml").write_text("items: [x]\n")
+    called = {}
+    monkeypatch.setattr(cli, "synthesize_plan", lambda *a: called.setdefault("ran", True) or "items: [x]\n")
+    result = runner.invoke(app, ["plan", "out.yml", "--text", "x"])
+    assert result.exit_code == 1
+    assert "ran" not in called

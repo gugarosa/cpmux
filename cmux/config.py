@@ -496,4 +496,13 @@ def load_plan(path: str | Path) -> Plan:
     try:
         return Plan.model_validate(raw)
     except ValidationError as exc:
-        raise ConfigError(f"`{config_path}` is not a valid cmux config:\n{exc}") from exc
+        raise ConfigError(f"`{config_path}` is not a valid cmux plan:\n{_format_validation(exc)}") from exc
+
+
+def _format_validation(exc: ValidationError) -> str:
+    lines = []
+    for error in exc.errors():
+        location = ".".join(str(part) for part in error["loc"]) or "(root)"
+        lines.append(f"  {location}: {error['msg']}")
+
+    return "\n".join(lines)

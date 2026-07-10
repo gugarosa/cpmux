@@ -158,3 +158,14 @@ def test_load_plan_reads_valid_file(tmp_path):
     plan = load_plan(path)
     assert len(plan.items) == 1
     assert plan.resolve()[0].prompt == "fix a thing"
+
+
+def test_load_plan_invalid_reports_concise_field_errors(tmp_path):
+    path = tmp_path / "bad.yaml"
+    path.write_text("items: []\n")
+    with pytest.raises(ConfigError) as excinfo:
+        load_plan(path)
+    message = str(excinfo.value)
+    assert "not a valid cmux plan" in message
+    assert "items" in message
+    assert "for Plan" not in message
