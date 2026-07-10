@@ -18,6 +18,11 @@ from rich.table import Table
 from cmux import __version__
 from cmux.config import ConfigError, Deps, Plan, ResolvedItem, load_plan
 from cmux.engine import daemon
+from cmux.engine.copilot_store import (
+    CopilotStoreUnavailable,
+    InvalidFtsQuery,
+    search_sessions,
+)
 from cmux.engine.interact import followup_argv, resume_interactive_argv
 from cmux.engine.session import SessionRunner
 from cmux.engine.store import (
@@ -361,8 +366,13 @@ def search(
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
     all_runs: bool = typer.Option(False, "--all", help="Search every run."),
     regex: bool = typer.Option(False, "--regex", help="Treat query as regex."),
+    fts: bool = typer.Option(False, "--fts", help="Rank matches via copilot's full-text index."),
 ) -> None:
     """Search session transcripts."""
+
+    if fts and regex:
+        logger.error("`--regex` cannot be combined with `--fts`.")
+        raise typer.Exit(1)
 
     root = Path(".")
     if all_runs:
@@ -375,16 +385,35 @@ def search(
         raise typer.Exit(1)
 
     items: list[tuple[str, Path]] = []
+    label_by_session: dict[str, str] = {}
     for run_id in run_ids:
         paths = RunPaths(root, run_id)
         _, records = load_run(root, run_id)
         for record in records:
             label = f"{run_id}/{record.key}" if all_runs else record.key
             items.append((label, paths.transcript(record.key)))
+            label_by_session[record.session_id] = label
+
+    if fts:
+        _search_fts(query, label_by_session)
+        return
 
     hits = search_transcripts(items, query, regex)
     for hit in hits:
         console.print(f"[cyan]{hit.label}[/cyan] [dim]{hit.role}[/dim] {escape(hit.snippet)}")
+    console.print(f"[dim]{len(hits)} hit(s)[/dim]")
+
+
+def _search_fts(query: str, label_by_session: dict[str, str]) -> None:
+    try:
+        hits = search_sessions(list(label_by_session), query)
+    except (InvalidFtsQuery, CopilotStoreUnavailable) as exc:
+        logger.error(str(exc))
+        raise typer.Exit(1)
+
+    for hit in hits:
+        label = label_by_session.get(hit.session_id, hit.session_id)
+        console.print(f"[cyan]{label}[/cyan] {escape(hit.snippet)}")
     console.print(f"[dim]{len(hits)} hit(s)[/dim]")
 
 

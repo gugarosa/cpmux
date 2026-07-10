@@ -93,3 +93,38 @@ def test_up_dry_run_shows_assigned_ports(tmp_path):
     assert result.exit_code == 0
     assert "PORT=3000" in result.output
     assert "PORT=3001" in result.output
+
+
+def test_search_fts_rejects_regex_combination(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["search", "login", "--fts", "--regex"])
+    assert result.exit_code == 1
+
+
+def test_search_fts_reports_store_unavailable(tmp_path, monkeypatch):
+    from cmux.engine.store import RunManifest, RunPaths, SessionRecord
+
+    paths = RunPaths(tmp_path, "run1")
+    paths.write_manifest(RunManifest(run_id="run1", repo_root=str(tmp_path), config_path="", item_keys=["a"]))
+    paths.write_record(
+        SessionRecord(
+            key="a",
+            name="a",
+            slug="a",
+            branch="cmux/a",
+            base="main",
+            model="m",
+            session_id="sid-a",
+            worktree=str(tmp_path / "a"),
+        )
+    )
+
+    def _boom(session_ids, query):
+        from cmux.engine.copilot_store import CopilotStoreUnavailable
+
+        raise CopilotStoreUnavailable("store gone.")
+
+    monkeypatch.setattr(cli, "search_sessions", _boom)
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["search", "login", "--fts"])
+    assert result.exit_code == 1

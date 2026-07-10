@@ -102,7 +102,7 @@ Every read/monitor command accepts `--run <id>` and defaults to the latest run.
 | | `cmux attach` | Live, read-only monitor; reconnects to a background run (Ctrl-C to detach). |
 | | `cmux dash` | Interactive TUI: session list, live transcript, search. |
 | | `cmux logs KEY` | Print a transcript; `--follow/-f` to stream, `--raw` for the JSONL. |
-| | `cmux search QUERY` | Full-text search across transcripts; `--all` for every run, `--regex`. |
+| | `cmux search QUERY` | Full-text search across transcripts; `--all` for every run, `--regex`, `--fts` to rank via copilot's index. |
 | **Steer** | `cmux enter KEY` | Drop into an interactive copilot session, resumed in place. |
 | | `cmux send KEY "…"` | Append a follow-up turn and print the reply. |
 | | `cmux kill KEY` | Stop one running session. |
