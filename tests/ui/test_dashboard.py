@@ -150,3 +150,31 @@ def test_dashboard_surfaces_item_dependencies(tmp_path):
             assert deps_col == ["-", "alpha"]
 
     asyncio.run(scenario())
+
+
+def test_dashboard_header_shows_selected_session_context(tmp_path):
+    _build_run(tmp_path, ["alpha"])
+
+    async def scenario():
+        app = CmuxApp(str(tmp_path), "run1")
+        async with app.run_test():
+            from textual.widgets import Static
+
+            header = app.query_one("#transcript-header", Static)
+            assert "alpha" in str(header.render())
+
+    asyncio.run(scenario())
+
+
+def test_dashboard_open_pr_without_pr_does_not_open_browser(tmp_path, monkeypatch):
+    _build_run(tmp_path, ["alpha"])
+    opened = []
+    monkeypatch.setattr("cmux.ui.dashboard.webbrowser.open", lambda url: opened.append(url))
+
+    async def scenario():
+        app = CmuxApp(str(tmp_path), "run1")
+        async with app.run_test():
+            app.action_open_pr()
+
+    asyncio.run(scenario())
+    assert opened == []

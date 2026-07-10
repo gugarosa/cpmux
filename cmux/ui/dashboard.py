@@ -4,12 +4,14 @@
 import asyncio
 import shutil
 import subprocess
+import time
+import webbrowser
 from pathlib import Path
 
 from textual import work
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Horizontal
+from textual.containers import Horizontal, Vertical
 from textual.screen import ModalScreen
 from textual.widgets import (
     DataTable,
@@ -20,6 +22,7 @@ from textual.widgets import (
     ListItem,
     ListView,
     RichLog,
+    Static,
 )
 
 from cmux import theme
@@ -27,7 +30,7 @@ from cmux.engine import daemon
 from cmux.engine.interact import followup_argv, resume_interactive_argv
 from cmux.engine.session import SessionRunner
 from cmux.engine.store import RunPaths, SessionRecord, load_run
-from cmux.events import parse_line
+from cmux.events import ACTIVE, parse_line
 from cmux.ui.render import deps_cell, event_text
 from cmux.ui.search import search_transcripts
 
@@ -93,14 +96,30 @@ class CmuxApp(App):
     """Dashboard for one run."""
 
     CSS = """
-    #sessions { width: 45%; border-right: solid $panel; }
-    #transcript { width: 1fr; padding: 0 1; }
+    #sessions {
+        width: 45%;
+        border-right: solid $panel;
+    }
+    #right {
+        width: 1fr;
+    }
+    #transcript-header {
+        height: 1;
+        padding: 0 1;
+        background: $panel;
+        color: $text;
+    }
+    #transcript {
+        padding: 0 1;
+    }
     """
     BINDINGS = [
         Binding("q", "quit", "Quit"),
         Binding("slash", "search", "Search"),
-        Binding("e", "enter", "Enter"),
-        Binding("s", "send", "Send"),
+        Binding("e", "enter", "Attach"),
+        Binding("s", "send", "Follow-up"),
+        Binding("o", "open_pr", "Open PR"),
+        Binding("x", "stop", "Stop"),
         Binding("r", "refresh", "Refresh"),
         Binding("j", "cursor_down", "Down"),
         Binding("k", "cursor_up", "Up"),
@@ -130,7 +149,9 @@ class CmuxApp(App):
 
         with Horizontal():
             yield DataTable(id="sessions")
-            yield RichLog(id="transcript", wrap=True, auto_scroll=False)
+            with Vertical(id="right"):
+                yield Static(id="transcript-header")
+                yield RichLog(id="transcript", wrap=True, auto_scroll=False)
 
         yield Footer()
 
@@ -153,6 +174,8 @@ class CmuxApp(App):
 
         self.deps_by_key = {item.key: list(item.depends_on) for item in manifest.resolved}
         self.records = daemon.reconcile(self.paths, records, persist=False)
+        active = sum(record.status in ACTIVE for record in self.records)
+        self.sub_title = f"{active}/{len(self.records)} active · updated {time.strftime('%H:%M:%S')}"
         self._refresh_table()
         self._refresh_transcript()
 
@@ -188,6 +211,7 @@ class CmuxApp(App):
 
         transcript = self.paths.transcript(record.key)
         text = transcript.read_text(encoding="utf-8") if transcript.exists() else ""
+        self._update_header(record, has_content=bool(text.strip()))
         log = self.query_one("#transcript", RichLog)
 
         if force or record.key != self._shown_key:
@@ -204,6 +228,14 @@ class CmuxApp(App):
                 self._transcript_len = boundary
                 if following:
                     log.scroll_end(animate=False)
+
+    def _update_header(self, record: SessionRecord, has_content: bool) -> None:
+        pr = record.pr_url or "no PR"
+        suffix = ""
+        if not has_content:
+            suffix = "  ·  waiting for output…" if record.status in ACTIVE else "  ·  no transcript"
+        header = self.query_one("#transcript-header", Static)
+        header.update(f"[bold]{record.key}[/bold]  ·  {record.model}  ·  {record.branch}  ·  {pr}{suffix}")
 
     def _write_events(self, log: RichLog, text: str) -> None:
         for line in text.splitlines():
@@ -234,6 +266,32 @@ class CmuxApp(App):
     def action_refresh(self) -> None:
         """Reload the run immediately."""
 
+        self.reload()
+
+    def action_open_pr(self) -> None:
+        """Open the selected item's pull request in a browser."""
+
+        record = self._selected_record()
+        if record is None:
+            return
+        if not record.pr_url:
+            self.notify(f"no PR for {record.key} yet.")
+            return
+
+        webbrowser.open(record.pr_url)
+        self.notify(f"opening PR for {record.key}…")
+
+    def action_stop(self) -> None:
+        """Stop the selected running session."""
+
+        record = self._selected_record()
+        if record is None:
+            return
+
+        if daemon.kill_session(self.paths, record):
+            self.notify(f"stopped {record.key}.")
+        else:
+            self.notify(f"{record.key} was not running.")
         self.reload()
 
     def action_search(self) -> None:
