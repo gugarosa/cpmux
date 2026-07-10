@@ -11,11 +11,11 @@ from cmux.config import Plan
 from cmux.voice.transcriber import VoiceError
 
 _SCHEMA = """\
-A cmux file is YAML with:
+cmux YAML fields:
 - `system` (optional): a shared instruction prepended to every task.
 - `defaults` (optional): `model`, `effort` (none|minimal|low|medium|high|xhigh|max),
   `permissions` (readonly|edit|full), `base`, `concurrency`, `pr` (`draft`, `labels`).
-- `items` (required, non-empty): the task list. Each item is EITHER a plain string
+- `items` (required, non-empty): task list. Each item is EITHER a plain string
   (the task prompt) OR a mapping with `prompt` plus optional `name`, `model`,
   `effort`, `labels`, `paths`, `depends_on`."""
 
@@ -23,11 +23,11 @@ _FENCE = re.compile(r"```(?:ya?ml)?\s*\n(.*?)```", re.DOTALL)
 
 
 def synthesize_plan(transcript: str, model: str = "gpt-5.5") -> str:
-    """Turn a spoken task description into a validated cmux plan.
+    """Build a validated cmux plan from a spoken task description.
 
     Args:
-        transcript: Natural-language description of the tasks.
-        model: Copilot model used to synthesise the plan.
+        transcript: Natural-language task description.
+        model: Copilot model for plan synthesis.
 
     Returns:
         Valid cmux YAML text.
@@ -57,7 +57,7 @@ def synthesize_plan(transcript: str, model: str = "gpt-5.5") -> str:
 
 def _build_prompt(transcript: str) -> str:
     return (
-        "Convert the following spoken task list into a cmux YAML plan.\n\n"
+        "Convert this spoken task list into a cmux YAML plan.\n\n"
         f"{_SCHEMA}\n\n"
         "Rules: one item per distinct task, keep each prompt a concise imperative sentence, "
         "add a shared `system` only if the speaker stated common guidance, and reply with "

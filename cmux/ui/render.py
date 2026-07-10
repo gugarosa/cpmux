@@ -15,13 +15,13 @@ STATUS_COLOR: dict[Status, str] = {
 
 
 def event_text(event: dict) -> Text | None:
-    """Render one JSONL transcript event as styled text.
+    """Render a JSONL transcript event.
 
     Args:
         event: Decoded JSONL event.
 
     Returns:
-        Styled text for a displayable event, or None when there is nothing to show.
+        Styled display text, or None if empty.
 
     """
 

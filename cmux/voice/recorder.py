@@ -12,14 +12,14 @@ _SAMPLE_WIDTH = 2
 
 
 def record_to_file(path: str | Path, prompt: str = "Recording — press Enter to stop") -> Path:
-    """Record from the default microphone until Enter is pressed.
+    """Record the default microphone until Enter is pressed.
 
     Args:
         path: Destination WAV file.
         prompt: Message shown while recording.
 
     Returns:
-        The written WAV file.
+        Written WAV file.
 
     Raises:
         VoiceError: If the audio backend is unavailable or capture fails.

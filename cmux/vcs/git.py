@@ -12,7 +12,7 @@ logger = get_logger(__name__)
 
 
 class GitError(Exception):
-    """Raised when a git command fails or a repository precondition is unmet."""
+    """Raised when git fails or a repository precondition is unmet."""
 
 
 def run_git(
@@ -21,19 +21,19 @@ def run_git(
     env: dict[str, str] | None = None,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    """Run a git command in `cwd`.
+    """Run `git` in `cwd`.
 
     Args:
-        args: Arguments passed after `git`.
-        cwd: Working directory for the command.
-        env: Environment for the subprocess, or `None` to inherit.
-        check: Whether to raise on a non-zero exit.
+        args: Arguments after `git`.
+        cwd: Command working directory.
+        env: Subprocess environment, or `None` to inherit.
+        check: Raise on non-zero exit.
 
     Returns:
-        The completed git process.
+        Completed git process.
 
     Raises:
-        GitError: If `check` is set and git exits non-zero.
+        GitError: If `check` is true and git exits non-zero.
 
     """
 
@@ -53,7 +53,7 @@ def is_git_repo(path: str | Path) -> bool:
         path: Path to probe.
 
     Returns:
-        `True` if `path` is inside a git work tree.
+        `True` if `path` is in a git work tree.
 
     """
 
@@ -63,13 +63,13 @@ def is_git_repo(path: str | Path) -> bool:
 
 
 def repo_root(path: str | Path) -> Path:
-    """Return the top-level directory of the repository containing `path`.
+    """Return the root of the repository containing `path`.
 
     Args:
         path: Path inside the repository.
 
     Returns:
-        The repository's top-level directory.
+        Repository root.
 
     Raises:
         GitError: If `path` is not inside a git repository.
@@ -83,7 +83,7 @@ def repo_root(path: str | Path) -> Path:
 
 
 def resolve_base(root: str | Path, remote: str, base: str) -> tuple[str, str]:
-    """Resolve `base` to `(branch, sha)` from remote, then local, then HEAD.
+    """Resolve `base` to `(branch, sha)` via remote, local, then HEAD.
 
     Args:
         root: Repository root.
@@ -91,7 +91,7 @@ def resolve_base(root: str | Path, remote: str, base: str) -> tuple[str, str]:
         base: Base branch name.
 
     Returns:
-        The base branch name and the resolved commit sha.
+        Base branch name and resolved commit sha.
 
     """
 
@@ -104,13 +104,13 @@ def resolve_base(root: str | Path, remote: str, base: str) -> tuple[str, str]:
 
 
 def add_worktree(root: str | Path, worktree: str | Path, branch: str, base_sha: str) -> None:
-    """Create a new worktree on a fresh branch off `base_sha`.
+    """Create a worktree on a new branch from `base_sha`.
 
     Args:
         root: Repository root.
-        worktree: Path for the new worktree.
-        branch: Name of the branch to create.
-        base_sha: Commit the branch starts from.
+        worktree: New worktree path.
+        branch: Branch to create.
+        base_sha: Starting commit.
 
     """
 
@@ -119,14 +119,14 @@ def add_worktree(root: str | Path, worktree: str | Path, branch: str, base_sha: 
 
 
 def branch_exists(root: str | Path, branch: str) -> bool:
-    """Return whether a local branch already exists in the repository.
+    """Return whether a local branch exists.
 
     Args:
         root: Repository root.
         branch: Branch name to check.
 
     Returns:
-        `True` if the local branch exists.
+        `True` if the branch exists.
 
     """
 
@@ -136,12 +136,12 @@ def branch_exists(root: str | Path, branch: str) -> bool:
 
 
 def remove_worktree(root: str | Path, worktree: str | Path, force: bool = True) -> None:
-    """Remove a worktree directory, ignoring any failure.
+    """Remove a worktree, ignoring failures.
 
     Args:
         root: Repository root.
-        worktree: Path of the worktree to remove.
-        force: Whether to pass `--force`.
+        worktree: Worktree to remove.
+        force: Pass `--force`.
 
     """
 
@@ -153,7 +153,7 @@ def remove_worktree(root: str | Path, worktree: str | Path, force: bool = True) 
 
 
 def prune_worktrees(root: str | Path) -> None:
-    """Prune administrative files for removed worktrees.
+    """Prune metadata for removed worktrees.
 
     Args:
         root: Repository root.
@@ -164,14 +164,14 @@ def prune_worktrees(root: str | Path) -> None:
 
 
 def has_changes(worktree: str | Path, base_sha: str) -> bool:
-    """Return whether the worktree has uncommitted edits or commits past `base_sha`.
+    """Return whether worktree has edits or commits after `base_sha`.
 
     Args:
-        worktree: Path of the worktree.
-        base_sha: Commit to compare HEAD against.
+        worktree: Worktree path.
+        base_sha: Base commit.
 
     Returns:
-        `True` if there are staged, unstaged, or committed changes.
+        `True` if staged, unstaged, or committed changes exist.
 
     """
 
@@ -184,12 +184,12 @@ def has_changes(worktree: str | Path, base_sha: str) -> bool:
 
 
 def provision_deps(root: str | Path, worktree: str | Path, strategy: str) -> None:
-    """Seed `node_modules` for a fresh worktree, ignoring any failure.
+    """Seed `node_modules` for a worktree, ignoring failures.
 
     Args:
-        root: Repository root holding the source `node_modules`.
-        worktree: Worktree to seed.
-        strategy: One of `skip`, `symlink`, `copy`, or `install`.
+        root: Repository root with source `node_modules`.
+        worktree: Target worktree.
+        strategy: `skip`, `symlink`, `copy`, or `install`.
 
     """
 

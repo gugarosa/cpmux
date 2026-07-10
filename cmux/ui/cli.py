@@ -40,7 +40,7 @@ from cmux.voice.transcriber import DEFAULT_TRANSCRIBE_MODEL, VoiceError, transcr
 app = typer.Typer(
     add_completion=False,
     no_args_is_help=True,
-    help="cmux — a declarative multiplexer for GitHub Copilot CLI agents.",
+    help="Run GitHub Copilot CLI agents from YAML.",
 )
 console = Console()
 logger = get_logger(__name__)
@@ -127,21 +127,21 @@ def _plan_table(resolved: list[ResolvedItem]) -> Table:
 
 @app.command()
 def up(
-    file: Path = typer.Argument(..., exists=True, dir_okay=False, help="Path to the cmux YAML file."),
+    file: Path = typer.Argument(..., exists=True, dir_okay=False, help="cmux YAML file."),
     dry_run: bool = typer.Option(False, "--dry-run", "--dry_run", help="Resolve and print the plan; spawn nothing."),
-    detach: bool = typer.Option(False, "--detach", "-d", help="Run in the background and return immediately."),
+    detach: bool = typer.Option(False, "--detach", "-d", help="Run in background and return."),
     concurrency: int | None = typer.Option(None, "--concurrency", "-j", help="Max parallel sessions."),
     pr: bool = typer.Option(True, "--pr/--no-pr", help="Open one draft PR per item (default: on)."),
-    deps: Deps | None = typer.Option(None, "--deps", help="Override the dependency strategy."),
+    deps: Deps | None = typer.Option(None, "--deps", help="Override dependency strategy."),
     strip_github_token: bool = typer.Option(
         True,
         "--strip-github-token/--no-strip-github-token",
         "--strip_github_token/--no-strip_github_token",
         help="Unset ambient GITHUB_TOKEN/GH_TOKEN for gh + git push (keyring fallback).",
     ),
-    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
 ) -> None:
-    """Spawn one Copilot session per item, each in its own worktree, branch, and PR."""
+    """Spawn one Copilot session per item."""
 
     if dry_run:
         resolved = _load(file).resolve()
@@ -173,16 +173,14 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
 
     console.print(_plan_table(resolved))
     action = "open a draft PR" if options.open_pr else "commit locally (no PR)"
-    if not yes and not typer.confirm(
-        f"Spawn {len(resolved)} Copilot session(s), each in its own worktree, and {action}?"
-    ):
+    if not yes and not typer.confirm(f"Spawn {len(resolved)} Copilot session(s) in separate worktrees and {action}?"):
         raise typer.Exit(1)
 
     supervisor.prepare()
     if detach:
         daemon.launch_detached(supervisor.run_id, str(supervisor.repo_root))
-        console.print(f"[green]run {supervisor.run_id} started in the background.[/green]")
-        console.print("[dim]monitor it with:[/dim] cmux attach")
+        console.print(f"[green]run {supervisor.run_id} started in background.[/green]")
+        console.print("[dim]monitor with:[/dim] cmux attach")
         return
 
     daemon.write_owner(supervisor.paths, os.getpid())
@@ -196,24 +194,22 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
 
 @app.command()
 def voice(
-    output: Path = typer.Argument(Path("cmux.yml"), dir_okay=False, help="Where to write the generated cmux file."),
-    text: str | None = typer.Option(None, "--text", help="Skip transcription and synthesize from this text."),
-    audio: Path | None = typer.Option(
-        None, "--audio", exists=True, dir_okay=False, help="Transcribe this audio file instead of recording."
-    ),
+    output: Path = typer.Argument(Path("cmux.yml"), dir_okay=False, help="Output cmux file."),
+    text: str | None = typer.Option(None, "--text", help="Text to turn into a plan."),
+    audio: Path | None = typer.Option(None, "--audio", exists=True, dir_okay=False, help="Audio file to transcribe."),
     transcribe_model: str = typer.Option(
         DEFAULT_TRANSCRIBE_MODEL, "--transcribe-model", help="Foundry Local audio model."
     ),
     endpoint: str | None = typer.Option(
-        None, "--endpoint", envvar="CMUX_FOUNDRY_ENDPOINT", help="Foundry Local endpoint override."
+        None, "--endpoint", envvar="CMUX_FOUNDRY_ENDPOINT", help="Foundry Local endpoint."
     ),
-    model: str = typer.Option("gpt-5.5", "--model", help="Copilot model used to synthesize the plan."),
-    up: bool = typer.Option(False, "--up", help="Launch the generated plan immediately."),
+    model: str = typer.Option("gpt-5.5", "--model", help="Copilot model for plan synthesis."),
+    up: bool = typer.Option(False, "--up", help="Launch the generated plan."),
     pr: bool = typer.Option(True, "--pr/--no-pr", help="With --up, open one draft PR per item (default: on)."),
-    detach: bool = typer.Option(False, "--detach", "-d", help="With --up, run in the background."),
-    yes: bool = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt when launching."),
+    detach: bool = typer.Option(False, "--detach", "-d", help="With --up, run in background."),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip launch confirmation."),
 ) -> None:
-    """Dictate a spoken task list into a cmux plan, then optionally launch it."""
+    """Create a cmux plan from speech or text."""
 
     try:
         transcript = _transcript(text, audio, transcribe_model, endpoint)
@@ -248,14 +244,14 @@ def _transcript(text: str | None, audio: Path | None, transcribe_model: str, end
 
 @app.command()
 def ls(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
-    """Show the status of a run."""
+    """Show run status."""
 
     _print_summary(Path("."), run)
 
 
 @app.command()
 def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
-    """Live-monitor a run's sessions read-only (Ctrl-C to exit)."""
+    """Monitor a run read-only (Ctrl-C to exit)."""
 
     root = Path(".")
     run_id = _run_id_or_exit(run, root)
@@ -277,7 +273,7 @@ def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: 
 
 @app.command()
 def dash(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
-    """Open the interactive dashboard for a run."""
+    """Open a run dashboard."""
 
     run_id = _run_id_or_exit(run)
 
@@ -288,10 +284,10 @@ def dash(run: str | None = typer.Option(None, "--run", help="Run id (default: la
 
 @app.command()
 def enter(
-    key: str = typer.Argument(..., help="Item key to open interactively."),
+    key: str = typer.Argument(..., help="Item key to open."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
 ) -> None:
-    """Open an interactive Copilot session for an item, resuming it in place."""
+    """Open an item's Copilot session."""
 
     _, record = _resolve_record(run, key)
     if shutil.which("copilot") is None:
@@ -307,10 +303,10 @@ def enter(
 @app.command()
 def send(
     key: str = typer.Argument(..., help="Item key to message."),
-    message: str = typer.Argument(..., help="Follow-up prompt to append to the session."),
+    message: str = typer.Argument(..., help="Follow-up prompt."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
 ) -> None:
-    """Append a follow-up turn to an item's session and print the reply."""
+    """Send a follow-up prompt to an item."""
 
     paths, record = _resolve_record(run, key)
     if not Path(record.worktree).exists():
@@ -335,12 +331,12 @@ def send(
 
 @app.command()
 def logs(
-    key: str = typer.Argument(..., help="Item key to show the transcript for."),
+    key: str = typer.Argument(..., help="Item key to show."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
-    raw: bool = typer.Option(False, "--raw", help="Print the raw JSONL transcript."),
-    follow: bool = typer.Option(False, "--follow", "-f", help="Stream new events as they arrive."),
+    raw: bool = typer.Option(False, "--raw", help="Print raw JSONL."),
+    follow: bool = typer.Option(False, "--follow", "-f", help="Stream new events."),
 ) -> None:
-    """Print a session's transcript."""
+    """Print a session transcript."""
 
     run_id = _run_id_or_exit(run)
 
@@ -356,12 +352,12 @@ def logs(
 
 @app.command()
 def search(
-    query: str = typer.Argument(..., help="Text (or regex with --regex) to find."),
+    query: str = typer.Argument(..., help="Text to find; regex with --regex."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
-    all_runs: bool = typer.Option(False, "--all", help="Search every run, not just the latest."),
-    regex: bool = typer.Option(False, "--regex", help="Treat the query as a regular expression."),
+    all_runs: bool = typer.Option(False, "--all", help="Search every run."),
+    regex: bool = typer.Option(False, "--regex", help="Treat query as regex."),
 ) -> None:
-    """Search session transcripts for matching text."""
+    """Search session transcripts."""
 
     root = Path(".")
     if all_runs:
@@ -392,7 +388,7 @@ def rm(
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
     force: bool = typer.Option(False, "--force", "-f", help="Skip confirmation."),
 ) -> None:
-    """Remove the git worktrees for a run."""
+    """Remove a run's git worktrees."""
 
     run_id = _run_id_or_exit(run)
 
@@ -411,7 +407,7 @@ def down(
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
 ) -> None:
-    """Stop a run's background daemon and any live sessions."""
+    """Stop a run and its sessions."""
 
     root = Path(".")
     run_id = _run_id_or_exit(run, root)
@@ -429,7 +425,7 @@ def kill(
     key: str = typer.Argument(..., help="Item key to stop."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
 ) -> None:
-    """Stop a single running session."""
+    """Stop a running session."""
 
     paths, record = _resolve_record(run, key)
     if daemon.kill_session(paths, record):
@@ -450,7 +446,7 @@ def _daemon_command(run_id: str = typer.Argument(...)) -> None:
 def _render_event(event: dict) -> None:
     text = event_text(event)
     if text is not None:
-        # Re-apply the repr highlighter that console.print skips for Text inputs
+        # Apply the repr highlighter console.print skips for Text inputs
         console.print(console.highlighter(text))
 
 
@@ -540,7 +536,7 @@ def _print_summary(root: Path, run_id: str | None) -> None:
 
 
 def main() -> None:
-    """Run the cmux command-line interface."""
+    """Run the cmux CLI."""
 
     app()
 

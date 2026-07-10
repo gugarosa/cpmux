@@ -16,7 +16,7 @@ _STREAM_LIMIT = 1 << 20
 
 
 class SessionRunner:
-    """A single `copilot` subprocess: spawns it, streams its JSONL, and tracks its state."""
+    """Spawn a `copilot` subprocess, stream JSONL, and track state."""
 
     def __init__(
         self,
@@ -28,10 +28,10 @@ class SessionRunner:
         """Initialize the runner.
 
         Args:
-            key: Unique identifier for the session.
-            argv: Arguments used to spawn the subprocess.
-            transcript_path: Path to write the JSONL transcript to.
-            env: Environment overrides for the subprocess.
+            key: Session identifier.
+            argv: Subprocess arguments.
+            transcript_path: JSONL transcript path.
+            env: Subprocess environment overrides.
 
         """
 
@@ -44,14 +44,14 @@ class SessionRunner:
         self._stderr = ""
 
     async def run(self, on_update: OnUpdate | None = None, on_spawn: OnSpawn | None = None) -> SessionState:
-        """Spawn the session, stream its events to disk, and return the final state.
+        """Spawn the session, stream events to disk, and return final state.
 
         Args:
             on_update: Called with `(key, state, event)` after each applied event.
             on_spawn: Called with the child PID once the subprocess starts.
 
         Returns:
-            The session state after the subprocess exits.
+            Session state after subprocess exit.
 
         """
 

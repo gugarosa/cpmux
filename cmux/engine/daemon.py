@@ -16,13 +16,13 @@ logger = get_logger(__name__)
 
 
 def pid_alive(pid: int | None) -> bool:
-    """Check whether a process id is running.
+    """Check whether a process id exists.
 
     Args:
         pid: Process id to probe, or None.
 
     Returns:
-        `True` when a process with that id exists.
+        `True` when the process exists.
 
     """
 
@@ -60,11 +60,11 @@ def _terminate(pid: int | None, grace: float = 3.0) -> None:
 
 
 def write_owner(paths: RunPaths, pid: int) -> None:
-    """Record the pid that owns the run.
+    """Record the run owner pid.
 
     Args:
-        paths: Run paths locating the owner file.
-        pid: Owner process id to record.
+        paths: Run paths with the owner file.
+        pid: Owner process id.
 
     """
 
@@ -72,13 +72,13 @@ def write_owner(paths: RunPaths, pid: int) -> None:
 
 
 def read_owner(paths: RunPaths) -> int | None:
-    """Read the run's recorded owner pid.
+    """Read the recorded owner pid.
 
     Args:
-        paths: Run paths locating the owner file.
+        paths: Run paths with the owner file.
 
     Returns:
-        The recorded owner pid, or `None` when absent or unreadable.
+        Recorded owner pid, or `None` when absent or unreadable.
 
     """
 
@@ -92,10 +92,10 @@ def read_owner(paths: RunPaths) -> int | None:
 
 
 def clear_owner(paths: RunPaths) -> None:
-    """Delete the owner file, marking the run as no longer managed.
+    """Delete the owner file.
 
     Args:
-        paths: Run paths locating the owner file.
+        paths: Run paths with the owner file.
 
     """
 
@@ -103,10 +103,10 @@ def clear_owner(paths: RunPaths) -> None:
 
 
 def owner_alive(paths: RunPaths) -> bool:
-    """Check whether the run's owner process is still alive.
+    """Check whether the owner process is alive.
 
     Args:
-        paths: Run paths locating the owner file.
+        paths: Run paths with the owner file.
 
     Returns:
         `True` when a recorded owner pid is running.
@@ -117,14 +117,14 @@ def owner_alive(paths: RunPaths) -> bool:
 
 
 def launch_detached(run_id: str, repo_root: str) -> int:
-    """Start the run's supervisor as a detached background daemon.
+    """Start the supervisor as a detached daemon.
 
     Args:
-        run_id: Identifier of the run to supervise.
+        run_id: Run identifier to supervise.
         repo_root: Repository root the daemon runs from.
 
     Returns:
-        The pid of the spawned daemon.
+        Spawned daemon pid.
 
     """
 
@@ -146,14 +146,14 @@ def launch_detached(run_id: str, repo_root: str) -> int:
 
 
 def reconcile(paths: RunPaths, records: list[SessionRecord]) -> list[SessionRecord]:
-    """Flip non-terminal sessions to failed when the run's owner has exited.
+    """Mark non-terminal sessions failed after owner exit.
 
     Args:
         paths: Run paths for the run being reconciled.
-        records: Session records to inspect and update.
+        records: Session records to update.
 
     Returns:
-        The same records, with abandoned sessions marked failed.
+        Records with abandoned sessions marked failed.
 
     """
 
@@ -163,7 +163,7 @@ def reconcile(paths: RunPaths, records: list[SessionRecord]) -> list[SessionReco
     for record in records:
         if record.status not in TERMINAL:
             record.status = Status.FAILED
-            record.error = record.error or "session interrupted, the run owner exited."
+            record.error = record.error or "run owner exited."
             record.mark_ended()
             paths.write_record(record)
 
@@ -171,14 +171,14 @@ def reconcile(paths: RunPaths, records: list[SessionRecord]) -> list[SessionReco
 
 
 def stop(paths: RunPaths, records: list[SessionRecord]) -> int:
-    """Terminate the run's owner and any live sessions.
+    """Terminate the owner and live sessions.
 
     Args:
         paths: Run paths for the run to stop.
-        records: Session records whose processes may be running.
+        records: Session records with possible live processes.
 
     Returns:
-        The number of processes signalled.
+        Number of processes signalled.
 
     """
 
@@ -208,11 +208,11 @@ def kill_session(paths: RunPaths, record: SessionRecord) -> bool:
     """Terminate a single session.
 
     Args:
-        paths: Run paths used to persist the updated record.
-        record: Session record identifying the process to kill.
+        paths: Run paths for the updated record.
+        record: Session record with the process to kill.
 
     Returns:
-        `True` when the session was still running.
+        `True` when the session was running.
 
     """
 

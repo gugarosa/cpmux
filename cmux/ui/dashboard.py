@@ -33,15 +33,15 @@ from cmux.ui.search import search_transcripts
 
 
 class SearchScreen(ModalScreen[str | None]):
-    """Full-text search overlay that returns the key of the chosen session."""
+    """Search overlay returning the selected session key."""
 
     BINDINGS = [Binding("escape", "close", "Close")]
 
     def __init__(self, items: list[tuple[str, Path]]) -> None:
-        """Initialize the search overlay.
+        """Create the search overlay.
 
         Args:
-            items: `(label, transcript_path)` pairs to search.
+            items: `(label, transcript_path)` pairs.
 
         """
 
@@ -73,7 +73,7 @@ class SearchScreen(ModalScreen[str | None]):
 
 
 class SendScreen(ModalScreen[str | None]):
-    """Prompt overlay that returns a follow-up message to send to a session."""
+    """Prompt overlay returning a follow-up message."""
 
     BINDINGS = [Binding("escape", "close", "Close")]
 
@@ -90,7 +90,7 @@ class SendScreen(ModalScreen[str | None]):
 
 
 class CmuxApp(App):
-    """Interactive cmux dashboard for a single run."""
+    """Dashboard for one run."""
 
     CSS = """
     #sessions { width: 45%; border-right: solid $panel; }
@@ -107,11 +107,11 @@ class CmuxApp(App):
     ]
 
     def __init__(self, start_path: str, run_id: str) -> None:
-        """Initialize the dashboard.
+        """Create the dashboard.
 
         Args:
-            start_path: Path inside the target git repository.
-            run_id: Identifier of the run to display.
+            start_path: Path inside target git repository.
+            run_id: Run identifier to display.
 
         """
 
@@ -143,7 +143,7 @@ class CmuxApp(App):
         self.set_interval(1.0, self.reload)
 
     def reload(self) -> None:
-        """Reload records from disk, reconcile crashes, and refresh both panes."""
+        """Reload records, reconcile crashes, and refresh panes."""
 
         try:
             _, records = load_run(self.start_path, self.run_id)
@@ -206,13 +206,13 @@ class CmuxApp(App):
         self._refresh_transcript(force=True)
 
     def action_cursor_down(self) -> None:
-        """Move the session cursor down one row."""
+        """Move down one row."""
 
         table = self.query_one("#sessions", DataTable)
         table.move_cursor(row=min(table.cursor_row + 1, table.row_count - 1))
 
     def action_cursor_up(self) -> None:
-        """Move the session cursor up one row."""
+        """Move up one row."""
 
         table = self.query_one("#sessions", DataTable)
         table.move_cursor(row=max(table.cursor_row - 1, 0))
@@ -223,7 +223,7 @@ class CmuxApp(App):
         self.reload()
 
     def action_search(self) -> None:
-        """Open the cross-session search overlay."""
+        """Open the search overlay."""
 
         items = [(record.key, self.paths.transcript(record.key)) for record in self.records]
 
@@ -239,7 +239,7 @@ class CmuxApp(App):
                 return
 
     def action_enter(self) -> None:
-        """Suspend the dashboard and drop into an interactive copilot session."""
+        """Suspend the dashboard for an interactive copilot session."""
 
         record = self._selected_record()
         if record is None:
@@ -248,7 +248,7 @@ class CmuxApp(App):
             self.notify("`copilot` is not on PATH.", severity="error")
             return
         if not Path(record.worktree).exists():
-            self.notify("worktree is gone, the run may have been cleaned.", severity="error")
+            self.notify("worktree is gone; run may be cleaned.", severity="error")
             return
 
         with self.suspend():
@@ -257,7 +257,7 @@ class CmuxApp(App):
         self.reload()
 
     def action_send(self) -> None:
-        """Prompt for a follow-up message and append a turn to the selected session."""
+        """Prompt for a follow-up and send it to the selected session."""
 
         record = self._selected_record()
         if record is None:
@@ -269,7 +269,7 @@ class CmuxApp(App):
         if not message:
             return
         if not Path(record.worktree).exists():
-            self.notify("worktree is gone, the run may have been cleaned.", severity="error")
+            self.notify("worktree is gone; run may be cleaned.", severity="error")
             return
 
         self.notify(f"sending to {record.key}…")

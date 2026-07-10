@@ -7,11 +7,11 @@ DEFAULT_TRANSCRIBE_MODEL = "whisper-large-v3"
 
 
 class VoiceError(Exception):
-    """Raised when recording, transcription, or plan synthesis fails."""
+    """Recording, transcription, or synthesis failed."""
 
 
 def transcribe(audio_path: str | Path, model: str = DEFAULT_TRANSCRIBE_MODEL, endpoint: str | None = None) -> str:
-    """Transcribe an audio file to text via Foundry Local's Whisper endpoint.
+    """Transcribe audio with Foundry Local's Whisper endpoint.
 
     Args:
         audio_path: Audio file to transcribe.
@@ -19,7 +19,7 @@ def transcribe(audio_path: str | Path, model: str = DEFAULT_TRANSCRIBE_MODEL, en
         endpoint: OpenAI-compatible base URL, discovered via the SDK when omitted.
 
     Returns:
-        The transcribed text.
+        Transcribed text.
 
     Raises:
         VoiceError: If Foundry Local is unavailable or the request fails.

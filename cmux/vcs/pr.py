@@ -7,17 +7,17 @@ from pathlib import Path
 
 
 class PRError(Exception):
-    """Raised when a git or gh step in the pull-request pipeline fails."""
+    """Raised when a git or gh PR step fails."""
 
 
 def gh_env(strip_token: bool = True) -> dict[str, str]:
-    """Build a subprocess environment for `gh`/`git`.
+    """Build environment for `gh`/`git`.
 
     Args:
         strip_token: Drop ambient `GITHUB_TOKEN`/`GH_TOKEN` so `gh` uses the keyring account.
 
     Returns:
-        The environment mapping for the subprocess.
+        Subprocess environment.
 
     """
 
@@ -39,10 +39,10 @@ def _run(
 
 
 def commit_all(worktree: str | Path, message: str, env: dict[str, str]) -> bool:
-    """Stage and commit everything in the worktree.
+    """Stage and commit worktree changes.
 
     Args:
-        worktree: Worktree to commit.
+        worktree: Worktree path.
         message: Commit message.
         env: Subprocess environment.
 
@@ -69,7 +69,7 @@ def push_branch(worktree: str | Path, remote: str, branch: str, env: dict[str, s
     """Push the worktree's HEAD to `branch` on `remote`.
 
     Args:
-        worktree: Worktree to push from.
+        worktree: Source worktree.
         remote: Remote name.
         branch: Target branch name.
         env: Subprocess environment.
@@ -88,13 +88,13 @@ def existing_pr_url(worktree: str | Path, base: str, branch: str, env: dict[str,
     """Return the URL of an open PR for `branch`, or `None` if there is none.
 
     Args:
-        worktree: Worktree used to run `gh`.
+        worktree: Worktree for `gh`.
         base: Base branch of the PR.
         branch: Head branch of the PR.
         env: Subprocess environment.
 
     Returns:
-        The open PR URL, or `None` if none exists.
+        Open PR URL, or `None` if none exists.
 
     """
 
@@ -136,7 +136,7 @@ def create_pr(
     """Create a pull request for `branch` and return its URL.
 
     Args:
-        worktree: Worktree used to run `gh`.
+        worktree: Worktree for `gh`.
         base: Base branch of the PR.
         branch: Head branch of the PR.
         title: PR title.
@@ -146,7 +146,7 @@ def create_pr(
         env: Subprocess environment.
 
     Returns:
-        The created PR URL, or an empty string if `gh` printed nothing.
+        Created PR URL, or an empty string if `gh` printed nothing.
 
     Raises:
         PRError: If `gh pr create` fails.
@@ -178,7 +178,7 @@ def open_pull_request(
     commit_message: str,
     strip_token: bool = True,
 ) -> str:
-    """Commit, push, and reuse-or-create a PR, returning its URL.
+    """Commit, push, and reuse or create a PR.
 
     Args:
         worktree: Worktree to publish.
@@ -190,10 +190,10 @@ def open_pull_request(
         labels: Labels to apply.
         draft: Whether to open the PR as a draft.
         commit_message: Message for the worktree commit.
-        strip_token: Whether to strip ambient GitHub tokens from the environment.
+        strip_token: Strip ambient GitHub tokens from the environment.
 
     Returns:
-        The existing or newly created PR URL, empty only if `gh` printed nothing.
+        Existing or created PR URL, empty only if `gh` printed nothing.
 
     Raises:
         PRError: If a commit, push, or create step fails.

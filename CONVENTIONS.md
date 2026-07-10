@@ -2,14 +2,13 @@
 
 Rules and invariants for adding to or changing cmux. cmux adopts the **phitrain
 conventions** (microsoft/aifsdk `.github/rules/` R1–R18 and `phitrain/CONVENTIONS.md`)
-as its style source of truth. **Code is the source of truth for "how it works";
-this file is the source of truth for "what rules apply."**
+as its style rules. **Code defines how cmux works; this file defines which rules apply.**
 
 For user-facing setup and usage see `README.md`.
 
 ## Architecture invariants
 
-These define how cmux stays composable. Crossing them turns one bug into many.
+These invariants keep cmux composable. Do not cross them.
 
 - **One worktree per item.** Every item runs in its own `git worktree` on a unique
   `cmux/<slug>` branch off `origin/<base>`. Items never share a working tree.
@@ -33,8 +32,7 @@ These define how cmux stays composable. Crossing them turns one bug into many.
 
 ## Package structure
 
-Modules are grouped by responsibility into domain subpackages, with the foundation
-modules that everything shares kept at the package root.
+Modules are grouped by domain. Shared foundation modules stay at the package root.
 
 ```
 cmux/
@@ -46,13 +44,13 @@ cmux/
 ```
 
 - **Layering is one-directional:** `ui` → {`engine`, `voice`} → `vcs` → foundation. A layer
-  may import the ones below it, never above; foundation imports no subpackage. Keeping
-  this acyclic is what lets `engine` run headless without the TUI. Shared code moves
+  may import the ones below it, never above; foundation imports no subpackage. This keeps
+  `engine` headless without the TUI. Shared code moves
   down to the lowest layer that needs it (status-to-colour lives in `ui/render.py`
   because only the UI reads it; the JSONL `event_data` unwrap lives in `events.py`
   because the engine needs it too).
-- **A subpackage earns its place by being a cohesive domain** with a few focused modules,
-  not by splitting one concern thinly. Heavy or optional third-party deps (`sounddevice`,
+- **A subpackage must be a cohesive domain** with a few focused modules,
+  not a thin split of one concern. Heavy or optional third-party deps (`sounddevice`,
   `foundry-local-sdk`, `httpx` behind the `voice` extra) are imported lazily inside the
   function that needs them, so the core install and `--help` stay light.
 - **Absolute imports only**, and `__init__.py` stays empty apart from the header —
@@ -62,7 +60,7 @@ cmux/
 
 ## `.cmux/` layout
 
-Repo-local and gitignored. cmux owns the orchestration bookkeeping; nothing here is committed.
+Repo-local and gitignored. cmux stores orchestration bookkeeping here; nothing here is committed.
 
 ```
 .cmux/
@@ -113,9 +111,9 @@ Adopted from phitrain (rule ids in parentheses).
 
 **Deliberate divergence: config uses Pydantic v2, not `@dataclass`.** phitrain models
 config with `@dataclass` + `__post_init__` because it is driven by OmegaConf. cmux is a
-declarative-YAML tool whose value is string→item coercion, discriminated unions,
+declarative YAML tool that needs string→item coercion, discriminated unions,
 `${ENV}` interpolation, and precise validation errors, all idiomatic in Pydantic v2.
-The config models in `config.py` and the on-disk records in `engine/store.py` are therefore
+The config models in `config.py` and on-disk records in `engine/store.py` are therefore
 Pydantic `BaseModel`s. Everything else follows phitrain.
 
 ## CLI conventions (`ui/cli.py`)

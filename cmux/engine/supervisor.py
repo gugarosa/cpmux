@@ -39,9 +39,9 @@ class Options:
     """Runtime options for a single run.
 
     Attributes:
-        concurrency: Max sessions to run at once, or None for the plan default.
-        open_pr: Whether to open a draft PR per item.
-        strip_github_token: Whether to scrub the GitHub token from spawned session environments.
+        concurrency: Max concurrent sessions, or None for the plan default.
+        open_pr: Open a draft PR per item.
+        strip_github_token: Scrub the GitHub token from session environments.
         deps_override: Dependency strategy overriding each item's `deps`, if set.
 
     """
@@ -53,7 +53,7 @@ class Options:
 
 
 class Supervisor:
-    """A run's driver: worktrees, the session pool, and pull requests."""
+    """Drive run worktrees, sessions, and pull requests."""
 
     def __init__(
         self,
@@ -68,13 +68,13 @@ class Supervisor:
         """Initialize the supervisor.
 
         Args:
-            repo_root: Root of the target git repository.
-            run_id: Identifier for this run.
-            resolved: Fully resolved items to execute.
+            repo_root: Target git repository root.
+            run_id: Run identifier.
+            resolved: Resolved items to execute.
             options: Runtime options for the run.
-            concurrency: Maximum sessions to run at once.
+            concurrency: Maximum concurrent sessions.
             system: Shared system prompt prepended to each item.
-            config_path: Path of the config file the run resolved, recorded for provenance.
+            config_path: Resolved config file path.
 
         """
 
@@ -100,10 +100,10 @@ class Supervisor:
             plan: Parsed run plan.
             start_path: Path inside the target git repository.
             options: Runtime options for the run.
-            config_path: Path of the config file the run resolved, recorded for provenance.
+            config_path: Resolved config file path.
 
         Returns:
-            A supervisor ready to prepare and run.
+            Supervisor ready to prepare and run.
 
         Raises:
             git.GitError: If start_path is not inside a git repository.
@@ -117,14 +117,14 @@ class Supervisor:
 
     @classmethod
     def from_run(cls, start_path: str, run_id: str) -> "Supervisor":
-        """Reconstruct a supervisor and its records from a persisted run.
+        """Reconstruct a supervisor from a persisted run.
 
         Args:
             start_path: Path inside the target git repository.
-            run_id: Identifier of the persisted run to load.
+            run_id: Persisted run identifier.
 
         Returns:
-            A supervisor rehydrated from the run manifest and records.
+            Supervisor loaded from the run manifest and records.
 
         """
 
@@ -201,13 +201,13 @@ class Supervisor:
             self.paths.write_record(record)
 
     async def run(self, headless: bool = False) -> list[SessionRecord]:
-        """Spawn every item under the concurrency pool and return the final records.
+        """Spawn every item under the concurrency pool and return final records.
 
         Args:
-            headless: Skip the live Rich table and only persist state.
+            headless: Skip the live Rich table.
 
         Returns:
-            The final record for every item in the run.
+            Final record for every item in the run.
 
         """
 

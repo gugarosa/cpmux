@@ -43,7 +43,7 @@ class Preset(StrEnum):
 
 
 class Deps(StrEnum):
-    """Strategy for seeding a fresh worktree's installed dependencies."""
+    """Dependency seeding strategy for a fresh worktree."""
 
     symlink = "symlink"
     copy = "copy"
@@ -58,7 +58,7 @@ def interpolate_env(value: str) -> str:
         value: Text possibly containing environment-variable references.
 
     Returns:
-        The string with every reference replaced by its value or fallback.
+        String with each reference replaced by its value or fallback.
 
     Raises:
         ValueError: If a referenced variable is unset and has no fallback.
@@ -72,7 +72,7 @@ def interpolate_env(value: str) -> str:
         if default is not None:
             return default
         raise ValueError(
-            f"`{name}` environment variable is not set, " f"provide a fallback with `${{{name}:-default}}`."
+            f"`{name}` environment variable is not set; " f"provide a fallback with `${{{name}:-default}}`."
         )
 
     return _ENV_RE.sub(repl, value)
@@ -90,13 +90,13 @@ def _walk_interpolate(obj: Any) -> Any:
 
 
 def slugify(text: str) -> str:
-    """Convert free text into a branch- and worktree-safe slug.
+    """Convert text to a branch- and worktree-safe slug.
 
     Args:
         text: Free-form text to normalize.
 
     Returns:
-        A lowercased, hyphenated slug of at most 50 characters.
+        Lowercased, hyphenated slug of at most 50 characters.
 
     """
 
@@ -107,12 +107,12 @@ def slugify(text: str) -> str:
 
 
 class Permissions(BaseModel):
-    """Permission preset with explicit allow/deny lists and network knobs.
+    """Permission preset plus allow, deny, and network options.
 
     Attributes:
-        preset: Named permission baseline the explicit lists extend.
-        allow: Tool specs to additionally allow.
-        deny: Tool specs to additionally deny.
+        preset: Permission baseline extended by explicit lists.
+        allow: Tool specs to allow.
+        deny: Tool specs to deny.
         add_dir: Extra directories the session may access.
         allow_url: URLs the session may reach.
 
@@ -134,10 +134,10 @@ class Permissions(BaseModel):
         return data
 
     def to_flags(self) -> list[str]:
-        """Expand the preset, then append explicit allow/deny/network flags.
+        """Expand the preset and append explicit allow, deny, and network flags.
 
         Returns:
-            The `copilot` command-line flags for these permissions.
+            `copilot` command-line flags for these permissions.
 
         """
 
@@ -181,7 +181,7 @@ class PRSettings(BaseModel):
 
 
 class Defaults(BaseModel):
-    """Run-wide defaults that each item inherits unless it overrides them.
+    """Run-wide defaults inherited by items unless overridden.
 
     Attributes:
         model: Model id passed to `copilot --model`.
@@ -210,7 +210,7 @@ class Defaults(BaseModel):
 
 
 class Item(BaseModel):
-    """One task, expressed as a bare prompt string or a mapping of overrides.
+    """One task as a bare prompt string or override mapping.
 
     Attributes:
         prompt: Task prompt handed to the session.
@@ -221,8 +221,8 @@ class Item(BaseModel):
         permissions: Permission override for this item.
         branch: Explicit branch name for this item.
         base: Base-branch override for this item.
-        labels: Extra labels for this item's pull request.
-        draft: Draft-state override for this item's pull request.
+        labels: Extra pull-request labels.
+        draft: Pull-request draft-state override.
         paths: Extra directories the session may access.
         depends_on: Ids of items that must finish first.
         env: Environment variables set for the session.
@@ -269,7 +269,7 @@ class Item(BaseModel):
 
 
 class ResolvedItem(BaseModel):
-    """A resolved session spec ready to spawn (item > defaults > built-in).
+    """Resolved session spec ready to spawn (item > defaults > built-in).
 
     Attributes:
         key: Stable identifier for the item.
@@ -280,9 +280,9 @@ class ResolvedItem(BaseModel):
         effort: Reasoning effort passed to `copilot --effort`.
         permissions: Resolved permission settings.
         branch: Branch name for the session.
-        base: Base branch to open the pull request against.
-        labels: Labels for the pull request.
-        draft: Whether the pull request opens as a draft.
+        base: Pull-request base branch.
+        labels: Pull-request labels.
+        draft: Whether to open the pull request as a draft.
         depends_on: Ids of items that must finish first.
         env: Environment variables set for the session.
         deps: Strategy for seeding the worktree's dependencies.
@@ -319,7 +319,7 @@ class ResolvedItem(BaseModel):
             log_dir: Directory where session logs are written.
 
         Returns:
-            The full `copilot` argv.
+            Full `copilot` argv.
 
         """
 
@@ -350,7 +350,7 @@ class ResolvedItem(BaseModel):
 
 
 class Plan(BaseModel):
-    """Parsed cmux run: shared system prompt, defaults, and a list of items.
+    """Parsed cmux run with system prompt, defaults, and items.
 
     Attributes:
         version: Config schema version.
@@ -398,7 +398,7 @@ class Plan(BaseModel):
         return items
 
     def resolve(self) -> list[ResolvedItem]:
-        """Apply precedence and compute the ready-to-spawn spec for every item.
+        """Apply precedence and compute ready-to-spawn specs.
 
         Returns:
             One resolved item per plan item, in declaration order.
@@ -457,7 +457,7 @@ def load_plan(path: str | Path) -> Plan:
         path: Filesystem path to the YAML config file.
 
     Returns:
-        The validated plan.
+        Validated plan.
 
     Raises:
         ConfigError: If the file is missing, unparseable, or fails validation.

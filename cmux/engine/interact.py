@@ -5,14 +5,14 @@ from pathlib import Path
 
 
 def resume_interactive_argv(session_id: str, worktree: str | Path) -> list[str]:
-    """Build the argv that resumes an interactive session.
+    """Build argv for an interactive resume.
 
     Args:
-        session_id: Copilot session id to resume.
-        worktree: Working directory to run the session in.
+        session_id: Copilot session id.
+        worktree: Session working directory.
 
     Returns:
-        The argv list for an interactive resumed session.
+        Interactive resume argv.
 
     """
 
@@ -26,17 +26,17 @@ def followup_argv(
     permission_flags: list[str],
     message: str,
 ) -> list[str]:
-    """Build the argv for a headless follow-up turn on an existing session.
+    """Build argv for a headless follow-up turn.
 
     Args:
-        session_id: Copilot session id to resume.
-        worktree: Working directory to run the turn in.
-        model: Model to drive the follow-up turn.
-        permission_flags: Permission flags to pass through.
-        message: Prompt text for the follow-up turn.
+        session_id: Copilot session id.
+        worktree: Turn working directory.
+        model: Follow-up model.
+        permission_flags: Permission flags.
+        message: Follow-up prompt.
 
     Returns:
-        The argv list for the follow-up turn.
+        Follow-up argv.
 
     """
 
