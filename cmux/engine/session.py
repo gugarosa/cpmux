@@ -39,6 +39,7 @@ class SessionRunner:
         self.argv = argv
         self.transcript_path = Path(transcript_path)
         self.env = env
+
         self.state = SessionState()
         self.proc: asyncio.subprocess.Process | None = None
         self._stderr = ""
@@ -101,6 +102,7 @@ class SessionRunner:
 
     async def _drain_stderr(self) -> str:
         data = await self.proc.stderr.read()
+
         return data.decode("utf-8", "replace")
 
     def terminate(self) -> None:

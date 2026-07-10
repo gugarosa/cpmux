@@ -39,6 +39,7 @@ def synthesize_plan(transcript: str, model: str = "gpt-5.5") -> str:
 
     prompt = _build_prompt(transcript)
     error = ""
+
     for _ in range(2):
         instruction = (
             prompt

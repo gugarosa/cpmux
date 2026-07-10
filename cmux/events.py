@@ -139,6 +139,7 @@ def apply_event(state: SessionState, event: dict[str, Any]) -> SessionState:
         files = changes.get("filesModified")
         if isinstance(files, list):
             state.files_modified = [str(path) for path in files]
+
         state.status = Status.DONE if state.exit_code == 0 else Status.FAILED
 
     return state

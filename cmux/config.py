@@ -412,6 +412,7 @@ class Plan(BaseModel):
             permissions = item.permissions or defaults.permissions
             if item.paths:
                 permissions = permissions.model_copy(update={"add_dir": [*permissions.add_dir, *item.paths]})
+
             branch = item.branch or defaults.branch_template.format(slug=item.slug, id=item.key)
             prompt = item.prompt
             if item.include_system and self.system.strip():

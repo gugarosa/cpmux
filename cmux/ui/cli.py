@@ -255,7 +255,6 @@ def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: 
 
     root = Path(".")
     run_id = _run_id_or_exit(run, root)
-
     paths = RunPaths(root, run_id)
 
     try:

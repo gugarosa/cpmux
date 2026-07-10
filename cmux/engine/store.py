@@ -131,6 +131,7 @@ class RunPaths:
 
         self.repo_root = Path(repo_root)
         self.run_id = run_id
+
         self.root = self.repo_root / CMUX_DIR
         self.run_dir = self.root / "runs" / run_id
         self.sessions_dir = self.run_dir / "sessions"

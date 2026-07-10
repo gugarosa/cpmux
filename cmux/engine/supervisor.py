@@ -85,6 +85,7 @@ class Supervisor:
         self.concurrency = concurrency
         self.system = system
         self.config_path = config_path
+
         self.paths = RunPaths(self.repo_root, run_id)
         self.console = Console()
         self.records: dict[str, SessionRecord] = {}
