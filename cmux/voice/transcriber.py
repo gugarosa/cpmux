@@ -35,7 +35,7 @@ def transcribe(audio_path: str | Path, model: str = DEFAULT_TRANSCRIBE_MODEL, en
     try:
         import httpx
     except ImportError as exc:
-        raise VoiceError("transcription needs `httpx`, install `copilot-mux[voice]`.") from exc
+        raise VoiceError("transcription needs `httpx`, install `cmux[voice]`.") from exc
 
     headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
     try:
@@ -65,9 +65,7 @@ def _resolve_endpoint(model: str, endpoint: str | None) -> tuple[str, str | None
     try:
         from foundry_local import FoundryLocalManager
     except ImportError as exc:
-        raise VoiceError(
-            "transcription needs Foundry Local, install `copilot-mux[voice]` or pass `--endpoint`."
-        ) from exc
+        raise VoiceError("transcription needs Foundry Local, install `cmux[voice]` or pass `--endpoint`.") from exc
 
     try:
         manager = FoundryLocalManager(model)

@@ -29,7 +29,7 @@ def record_to_file(path: str | Path, prompt: str = "Recording — press Enter to
     try:
         import sounddevice
     except ImportError as exc:
-        raise VoiceError("microphone capture needs `sounddevice`, install `copilot-mux[voice]`.") from exc
+        raise VoiceError("microphone capture needs `sounddevice`, install `cmux[voice]`.") from exc
 
     frames: list[bytes] = []
 

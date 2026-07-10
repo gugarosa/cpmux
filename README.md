@@ -118,7 +118,7 @@ Speech-to-text runs through **Foundry Local** — the same on-device engine Copi
 Whisper model once:
 
 ```bash
-pip install "copilot-mux[voice]"     # sounddevice + foundry-local-sdk
+pip install "cmux[voice]"     # sounddevice + foundry-local-sdk
 foundry model run whisper-large-v3   # one-time model download
 ```
 

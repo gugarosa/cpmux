@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "copilot-mux"
+name = "cmux"
 version = "0.0.1"
-description = "cmux — a declarative, guided multiplexer for GitHub Copilot CLI agents (tmux for copilot sessions)."
+description = "Multiplexer for GitHub Copilot CLI agents"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
