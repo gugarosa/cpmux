@@ -116,6 +116,16 @@ def _resolve_record(run: str | None, key: str) -> tuple[RunPaths, SessionRecord]
     return paths, paths.read_record(key)
 
 
+def _require_tool(name: str, hint: str) -> None:
+    if shutil.which(name) is None:
+        theme.print_error(f"`{name}` was not found on PATH.", hint=hint)
+        raise typer.Exit(1)
+
+
+_COPILOT_HINT = "install the GitHub Copilot CLI and run `copilot` once to authenticate."
+_GH_HINT = "install the GitHub CLI and run `gh auth login`, or rerun with `--no-pr`."
+
+
 def _display_argv(argv: list[str]) -> str:
     parts: list[str] = []
     redact_next = False
@@ -231,6 +241,10 @@ def up(
 def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
     plan = _load(file)
     resolved = plan.resolve()
+
+    _require_tool("copilot", _COPILOT_HINT)
+    if options.open_pr:
+        _require_tool("gh", _GH_HINT)
 
     try:
         supervisor = Supervisor.create(plan, ".", options, str(file))
@@ -430,9 +444,7 @@ def enter(
     """Open an item's Copilot session."""
 
     _, record = _resolve_record(run, key)
-    if shutil.which("copilot") is None:
-        theme.print_error("`copilot` is not on PATH.")
-        raise typer.Exit(1)
+    _require_tool("copilot", _COPILOT_HINT)
     if not Path(record.worktree).exists():
         theme.print_error(f"`{record.worktree}` worktree is gone, the run may have been cleaned.")
         raise typer.Exit(1)
@@ -449,6 +461,7 @@ def send(
     """Send a follow-up prompt to an item."""
 
     paths, record = _resolve_record(run, key)
+    _require_tool("copilot", _COPILOT_HINT)
     if not Path(record.worktree).exists():
         theme.print_error(f"`{record.worktree}` worktree is gone, the run may have been cleaned.")
         raise typer.Exit(1)

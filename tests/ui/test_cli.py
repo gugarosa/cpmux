@@ -233,3 +233,12 @@ def test_help_groups_commands_into_panels():
     assert result.exit_code == 0
     assert "Create & run" in result.output
     assert "Monitor" in result.output
+
+
+def test_up_without_copilot_exits_cleanly(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "cmux.yml").write_text("items: [do a thing]\n")
+    monkeypatch.setattr(cli.shutil, "which", lambda name: None)
+    result = runner.invoke(app, ["up", "--yes"])
+    assert result.exit_code == 1
+    assert "copilot" in result.output

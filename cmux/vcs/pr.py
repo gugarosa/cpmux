@@ -81,7 +81,7 @@ def push_branch(worktree: str | Path, remote: str, branch: str, env: dict[str, s
 
     proc = _run(["git", "push", "-u", remote, f"HEAD:refs/heads/{branch}"], worktree, env)
     if proc.returncode != 0:
-        raise PRError(f"`git push` failed: {proc.stderr.strip()}.")
+        raise PRError(f"`git push` of `{branch}` to `{remote}` failed: {proc.stderr.strip()}.")
 
 
 def existing_pr_url(worktree: str | Path, base: str, branch: str, env: dict[str, str]) -> str | None:
@@ -161,7 +161,7 @@ def create_pr(
 
     proc = _run(cmd, worktree, env, stdin=body)
     if proc.returncode != 0:
-        raise PRError(f"`gh pr create` failed: {proc.stderr.strip() or proc.stdout.strip()}.")
+        raise PRError(f"`gh pr create` for `{branch}` failed: {proc.stderr.strip() or proc.stdout.strip()}.")
 
     return proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
 
