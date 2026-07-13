@@ -12,9 +12,15 @@ Requires Python ≥ 3.12 and the [`copilot`](https://docs.github.com/copilot/how
 `git`, and `gh` CLIs on your `PATH`.
 
 ```bash
+pip install cmux
+```
+
+Or from source, for development:
+
+```bash
 git clone https://github.com/gugarosa/cmux
 cd cmux
-pip install -e .
+pip install -e ".[dev]"
 ```
 
 ## Quickstart
