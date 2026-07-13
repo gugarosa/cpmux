@@ -25,7 +25,7 @@ class StatusVisual:
     """Glyph, ASCII fallback, style, and label for one session status."""
 
     glyph: str
-    ascii: str
+    ascii_glyph: str
     style: str
     label: str
 
@@ -80,7 +80,7 @@ def status_text(status: Status) -> Text:
     """Render a styled status glyph and label."""
 
     visual = STATUS_VISUAL[status]
-    glyph = visual.ascii if _ascii_only() else visual.glyph
+    glyph = visual.ascii_glyph if _ascii_only() else visual.glyph
 
     return Text(f"{glyph} {visual.label}", style=visual.style)
 

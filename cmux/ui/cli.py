@@ -83,7 +83,7 @@ def _main(
     pass
 
 
-def _load(file: Path) -> Plan:
+def _load_plan_or_exit(file: Path) -> Plan:
     try:
         return load_plan(file)
     except ConfigError as exc:
@@ -216,7 +216,7 @@ def up(
     """Spawn one Copilot session per item."""
 
     if dry_run:
-        resolved = _load(file).resolve()
+        resolved = _load_plan_or_exit(file).resolve()
         publish = "one draft PR per item" if pr else "local commits only"
         parallel = str(concurrency) if concurrency else "plan default"
         console.print(_plan_table(resolved))
@@ -240,7 +240,7 @@ def up(
 
 
 def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
-    plan = _load(file)
+    plan = _load_plan_or_exit(file)
     resolved = plan.resolve()
 
     _require_tool("copilot", _COPILOT_HINT)
@@ -398,7 +398,7 @@ def ls(run: str | None = typer.Option(None, "--run", help="Run id (default: late
         theme.print_hint("no cmux runs yet — start one with `cmux up <plan.yml>`.")
         return
 
-    _print_summary(root, run_id)
+    _print_run_summary(root, run_id)
 
 
 @app.command(rich_help_panel="Monitor")
@@ -786,7 +786,7 @@ def _run_table(run_id: str, records: list[SessionRecord], paths: RunPaths) -> Ta
     return table
 
 
-def _print_summary(root: Path, run_id: str | None) -> None:
+def _print_run_summary(root: Path, run_id: str | None) -> None:
     run_id = _run_id_or_exit(run_id, root)
     paths = RunPaths(root, run_id)
 
