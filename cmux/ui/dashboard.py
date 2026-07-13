@@ -284,11 +284,11 @@ class CmuxApp(App):
         if record is None:
             return
         if not record.pr_url:
-            self.notify(f"no pr for `{record.key}` yet.")
+            self.notify(f"no PR for `{record.key}` yet.")
             return
 
         webbrowser.open(record.pr_url)
-        self.notify(f"opening pr for `{record.key}`.")
+        self.notify(f"opening PR for `{record.key}`.")
 
     def action_stop(self) -> None:
         """Stop the selected running session."""
@@ -360,7 +360,7 @@ class CmuxApp(App):
     @work(thread=True)
     def _send_worker(self, record: SessionRecord, message: str) -> None:
         argv = followup_argv(record.session_id, record.worktree, record.model, record.permission_flags, message)
-        state = asyncio.run(SessionRunner(record.key, argv, self.paths.transcript(record.key)).run())
+        state = asyncio.run(SessionRunner(record.key, argv, self.paths.transcript(record.key), env=record.env).run())
 
         record.status = state.status
         record.exit_code = state.exit_code
