@@ -120,6 +120,7 @@ class Supervisor:
         )
 
         for item in self.resolved:
+            worktree = self.paths.worktree(item.key)
             record = SessionRecord(
                 key=item.key,
                 name=item.name,
@@ -128,7 +129,7 @@ class Supervisor:
                 base=item.base,
                 model=item.model,
                 session_id=str(uuid4()),
-                worktree=str(self.paths.worktree(item.key)),
+                worktree=str(worktree),
                 permission_flags=item.permissions.to_flags(),
                 env=dict(item.env),
             )
@@ -140,10 +141,9 @@ class Supervisor:
                 _, record.base_sha = git.resolve_base(self.repo_root, item.remote, item.base)
                 if git.branch_exists(self.repo_root, record.branch):
                     record.branch = f"{item.branch}-{self.run_id[-6:]}"
-                git.add_worktree(self.repo_root, self.paths.worktree(item.key), record.branch, record.base_sha)
-                git.provision_deps(
-                    self.repo_root, self.paths.worktree(item.key), self.options.deps_override or item.deps
-                )
+                git.add_worktree(self.repo_root, worktree, record.branch, record.base_sha)
+                git.require_paths_exist(worktree, item.permissions.add_dir)
+                git.provision_deps(self.repo_root, worktree, self.options.deps_override or item.deps)
             except git.GitError as exc:
                 record.status = Status.FAILED
                 record.error = str(exc)

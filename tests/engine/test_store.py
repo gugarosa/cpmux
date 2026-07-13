@@ -6,6 +6,7 @@ from cmux.engine.store import (
     RunPaths,
     SessionRecord,
     all_run_ids,
+    delete_run,
     latest_run_id,
     load_run,
     new_run_id,
@@ -122,3 +123,14 @@ def test_elapsed_seconds_spans_start_to_end():
     record.started_at = "2026-07-10T17:00:00+00:00"
     record.ended_at = "2026-07-10T17:01:30+00:00"
     assert record.elapsed_seconds == 90.0
+
+
+def test_delete_run_removes_run_history(tmp_path):
+    paths = RunPaths(tmp_path, "run-x")
+    paths.run_dir.mkdir(parents=True)
+    (paths.run_dir / "manifest.json").write_text("{}")
+    assert "run-x" in all_run_ids(tmp_path)
+
+    delete_run(tmp_path, "run-x")
+
+    assert "run-x" not in all_run_ids(tmp_path)

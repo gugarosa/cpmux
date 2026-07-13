@@ -14,10 +14,12 @@ _SCHEMA = """\
 cmux YAML fields:
 - `system` (optional): a shared instruction prepended to every task.
 - `defaults` (optional): `model`, `effort` (none|minimal|low|medium|high|xhigh|max),
-  `permissions` (readonly|edit|full), `base`, `concurrency`, `pr` (`draft`, `labels`).
+  `permissions` (readonly|edit|full), `base` (branch to fork from, default `main`),
+  `branch_template` (each item's branch name, default `cmux/{slug}`; keep the `{slug}`
+  placeholder, e.g. `alice/feature/{slug}`), `concurrency`, `pr` (`draft`, `labels`).
 - `items` (required, non-empty): task list. Each item is EITHER a plain string
-  (the task prompt) OR a mapping with `prompt` plus optional `name`, `model`,
-  `effort`, `labels`, `paths`, `depends_on`."""
+  (the task prompt) OR a mapping with `prompt` plus optional `name`, `model`, `effort`,
+  `permissions`, `branch`, `base`, `paths`, `depends_on`."""
 
 _FENCE = re.compile(r"```(?:ya?ml)?\s*\n(.*?)```", re.DOTALL)
 

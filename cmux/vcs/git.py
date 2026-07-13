@@ -57,6 +57,8 @@ def resolve_base(root: str | Path, remote: str, base: str) -> tuple[str, str]:
         if proc.returncode == 0 and proc.stdout.strip():
             return base, proc.stdout.strip()
 
+    logger.warning(f"base `{base}` not found; branching from `HEAD`.")
+
     return base, run_git(["rev-parse", "HEAD"], cwd=root).stdout.strip()
 
 
@@ -65,6 +67,20 @@ def add_worktree(root: str | Path, worktree: str | Path, branch: str, base_sha: 
 
     Path(worktree).parent.mkdir(parents=True, exist_ok=True)
     run_git(["worktree", "add", "-b", branch, str(worktree), base_sha], cwd=root)
+
+
+def require_paths_exist(worktree: str | Path, paths: list[str]) -> None:
+    """Raise if any `paths` entry is missing from the worktree.
+
+    Raises:
+        GitError: A path does not exist in the worktree.
+
+    """
+
+    root = Path(worktree)
+    missing = [directory for directory in paths if not (root / directory).exists()]
+    if missing:
+        raise GitError(f"`{missing[0]}` does not exist in the worktree.")
 
 
 def branch_exists(root: str | Path, branch: str) -> bool:

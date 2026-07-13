@@ -11,6 +11,7 @@ from cmux.vcs.git import (
     is_git_repo,
     remove_worktree,
     repo_root,
+    require_paths_exist,
     resolve_base,
     run_git,
 )
@@ -91,3 +92,23 @@ def test_remove_worktree_absent_is_success(git_repo):
 def test_run_git_raises_on_bad_subcommand(git_repo):
     with pytest.raises(GitError):
         run_git(["not-a-real-subcommand"], cwd=git_repo)
+
+
+def test_require_paths_exist_passes_for_present_paths(git_repo):
+    require_paths_exist(git_repo, ["README.md"])
+
+
+def test_require_paths_exist_raises_for_missing_path(git_repo):
+    with pytest.raises(GitError):
+        require_paths_exist(git_repo, ["nope-dir"])
+
+
+def test_resolve_base_warns_when_base_unresolved(git_repo, monkeypatch):
+    from cmux.vcs import git
+
+    warnings = []
+    monkeypatch.setattr(git.logger, "warning", lambda message, *args: warnings.append(message))
+    base, sha = resolve_base(git_repo, "origin", "definitely-missing")
+    assert base == "definitely-missing"
+    assert len(sha) == 40
+    assert warnings and "not found" in warnings[0]

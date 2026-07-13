@@ -279,3 +279,30 @@ def test_highlight_marks_the_matched_span():
     text = cli._highlight("the authorization retry", "authorization", regex=False)
     start = text.plain.index("authorization")
     assert any(span.start == start and "yellow" in span.style for span in text.spans)
+
+
+def test_rm_purge_deletes_run_history(monkeypatch):
+    from cmux.engine.store import RunManifest, SessionRecord
+
+    record = SessionRecord(
+        key="alpha",
+        name="alpha",
+        slug="alpha",
+        branch="cmux/alpha",
+        base="main",
+        model="m",
+        session_id="sid",
+        worktree="/tmp/alpha",
+    )
+    manifest = RunManifest(run_id="run1", repo_root="/tmp", config_path="", item_keys=["alpha"])
+    purged = []
+    monkeypatch.setattr(cli, "_run_id_or_exit", lambda run, *a: "run1")
+    monkeypatch.setattr(cli.daemon, "owner_alive", lambda paths: False)
+    monkeypatch.setattr(cli, "load_run", lambda root, run_id: (manifest, [record]))
+    monkeypatch.setattr(cli, "remove_worktree", lambda *a, **k: True)
+    monkeypatch.setattr(cli, "prune_worktrees", lambda *a, **k: None)
+    monkeypatch.setattr(cli, "delete_run", lambda root, run_id: purged.append(run_id))
+
+    result = runner.invoke(app, ["rm", "--purge", "--yes"])
+    assert result.exit_code == 0
+    assert purged == ["run1"]

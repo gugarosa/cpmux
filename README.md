@@ -64,7 +64,8 @@ defaults:
   model: gpt-5.5           # any `copilot --model` id
   effort: medium           # none | minimal | low | medium | high | xhigh | max
   permissions: edit        # readonly | edit | full (yolo)
-  base: main               # branch PRs are opened against
+  base: main               # branch to fork from and open PRs against
+  branch_template: cmux/{slug}  # each item's branch name; e.g. gderosa/{slug}
   concurrency: 6           # max sessions running at once (1–64)
   deps: symlink            # seed a worktree's node_modules: symlink | copy | install | skip
   port_base: 3000          # give each item a unique port (3000, 3001, …) via $PORT
@@ -115,7 +116,7 @@ Run-scoped commands accept `--run <id>` and default to the latest run.
 | | `cmux send KEY "…"` | Append a follow-up turn and print the reply. |
 | | `cmux kill KEY` | Stop one running session. Flag: `--yes/-y`. |
 | **Teardown** | `cmux down` | Stop a run's background daemon and any live sessions. Flag: `--yes/-y`. |
-| | `cmux rm` | Remove the run's git worktrees. Flags: `--yes/-y`, `--force/-f` (delete uncommitted work). |
+| | `cmux rm` | Remove the run's git worktrees. Flags: `--yes/-y`, `--force/-f` (delete uncommitted work), `--purge` (also delete run history). |
 
 ## Composing a plan
 

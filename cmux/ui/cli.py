@@ -32,6 +32,7 @@ from cmux.engine.store import (
     RunPaths,
     SessionRecord,
     all_run_ids,
+    delete_run,
     latest_run_id,
     load_run,
 )
@@ -617,6 +618,7 @@ def rm(
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
     force: bool = typer.Option(False, "--force", "-f", help="Delete worktrees with uncommitted changes."),
+    purge: bool = typer.Option(False, "--purge", help="Also delete run history so it leaves `cmux ls`."),
 ) -> None:
     """Remove a run's git worktrees."""
 
@@ -631,9 +633,9 @@ def rm(
         raise typer.Exit(1)
 
     manifest, records = load_run(root, run_id)
-    if not yes and not typer.confirm(
-        f"Remove {len(records)} worktree(s) for run {run_id}? Branches, PRs, and run history are kept."
-    ):
+    scope = "worktree(s) and run history" if purge else "worktree(s)"
+    kept = "" if purge else " Branches, PRs, and run history are kept."
+    if not yes and not typer.confirm(f"Remove {len(records)} {scope} for run {run_id}?{kept}"):
         theme.print_hint("cancelled; nothing was removed.")
         raise typer.Exit()
 
@@ -648,7 +650,11 @@ def rm(
             )
         raise typer.Exit(1)
 
-    theme.print_success(f"removed {len(records)} worktree(s) for run {run_id}.")
+    if purge:
+        delete_run(root, run_id)
+        theme.print_success(f"removed {len(records)} worktree(s) and purged run {run_id}.")
+    else:
+        theme.print_success(f"removed {len(records)} worktree(s) for run {run_id}.")
 
 
 @app.command(rich_help_panel="Stop & clean up")

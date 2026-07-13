@@ -29,3 +29,8 @@ def test_extract_yaml_prefers_fenced_block():
 
 def test_extract_yaml_falls_back_to_raw():
     assert _extract_yaml("  items:\n  - x  ") == "items:\n  - x"
+
+
+def test_schema_documents_branch_scoping():
+    assert "branch_template" in synthesizer._SCHEMA
+    assert "branch" in synthesizer._SCHEMA

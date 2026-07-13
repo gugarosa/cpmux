@@ -156,3 +156,22 @@ def test_finalize_marks_failed_on_unexpected_error(git_repo):
 
     assert record.status == Status.FAILED
     assert record.error
+
+
+def test_prepare_marks_failed_when_add_dir_missing(git_repo):
+    plan = Plan.model_validate({"items": [{"prompt": "fix x", "paths": ["nope-dir"]}]})
+    supervisor = Supervisor.create(plan, str(git_repo), Options())
+    supervisor.prepare()
+    record = next(iter(supervisor.records.values()))
+
+    assert record.status == Status.FAILED
+    assert "nope-dir" in record.error
+
+
+def test_prepare_accepts_existing_add_dir(git_repo):
+    plan = Plan.model_validate({"items": [{"prompt": "fix x", "paths": ["README.md"]}]})
+    supervisor = Supervisor.create(plan, str(git_repo), Options())
+    supervisor.prepare()
+    record = next(iter(supervisor.records.values()))
+
+    assert record.status != Status.FAILED

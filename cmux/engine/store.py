@@ -5,6 +5,7 @@ import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from shutil import rmtree
 from uuid import uuid4
 
 from pydantic import BaseModel, Field
@@ -199,3 +200,11 @@ def load_run(repo_root: str | Path, run_id: str) -> tuple[RunManifest, list[Sess
             records.append(SessionRecord.model_validate_json(record_path.read_text()))
 
     return manifest, records
+
+
+def delete_run(repo_root: str | Path, run_id: str) -> None:
+    """Delete a run's on-disk history and worktree directory."""
+
+    paths = RunPaths(repo_root, run_id)
+    rmtree(paths.run_dir, ignore_errors=True)
+    rmtree(paths.worktrees_dir, ignore_errors=True)
