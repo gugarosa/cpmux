@@ -13,15 +13,8 @@ class VoiceError(Exception):
 def transcribe(audio_path: str | Path, model: str = DEFAULT_TRANSCRIBE_MODEL) -> str:
     """Transcribe audio on-device with faster-whisper.
 
-    Args:
-        audio_path: Audio file to transcribe.
-        model: Whisper model size (``tiny`` … ``large-v3``) or a Hugging Face model id.
-
-    Returns:
-        Transcribed text.
-
     Raises:
-        VoiceError: If faster-whisper is missing or transcription returns no text.
+        VoiceError: If transcription is unavailable or fails.
 
     """
 
@@ -32,7 +25,7 @@ def transcribe(audio_path: str | Path, model: str = DEFAULT_TRANSCRIBE_MODEL) ->
     try:
         from faster_whisper import WhisperModel
     except ImportError as exc:
-        raise VoiceError("transcription needs faster-whisper, install `cmux[voice]`.") from exc
+        raise VoiceError("`faster-whisper` is unavailable; install `cmux[voice]`.") from exc
 
     try:
         whisper = WhisperModel(model, device="cpu", compute_type="int8")

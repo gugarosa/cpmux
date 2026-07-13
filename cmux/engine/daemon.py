@@ -16,15 +16,7 @@ logger = get_logger(__name__)
 
 
 def pid_alive(pid: int | None) -> bool:
-    """Check whether a process id exists.
-
-    Args:
-        pid: Process id to probe, or None.
-
-    Returns:
-        `True` when the process exists.
-
-    """
+    """Check whether a process id exists."""
 
     if not pid:
         return False
@@ -60,27 +52,13 @@ def _terminate(pid: int | None, grace: float = 3.0) -> None:
 
 
 def write_owner(paths: RunPaths, pid: int) -> None:
-    """Record the run owner pid.
-
-    Args:
-        paths: Run paths with the owner file.
-        pid: Owner process id.
-
-    """
+    """Record the run owner pid."""
 
     paths.owner_file.write_text(json.dumps({"pid": pid}))
 
 
 def read_owner(paths: RunPaths) -> int | None:
-    """Read the recorded owner pid.
-
-    Args:
-        paths: Run paths with the owner file.
-
-    Returns:
-        Recorded owner pid, or `None` when absent or unreadable.
-
-    """
+    """Read the owner pid, or `None` when unavailable."""
 
     if not paths.owner_file.exists():
         return None
@@ -92,41 +70,19 @@ def read_owner(paths: RunPaths) -> int | None:
 
 
 def clear_owner(paths: RunPaths) -> None:
-    """Delete the owner file.
-
-    Args:
-        paths: Run paths with the owner file.
-
-    """
+    """Delete the owner file."""
 
     paths.owner_file.unlink(missing_ok=True)
 
 
 def owner_alive(paths: RunPaths) -> bool:
-    """Check whether the owner process is alive.
-
-    Args:
-        paths: Run paths with the owner file.
-
-    Returns:
-        `True` when a recorded owner pid is running.
-
-    """
+    """Check whether the owner process is alive."""
 
     return pid_alive(read_owner(paths))
 
 
 def launch_detached(run_id: str, repo_root: str) -> int:
-    """Start the supervisor as a detached daemon.
-
-    Args:
-        run_id: Run identifier to supervise.
-        repo_root: Repository root the daemon runs from.
-
-    Returns:
-        Spawned daemon pid.
-
-    """
+    """Launch the supervisor daemon and return its pid."""
 
     paths = RunPaths(repo_root, run_id)
 
@@ -146,17 +102,7 @@ def launch_detached(run_id: str, repo_root: str) -> int:
 
 
 def reconcile(paths: RunPaths, records: list[SessionRecord], persist: bool = True) -> list[SessionRecord]:
-    """Mark non-terminal sessions failed after owner exit.
-
-    Args:
-        paths: Run paths for the run being reconciled.
-        records: Session records to update.
-        persist: Write failed records to disk, or pass `False` for read-only inspection.
-
-    Returns:
-        Records with abandoned sessions marked failed.
-
-    """
+    """Mark orphaned non-terminal sessions failed."""
 
     if owner_alive(paths):
         return records
@@ -173,16 +119,7 @@ def reconcile(paths: RunPaths, records: list[SessionRecord], persist: bool = Tru
 
 
 def stop(paths: RunPaths, records: list[SessionRecord]) -> int:
-    """Terminate the owner and live sessions.
-
-    Args:
-        paths: Run paths for the run to stop.
-        records: Session records with possible live processes.
-
-    Returns:
-        Number of processes signalled.
-
-    """
+    """Terminate the owner and live sessions."""
 
     signalled = 0
 
@@ -207,16 +144,7 @@ def stop(paths: RunPaths, records: list[SessionRecord]) -> int:
 
 
 def kill_session(paths: RunPaths, record: SessionRecord) -> bool:
-    """Terminate a single session.
-
-    Args:
-        paths: Run paths for the updated record.
-        record: Session record with the process to kill.
-
-    Returns:
-        `True` when the session was running.
-
-    """
+    """Terminate a session and report whether it was running."""
 
     alive = pid_alive(record.pid)
 

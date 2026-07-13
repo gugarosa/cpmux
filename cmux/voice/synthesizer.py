@@ -23,17 +23,10 @@ _FENCE = re.compile(r"```(?:ya?ml)?\s*\n(.*?)```", re.DOTALL)
 
 
 def synthesize_plan(transcript: str, model: str = "gpt-5.5") -> str:
-    """Build a validated cmux plan from a spoken task description.
-
-    Args:
-        transcript: Natural-language task description.
-        model: Copilot model for plan synthesis.
-
-    Returns:
-        Valid cmux YAML text.
+    """Build a validated cmux plan from spoken tasks.
 
     Raises:
-        VoiceError: If synthesis or validation fails after a retry.
+        VoiceError: If synthesis or validation fails.
 
     """
 
@@ -53,7 +46,7 @@ def synthesize_plan(transcript: str, model: str = "gpt-5.5") -> str:
         except (yaml.YAMLError, ValidationError) as exc:
             error = str(exc).splitlines()[0]
 
-    raise VoiceError(f"could not synthesise a valid plan: {error}.")
+    raise VoiceError(f"plan synthesis failed: {error}.")
 
 
 def _build_prompt(transcript: str) -> str:
@@ -72,7 +65,7 @@ def _run_copilot(prompt: str, model: str) -> str:
     try:
         proc = subprocess.run(argv, capture_output=True, text=True, check=False)
     except FileNotFoundError as exc:
-        raise VoiceError("`copilot` is not on PATH.") from exc
+        raise VoiceError("`copilot` is not on `PATH`.") from exc
 
     if proc.returncode != 0:
         raise VoiceError(f"`copilot` failed: {proc.stderr.strip() or proc.stdout.strip()}.")

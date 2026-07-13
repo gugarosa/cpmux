@@ -23,21 +23,15 @@ _METER_GAIN = 2.5
 def record_to_file(path: str | Path) -> Path:
     """Record the default microphone until Enter is pressed.
 
-    Args:
-        path: Destination WAV file.
-
-    Returns:
-        Written WAV file.
-
     Raises:
-        VoiceError: If the audio backend is unavailable or capture fails.
+        VoiceError: If capture is unavailable or fails.
 
     """
 
     try:
         import sounddevice
     except ImportError as exc:
-        raise VoiceError("microphone capture needs `sounddevice`, install `cmux[voice]`.") from exc
+        raise VoiceError("`sounddevice` is unavailable; install `cmux[voice]`.") from exc
 
     frames: list[bytes] = []
     level = _Level()
@@ -70,8 +64,6 @@ def record_to_file(path: str | Path) -> Path:
 
 
 class _Level:
-    """Rolling microphone level, updated from raw audio blocks."""
-
     def __init__(self) -> None:
         self.value = 0.0
 

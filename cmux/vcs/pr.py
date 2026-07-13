@@ -7,17 +7,14 @@ from pathlib import Path
 
 
 class PRError(Exception):
-    """Raised when a git or gh PR step fails."""
+    """Raised when a `git` or `gh` PR step fails."""
 
 
 def gh_env(strip_token: bool = True) -> dict[str, str]:
-    """Build environment for `gh`/`git`.
+    """Build a non-interactive environment for `gh` and `git`.
 
     Args:
-        strip_token: Drop ambient `GITHUB_TOKEN`/`GH_TOKEN` so `gh` uses the keyring account.
-
-    Returns:
-        Subprocess environment.
+        strip_token: Remove ambient GitHub tokens so `gh` uses the keyring.
 
     """
 
@@ -39,20 +36,7 @@ def _run(
 
 
 def commit_all(worktree: str | Path, message: str, env: dict[str, str]) -> bool:
-    """Stage and commit worktree changes.
-
-    Args:
-        worktree: Worktree path.
-        message: Commit message.
-        env: Subprocess environment.
-
-    Returns:
-        `True` if a commit was made, `False` if there was nothing to commit.
-
-    Raises:
-        PRError: If `git commit` fails.
-
-    """
+    """Commit worktree changes, returning whether a commit was made."""
 
     _run(["git", "add", "-A"], worktree, env)
     if _run(["git", "diff", "--cached", "--quiet"], worktree, env).returncode == 0:
@@ -66,18 +50,7 @@ def commit_all(worktree: str | Path, message: str, env: dict[str, str]) -> bool:
 
 
 def push_branch(worktree: str | Path, remote: str, branch: str, env: dict[str, str]) -> None:
-    """Push the worktree's HEAD to `branch` on `remote`.
-
-    Args:
-        worktree: Source worktree.
-        remote: Remote name.
-        branch: Target branch name.
-        env: Subprocess environment.
-
-    Raises:
-        PRError: If `git push` fails.
-
-    """
+    """Push the worktree's HEAD to `branch` on `remote`."""
 
     proc = _run(["git", "push", "-u", remote, f"HEAD:refs/heads/{branch}"], worktree, env)
     if proc.returncode != 0:
@@ -85,18 +58,7 @@ def push_branch(worktree: str | Path, remote: str, branch: str, env: dict[str, s
 
 
 def existing_pr_url(worktree: str | Path, base: str, branch: str, env: dict[str, str]) -> str | None:
-    """Return the URL of an open PR for `branch`, or `None` if there is none.
-
-    Args:
-        worktree: Worktree for `gh`.
-        base: Base branch of the PR.
-        branch: Head branch of the PR.
-        env: Subprocess environment.
-
-    Returns:
-        Open PR URL, or `None` if none exists.
-
-    """
+    """Return the open PR URL for `branch`, if any."""
 
     proc = _run(
         [
@@ -133,25 +95,7 @@ def create_pr(
     draft: bool,
     env: dict[str, str],
 ) -> str:
-    """Create a pull request for `branch` and return its URL.
-
-    Args:
-        worktree: Worktree for `gh`.
-        base: Base branch of the PR.
-        branch: Head branch of the PR.
-        title: PR title.
-        body: PR body, passed on stdin.
-        labels: Labels to apply.
-        draft: Whether to open the PR as a draft.
-        env: Subprocess environment.
-
-    Returns:
-        Created PR URL, or an empty string if `gh` printed nothing.
-
-    Raises:
-        PRError: If `gh pr create` fails.
-
-    """
+    """Create a pull request for `branch` and return its URL."""
 
     cmd = ["gh", "pr", "create", "--base", base, "--head", branch, "--title", title, "--body-file", "-"]
     if draft:
@@ -178,27 +122,7 @@ def open_pull_request(
     commit_message: str,
     strip_token: bool = True,
 ) -> str:
-    """Commit, push, and reuse or create a PR.
-
-    Args:
-        worktree: Worktree to publish.
-        remote: Remote to push to.
-        base: Base branch of the PR.
-        branch: Head branch of the PR.
-        title: PR title.
-        body: PR body.
-        labels: Labels to apply.
-        draft: Whether to open the PR as a draft.
-        commit_message: Message for the worktree commit.
-        strip_token: Strip ambient GitHub tokens from the environment.
-
-    Returns:
-        Existing or created PR URL, empty only if `gh` printed nothing.
-
-    Raises:
-        PRError: If a commit, push, or create step fails.
-
-    """
+    """Commit, push, and reuse or create a PR."""
 
     env = gh_env(strip_token)
 

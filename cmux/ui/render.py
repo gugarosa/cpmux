@@ -8,15 +8,10 @@ from cmux.events import SUCCESS, TERMINAL_FAILURE, Status, event_data
 
 
 def deps_cell(deps: list[str], status_by_key: dict[str, Status]) -> Text:
-    """Render an item's dependencies, colored by whether each still blocks it.
-
-    Args:
-        deps: Keys this item depends on.
-        status_by_key: Current status of every item in the run.
+    """Render dependencies by status.
 
     Returns:
-        Styled text: green when satisfied, red when failed, yellow when still
-        pending, magenta when the dependency key is unknown.
+        Styled dependencies: green successful, red failed, yellow pending, magenta unknown.
 
     """
 
@@ -42,13 +37,10 @@ def deps_cell(deps: list[str], status_by_key: dict[str, Status]) -> Text:
 
 
 def event_text(event: dict) -> Text | None:
-    """Render a JSONL transcript event.
-
-    Args:
-        event: Decoded JSONL event.
+    """Render a transcript event.
 
     Returns:
-        Styled display text, or None if empty.
+        Styled text, or `None` for empty or unsupported events.
 
     """
 

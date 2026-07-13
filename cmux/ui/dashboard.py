@@ -277,17 +277,17 @@ class CmuxApp(App):
         self.reload()
 
     def action_open_pr(self) -> None:
-        """Open the selected item's pull request in a browser."""
+        """Open the selected pull request."""
 
         record = self._selected_record()
         if record is None:
             return
         if not record.pr_url:
-            self.notify(f"no PR for {record.key} yet.")
+            self.notify(f"no pr for `{record.key}` yet.")
             return
 
         webbrowser.open(record.pr_url)
-        self.notify(f"opening PR for {record.key}…")
+        self.notify(f"opening pr for `{record.key}`.")
 
     def action_stop(self) -> None:
         """Stop the selected running session."""
@@ -297,9 +297,9 @@ class CmuxApp(App):
             return
 
         if daemon.kill_session(self.paths, record):
-            self.notify(f"stopped {record.key}.")
+            self.notify(f"stopped `{record.key}`.")
         else:
-            self.notify(f"{record.key} was not running.")
+            self.notify(f"`{record.key}` was not running.")
         self.reload()
 
     def action_search(self) -> None:
@@ -325,7 +325,7 @@ class CmuxApp(App):
         if record is None:
             return
         if shutil.which("copilot") is None:
-            self.notify("`copilot` is not on PATH.", severity="error")
+            self.notify("could not find `copilot` on `PATH`.", severity="error")
             return
         if not Path(record.worktree).exists():
             self.notify("worktree is gone; run may be cleaned.", severity="error")
@@ -352,7 +352,7 @@ class CmuxApp(App):
             self.notify("worktree is gone; run may be cleaned.", severity="error")
             return
 
-        self.notify(f"sending to {record.key}…")
+        self.notify(f"sending to `{record.key}`.")
         self._send_worker(record, message)
 
     @work(thread=True)

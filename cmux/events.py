@@ -40,15 +40,7 @@ def _first_str(data: dict[str, Any], *keys: str, default: str = "") -> str:
 
 
 def event_data(event: dict[str, Any]) -> dict[str, Any]:
-    """Unwrap a JSONL event's nested payload, falling back to the event itself.
-
-    Args:
-        event: Decoded JSONL event.
-
-    Returns:
-        The nested `data` mapping when present, otherwise the event.
-
-    """
+    """Return a JSONL event's nested payload or the event itself."""
 
     data = event.get("data")
 
@@ -57,20 +49,7 @@ def event_data(event: dict[str, Any]) -> dict[str, Any]:
 
 @dataclass
 class SessionState:
-    """Live, reduced view of one copilot session, updated event by event.
-
-    Attributes:
-        status: Current lifecycle status.
-        last_text: Most recent assistant message text.
-        current_tool: Name of the tool currently executing, if any.
-        tool_count: Number of tool executions started so far.
-        exit_code: Process exit code once the session ends.
-        session_id: Copilot session id reported on completion.
-        premium_requests: Premium request count reported on completion.
-        files_modified: Paths of files changed during the session.
-        error: Error message when the session fails.
-
-    """
+    """Live state of one copilot session."""
 
     status: Status = Status.PENDING
     last_text: str = ""
@@ -93,16 +72,7 @@ class SessionState:
 
 
 def apply_event(state: SessionState, event: dict[str, Any]) -> SessionState:
-    """Fold one decoded JSONL event into the session state.
-
-    Args:
-        state: Session state to update in place.
-        event: Decoded JSONL event.
-
-    Returns:
-        The updated session state.
-
-    """
+    """Fold a decoded JSONL event into the session state."""
 
     event_type = event.get("type", "")
     data = event_data(event)
@@ -149,15 +119,7 @@ def apply_event(state: SessionState, event: dict[str, Any]) -> SessionState:
 
 
 def parse_line(line: str) -> dict[str, Any] | None:
-    """Decode one JSONL line into a dict.
-
-    Args:
-        line: Raw JSONL line.
-
-    Returns:
-        The decoded object, or `None` for blank or non-JSON lines.
-
-    """
+    """Decode a JSONL line, returning `None` for invalid input."""
 
     line = line.strip()
     if not line:

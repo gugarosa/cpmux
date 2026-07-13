@@ -23,15 +23,7 @@ logger = get_logger(__name__)
 
 @dataclass
 class Options:
-    """Runtime options for a single run.
-
-    Attributes:
-        concurrency: Max concurrent sessions, or None for the plan default.
-        open_pr: Open a draft PR per item.
-        strip_github_token: Scrub the GitHub token from session environments.
-        deps_override: Dependency strategy overriding each item's `deps`, if set.
-
-    """
+    """Runtime options for a run."""
 
     concurrency: int | None = None
     open_pr: bool = True
@@ -52,19 +44,6 @@ class Supervisor:
         system: str = "",
         config_path: str = "",
     ) -> None:
-        """Initialize the supervisor.
-
-        Args:
-            repo_root: Target git repository root.
-            run_id: Run identifier.
-            resolved: Resolved items to execute.
-            options: Runtime options for the run.
-            concurrency: Maximum concurrent sessions.
-            system: Shared system prompt prepended to each item.
-            config_path: Resolved config file path.
-
-        """
-
         self.repo_root = Path(repo_root)
         self.run_id = run_id
         self.resolved = resolved
@@ -83,19 +62,10 @@ class Supervisor:
 
     @classmethod
     def create(cls, plan: Plan, start_path: str, options: Options, config_path: str = "") -> "Supervisor":
-        """Build a fresh supervisor for a new run.
-
-        Args:
-            plan: Parsed run plan.
-            start_path: Path inside the target git repository.
-            options: Runtime options for the run.
-            config_path: Resolved config file path.
-
-        Returns:
-            Supervisor ready to prepare and run.
+        """Create a supervisor for a new run.
 
         Raises:
-            git.GitError: If start_path is not inside a git repository.
+            git.GitError: `start_path` is outside a git repository.
 
         """
 
@@ -106,16 +76,7 @@ class Supervisor:
 
     @classmethod
     def from_run(cls, start_path: str, run_id: str) -> "Supervisor":
-        """Reconstruct a supervisor from a persisted run.
-
-        Args:
-            start_path: Path inside the target git repository.
-            run_id: Persisted run identifier.
-
-        Returns:
-            Supervisor loaded from the run manifest and records.
-
-        """
+        """Reconstruct a supervisor from a persisted run."""
 
         manifest = RunManifest.model_validate_json(RunPaths(start_path, run_id).manifest.read_text())
         options = Options(
@@ -191,13 +152,13 @@ class Supervisor:
             self.paths.write_record(record)
 
     async def run(self, headless: bool = False) -> list[SessionRecord]:
-        """Spawn every item under the concurrency pool and return final records.
+        """Run all items under the concurrency limit.
 
         Args:
-            headless: Skip the live Rich table.
+            headless: Whether to disable the live table.
 
         Returns:
-            Final record for every item in the run.
+            Final item records.
 
         """
 

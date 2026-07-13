@@ -54,14 +54,8 @@ class Deps(StrEnum):
 def interpolate_env(value: str) -> str:
     """Expand `${VAR}` and `${VAR:-default}` references in a string.
 
-    Args:
-        value: Text possibly containing environment-variable references.
-
-    Returns:
-        String with each reference replaced by its value or fallback.
-
     Raises:
-        ValueError: If a referenced variable is unset and has no fallback.
+        ValueError: If a variable is unset without a fallback.
 
     """
 
@@ -71,9 +65,7 @@ def interpolate_env(value: str) -> str:
             return os.environ[name]
         if default is not None:
             return default
-        raise ValueError(
-            f"`{name}` environment variable is not set; " f"provide a fallback with `${{{name}:-default}}`."
-        )
+        raise ValueError(f"`{name}` is unset; use `${{{name}:-default}}`.")
 
     return _ENV_RE.sub(repl, value)
 
@@ -90,15 +82,7 @@ def _walk_interpolate(obj: Any) -> Any:
 
 
 def slugify(text: str) -> str:
-    """Convert text to a branch- and worktree-safe slug.
-
-    Args:
-        text: Free-form text to normalize.
-
-    Returns:
-        Lowercased, hyphenated slug of at most 50 characters.
-
-    """
+    """Convert text to a branch- and worktree-safe slug."""
 
     text = text.strip().lower().splitlines()[0] if text.strip() else "task"
     text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
@@ -107,16 +91,7 @@ def slugify(text: str) -> str:
 
 
 class Permissions(BaseModel):
-    """Permission preset plus allow, deny, and network options.
-
-    Attributes:
-        preset: Permission baseline extended by explicit lists.
-        allow: Tool specs to allow.
-        deny: Tool specs to deny.
-        add_dir: Extra directories the session may access.
-        allow_url: URLs the session may reach.
-
-    """
+    """Permission preset with allow, deny, and network options."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -134,12 +109,7 @@ class Permissions(BaseModel):
         return data
 
     def to_flags(self) -> list[str]:
-        """Expand the preset and append explicit allow, deny, and network flags.
-
-        Returns:
-            `copilot` command-line flags for these permissions.
-
-        """
+        """Return `copilot` permission flags."""
 
         flags: list[str] = []
         if self.preset in (Preset.full, Preset.yolo):
@@ -162,15 +132,7 @@ class Permissions(BaseModel):
 
 
 class PRSettings(BaseModel):
-    """Pull-request defaults applied to every item unless overridden.
-
-    Attributes:
-        draft: Whether pull requests open as drafts.
-        labels: Labels attached to every pull request.
-        title_template: Format string for the pull-request title.
-        body_template: Format string for the pull-request body.
-
-    """
+    """Pull-request defaults applied unless overridden."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -181,22 +143,7 @@ class PRSettings(BaseModel):
 
 
 class Defaults(BaseModel):
-    """Run-wide defaults inherited by items unless overridden.
-
-    Attributes:
-        model: Model id passed to `copilot --model`.
-        effort: Reasoning effort passed to `copilot --effort`.
-        permissions: Permission settings shared across items.
-        base: Base branch to open pull requests against.
-        branch_template: Format string for per-item branch names.
-        pr: Pull-request defaults.
-        concurrency: Maximum number of sessions run at once.
-        deps: Strategy for seeding a worktree's dependencies.
-        remote: Git remote to push branches to.
-        port_base: First port assigned to items, or None to assign none.
-        port_env: Environment variable that carries each item's assigned port.
-
-    """
+    """Run-wide defaults inherited by items."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -216,31 +163,13 @@ class Defaults(BaseModel):
     @classmethod
     def _valid_env_name(cls, value: str) -> str:
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value):
-            raise ValueError(f"`port_env` must be a valid environment variable name, but got `{value}`.")
+            raise ValueError(f"`port_env` must be a valid environment variable name, got `{value}`.")
 
         return value
 
 
 class Item(BaseModel):
-    """One task as a bare prompt string or override mapping.
-
-    Attributes:
-        prompt: Task prompt handed to the session.
-        name: Human-readable label for the item.
-        id: Explicit stable identifier.
-        model: Model override for this item.
-        effort: Reasoning-effort override for this item.
-        permissions: Permission override for this item.
-        branch: Explicit branch name for this item.
-        base: Base-branch override for this item.
-        labels: Extra pull-request labels.
-        draft: Pull-request draft-state override.
-        paths: Extra directories the session may access.
-        depends_on: Ids of items that must finish first.
-        env: Environment variables set for the session.
-        include_system: Whether to prepend the shared system prompt.
-
-    """
+    """Task prompt with optional per-item overrides."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -281,28 +210,7 @@ class Item(BaseModel):
 
 
 class ResolvedItem(BaseModel):
-    """Resolved session spec ready to spawn (item > defaults > built-in).
-
-    Attributes:
-        key: Stable identifier for the item.
-        name: Display name for the session.
-        slug: Branch- and worktree-safe slug.
-        prompt: Final prompt, with the system prompt merged in when enabled.
-        model: Model id passed to `copilot --model`.
-        effort: Reasoning effort passed to `copilot --effort`.
-        permissions: Resolved permission settings.
-        branch: Branch name for the session.
-        base: Pull-request base branch.
-        labels: Pull-request labels.
-        draft: Whether to open the pull request as a draft.
-        depends_on: Ids of items that must finish first.
-        env: Environment variables set for the session.
-        deps: Strategy for seeding the worktree's dependencies.
-        remote: Git remote to push the branch to.
-        pr_title: Rendered pull-request title.
-        pr_body: Rendered pull-request body.
-
-    """
+    """Resolved session configuration."""
 
     key: str
     name: str
@@ -323,17 +231,7 @@ class ResolvedItem(BaseModel):
     pr_body: str
 
     def spawn_argv(self, worktree: str | Path, session_id: str, log_dir: str | Path) -> list[str]:
-        """Build the headless `copilot` invocation for this session.
-
-        Args:
-            worktree: Working directory for the session.
-            session_id: Stable identifier for the copilot session.
-            log_dir: Directory where session logs are written.
-
-        Returns:
-            Full `copilot` argv.
-
-        """
+        """Build the headless `copilot` invocation."""
 
         argv = [
             "copilot",
@@ -362,15 +260,7 @@ class ResolvedItem(BaseModel):
 
 
 class Plan(BaseModel):
-    """Parsed cmux run with system prompt, defaults, and items.
-
-    Attributes:
-        version: Config schema version.
-        system: Shared system prompt prepended to items.
-        defaults: Run-wide defaults inherited by items.
-        items: Tasks to run, each a prompt string or an item mapping.
-
-    """
+    """Parsed cmux run configuration."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -394,8 +284,7 @@ class Plan(BaseModel):
         dupes = {key for key in keys if keys.count(key) > 1}
         if dupes:
             raise ValueError(
-                f"`items` contain duplicate id/slug {sorted(dupes)}, "
-                f"give each conflicting item a distinct `name` or `id`."
+                f"`items` contains duplicate identifiers {sorted(dupes)}; assign distinct `name` or `id` values."
             )
 
         known = set(keys)
@@ -403,19 +292,13 @@ class Plan(BaseModel):
             missing = [dep for dep in item.depends_on if dep not in known]
             if missing:
                 raise ValueError(
-                    f"`depends_on` of item '{item.key}' references unknown id(s) {missing}, "
-                    f"known ids are {sorted(known)}."
+                    f"`depends_on` for `{item.key}` references unknown ids {missing}; known ids: {sorted(known)}."
                 )
 
         return items
 
     def resolve(self) -> list[ResolvedItem]:
-        """Apply precedence and compute ready-to-spawn specs.
-
-        Returns:
-            One resolved item per plan item, in declaration order.
-
-        """
+        """Resolve items in declaration order."""
 
         defaults = self.defaults
         resolved: list[ResolvedItem] = []
@@ -468,16 +351,10 @@ class ConfigError(Exception):
 
 
 def load_plan(path: str | Path) -> Plan:
-    """Load and validate a cmux YAML file into a `Plan`.
-
-    Args:
-        path: Filesystem path to the YAML config file.
-
-    Returns:
-        Validated plan.
+    """Load and validate a cmux YAML file.
 
     Raises:
-        ConfigError: If the file is missing, unparseable, or fails validation.
+        ConfigError: If the file is missing or invalid.
 
     """
 
@@ -491,12 +368,12 @@ def load_plan(path: str | Path) -> Plan:
         raise ConfigError(f"`{config_path}` is not valid YAML: {exc}.") from exc
 
     if not isinstance(raw, dict):
-        raise ConfigError(f"`{config_path}` top-level YAML must be a mapping, but got {type(raw).__name__}.")
+        raise ConfigError(f"`{config_path}` top-level YAML must be a mapping, got `{type(raw).__name__}`.")
 
     try:
         return Plan.model_validate(raw)
     except ValidationError as exc:
-        raise ConfigError(f"`{config_path}` is not a valid cmux plan:\n{_format_validation(exc)}") from exc
+        raise ConfigError(f"`{config_path}` is not a valid cmux plan:\n{_format_validation(exc)}.") from exc
 
 
 def _format_validation(exc: ValidationError) -> str:

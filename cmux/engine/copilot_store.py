@@ -10,23 +10,16 @@ _CHUNK = 400
 
 
 class CopilotStoreUnavailable(Exception):
-    """Raised when copilot's session store cannot be queried."""
+    """Copilot session store query failure."""
 
 
 class InvalidFtsQuery(Exception):
-    """Raised when a search query is not valid FTS5 syntax."""
+    """Invalid FTS5 query."""
 
 
 @dataclass
 class FtsHit:
-    """A ranked full-text match from copilot's session store.
-
-    Attributes:
-        session_id: Session the match belongs to.
-        snippet: Excerpt centered on the match.
-        rank: FTS5 bm25 rank, smaller is more relevant.
-
-    """
+    """Ranked full-text match from Copilot's session store."""
 
     session_id: str
     snippet: str
@@ -34,20 +27,20 @@ class FtsHit:
 
 
 def search_sessions(session_ids: list[str], query: str, limit: int = 50, db_path: Path | None = None) -> list[FtsHit]:
-    """Search copilot's full-text index for turns in the given sessions.
+    """Search Copilot turns within selected sessions.
 
     Args:
-        session_ids: Sessions to search within.
-        query: FTS5 query, supporting operators like `OR`, `"phrase"`, and `term*`.
-        limit: Maximum number of hits to return.
-        db_path: Copilot session store, defaulting to `~/.copilot/session-store.db`.
+        session_ids: Session ids.
+        query: FTS5 query with operators such as `OR`, `"phrase"`, and `term*`.
+        limit: Maximum hit count.
+        db_path: Session store path.
 
     Returns:
-        Hits ranked most-relevant first.
+        Hits ordered by relevance.
 
     Raises:
-        InvalidFtsQuery: If the query is not valid FTS5 syntax.
-        CopilotStoreUnavailable: If the store is missing or cannot be read.
+        InvalidFtsQuery: Invalid FTS5 syntax.
+        CopilotStoreUnavailable: Missing or unreadable store.
 
     """
 

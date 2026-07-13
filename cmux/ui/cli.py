@@ -333,7 +333,7 @@ def plan(
     detach: bool = typer.Option(False, "--detach", "-d", help="With --up, run in background."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip launch confirmation."),
 ) -> None:
-    """Compose a cmux plan in your editor, or from text, speech, or audio."""
+    """Create a cmux plan."""
 
     if sum([bool(text), voice, audio is not None]) > 1:
         theme.print_error("`--text`, `--voice`, and `--audio` are mutually exclusive; choose one.")
@@ -710,7 +710,7 @@ def _daemon_command(run_id: str = typer.Argument(...)) -> None:
 def _render_event(event: dict) -> None:
     text = event_text(event)
     if text is not None:
-        # Apply the repr highlighter console.print skips for Text inputs
+        # Apply the repr highlighter because Text inputs bypass it
         console.print(console.highlighter(text))
 
 

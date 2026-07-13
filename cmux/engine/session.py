@@ -25,16 +25,6 @@ class SessionRunner:
         transcript_path: str | Path,
         env: dict[str, str] | None = None,
     ) -> None:
-        """Initialize the runner.
-
-        Args:
-            key: Session identifier.
-            argv: Subprocess arguments.
-            transcript_path: JSONL transcript path.
-            env: Subprocess environment overrides.
-
-        """
-
         self.key = key
         self.argv = argv
         self.transcript_path = Path(transcript_path)
@@ -45,14 +35,14 @@ class SessionRunner:
         self._stderr = ""
 
     async def run(self, on_update: OnUpdate | None = None, on_spawn: OnSpawn | None = None) -> SessionState:
-        """Spawn the session, stream events to disk, and return final state.
+        """Run the session and stream events to its transcript.
 
         Args:
-            on_update: Called with `(key, state, event)` after each applied event.
-            on_spawn: Called with the child PID once the subprocess starts.
+            on_update: Callback after each applied event.
+            on_spawn: Callback after the subprocess starts.
 
         Returns:
-            Session state after subprocess exit.
+            Final session state.
 
         """
 
@@ -96,7 +86,7 @@ class SessionRunner:
             self.state.exit_code = return_code
             self.state.status = Status.DONE if return_code == 0 else Status.FAILED
         if self.state.status == Status.FAILED and not self.state.error:
-            self.state.error = self._stderr.strip()[-500:] or f"exit code {self.state.exit_code}"
+            self.state.error = self._stderr.strip()[-500:] or f"exit code {self.state.exit_code}."
 
         return self.state
 

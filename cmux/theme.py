@@ -67,16 +67,7 @@ def _icon(icon: tuple[str, str]) -> str:
 
 
 def icon(unicode_glyph: str, ascii_glyph: str) -> str:
-    """Return the unicode glyph, or its ASCII fallback on a limited terminal.
-
-    Args:
-        unicode_glyph: Preferred glyph.
-        ascii_glyph: Fallback for non-UTF terminals or `CMUX_ASCII`.
-
-    Returns:
-        The glyph appropriate for the current terminal.
-
-    """
+    """Return the terminal-compatible glyph."""
 
     return ascii_glyph if _ascii_only() else unicode_glyph
 
@@ -86,15 +77,7 @@ err = Console(stderr=True, highlight=False)
 
 
 def status_text(status: Status) -> Text:
-    """Render a status as a glyph plus a human label, styled by severity.
-
-    Args:
-        status: Session status to render.
-
-    Returns:
-        Styled glyph-and-label text.
-
-    """
+    """Render a styled status glyph and label."""
 
     visual = STATUS_VISUAL[status]
     glyph = visual.ascii if _ascii_only() else visual.glyph
@@ -103,15 +86,7 @@ def status_text(status: Status) -> Text:
 
 
 def format_duration(seconds: float) -> str:
-    """Format a duration as `M:SS`, or `H:MM:SS` past an hour.
-
-    Args:
-        seconds: Duration in seconds.
-
-    Returns:
-        Compact duration string.
-
-    """
+    """Format a duration as `M:SS`, or `H:MM:SS` past an hour."""
 
     total = int(seconds)
     hours, remainder = divmod(total, 3600)
@@ -121,15 +96,7 @@ def format_duration(seconds: float) -> str:
 
 
 def table(title: str | None = None) -> Table:
-    """Build a table with the shared cmux style.
-
-    Args:
-        title: Optional table title.
-
-    Returns:
-        A styled, terminal-safe table.
-
-    """
+    """Build a table with the shared cmux style."""
 
     return Table(
         title=title,

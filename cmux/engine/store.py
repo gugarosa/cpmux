@@ -16,12 +16,7 @@ CMUX_DIR = ".cmux"
 
 
 def new_run_id() -> str:
-    """Return a time-sortable run identifier.
-
-    Returns:
-        UTC timestamp plus a short random suffix.
-
-    """
+    """Return a time-sortable run identifier."""
 
     return f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:6]}"
 
@@ -31,31 +26,7 @@ def _now() -> str:
 
 
 class SessionRecord(BaseModel):
-    """Persist session identity, git binding, status, and PR.
-
-    Attributes:
-        key: Stable config item identifier.
-        name: Item name.
-        slug: Branch- and worktree-safe slug.
-        branch: Session git branch.
-        base: Base branch.
-        model: Copilot model.
-        session_id: Copilot session identifier.
-        worktree: Session git worktree path.
-        base_sha: Base branch commit sha.
-        permission_flags: Extra copilot permission flags.
-        env: Environment overrides for the session subprocess.
-        pid: Running session process id, if any.
-        status: Current lifecycle status.
-        exit_code: Process exit code after finish.
-        pr_url: Opened pull request URL, if any.
-        premium_requests: Premium request count.
-        files_modified: Changed paths.
-        error: Failure message.
-        started_at: Session start ISO timestamp.
-        ended_at: Session end ISO timestamp.
-
-    """
+    """Persisted session state and git metadata."""
 
     key: str
     name: str
@@ -101,22 +72,7 @@ class SessionRecord(BaseModel):
 
 
 class RunManifest(BaseModel):
-    """Persist resolved run configuration as `manifest.json`.
-
-    Attributes:
-        run_id: Run identifier.
-        created_at: Manifest creation ISO timestamp.
-        repo_root: Repository root path.
-        config_path: Resolved config file path.
-        system: Shared system prompt.
-        item_keys: Included item keys.
-        resolved: Resolved config items.
-        open_pr: Open pull requests when sessions finish.
-        concurrency: Maximum concurrent sessions, if capped.
-        strip_github_token: Strip the github token from sessions.
-        deps_override: Dependency strategy override, if set.
-
-    """
+    """Resolved run configuration persisted as `manifest.json`."""
 
     run_id: str
     created_at: str = Field(default_factory=_now)
@@ -135,14 +91,6 @@ class RunPaths:
     """Filesystem paths for a single run, rooted at `<repo_root>/.cmux`."""
 
     def __init__(self, repo_root: str | Path, run_id: str) -> None:
-        """Initialize run paths.
-
-        Args:
-            repo_root: Target git repository root.
-            run_id: Run identifier.
-
-        """
-
         self.repo_root = Path(repo_root)
         self.run_id = run_id
 
@@ -221,15 +169,7 @@ class RunPaths:
 
 
 def all_run_ids(repo_root: str | Path) -> list[str]:
-    """List every run id under `<repo_root>/.cmux`, newest first.
-
-    Args:
-        repo_root: Repository root with the `.cmux` directory.
-
-    Returns:
-        Run ids sorted newest first, or empty if none exist.
-
-    """
+    """List run ids under `<repo_root>/.cmux`, newest first."""
 
     runs = Path(repo_root) / CMUX_DIR / "runs"
     if not runs.is_dir():
@@ -239,15 +179,7 @@ def all_run_ids(repo_root: str | Path) -> list[str]:
 
 
 def latest_run_id(repo_root: str | Path) -> str | None:
-    """Return the most recent run id under `<repo_root>/.cmux`.
-
-    Args:
-        repo_root: Repository root with the `.cmux` directory.
-
-    Returns:
-        Newest run id, or `None` when none exist.
-
-    """
+    """Return the most recent run id under `<repo_root>/.cmux`."""
 
     ids = all_run_ids(repo_root)
 
@@ -255,16 +187,7 @@ def latest_run_id(repo_root: str | Path) -> str | None:
 
 
 def load_run(repo_root: str | Path, run_id: str) -> tuple[RunManifest, list[SessionRecord]]:
-    """Load a run manifest and referenced session records.
-
-    Args:
-        repo_root: Repository root with the `.cmux` directory.
-        run_id: Run identifier.
-
-    Returns:
-        Run manifest and existing session records.
-
-    """
+    """Load a run manifest and its existing session records."""
 
     paths = RunPaths(repo_root, run_id)
     manifest = RunManifest.model_validate_json(paths.manifest.read_text())

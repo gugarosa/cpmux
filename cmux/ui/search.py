@@ -13,14 +13,7 @@ _SNIPPET_AFTER = 80
 
 @dataclass
 class Hit:
-    """Search match.
-
-    Attributes:
-        label: Session label.
-        role: Message role.
-        snippet: Text around the match.
-
-    """
+    """Transcript search match."""
 
     label: str
     role: str
@@ -67,17 +60,7 @@ def _build_snippet(text: str, index: int) -> str:
 
 
 def search_transcripts(items: list[tuple[str, Path]], query: str, regex: bool = False) -> list[Hit]:
-    """Find matching transcript messages across sessions.
-
-    Args:
-        items: Session label and transcript path pairs.
-        query: Text or regex to match.
-        regex: Treat query as a regex.
-
-    Returns:
-        Hits, one per matching message.
-
-    """
+    """Find matching transcript messages across sessions."""
 
     hits: list[Hit] = []
     for label, transcript_path in items:

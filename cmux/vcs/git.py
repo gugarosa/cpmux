@@ -21,21 +21,7 @@ def run_git(
     env: dict[str, str] | None = None,
     check: bool = True,
 ) -> subprocess.CompletedProcess[str]:
-    """Run `git` in `cwd`.
-
-    Args:
-        args: Arguments after `git`.
-        cwd: Command working directory.
-        env: Subprocess environment, or `None` to inherit.
-        check: Raise on non-zero exit.
-
-    Returns:
-        Completed git process.
-
-    Raises:
-        GitError: If `check` is true and git exits non-zero.
-
-    """
+    """Run `git` in `cwd`, optionally raising on failure."""
 
     proc = subprocess.run(["git", *args], cwd=str(cwd), env=env, capture_output=True, text=True)
 
@@ -47,15 +33,7 @@ def run_git(
 
 
 def is_git_repo(path: str | Path) -> bool:
-    """Return whether `path` is inside a git work tree.
-
-    Args:
-        path: Path to probe.
-
-    Returns:
-        `True` if `path` is in a git work tree.
-
-    """
+    """Return whether `path` is inside a git worktree."""
 
     proc = run_git(["rev-parse", "--is-inside-work-tree"], cwd=path, check=False)
 
@@ -63,18 +41,7 @@ def is_git_repo(path: str | Path) -> bool:
 
 
 def repo_root(path: str | Path) -> Path:
-    """Return the root of the repository containing `path`.
-
-    Args:
-        path: Path inside the repository.
-
-    Returns:
-        Repository root.
-
-    Raises:
-        GitError: If `path` is not inside a git repository.
-
-    """
+    """Return the repository root containing `path`."""
 
     if not is_git_repo(path):
         raise GitError(f"`{path}` is not inside a git repository.")
@@ -83,17 +50,7 @@ def repo_root(path: str | Path) -> Path:
 
 
 def resolve_base(root: str | Path, remote: str, base: str) -> tuple[str, str]:
-    """Resolve `base` to `(branch, sha)` via remote, local, then HEAD.
-
-    Args:
-        root: Repository root.
-        remote: Remote name to check first.
-        base: Base branch name.
-
-    Returns:
-        Base branch name and resolved commit sha.
-
-    """
+    """Resolve `base` via remote, local, then HEAD."""
 
     for ref in (f"refs/remotes/{remote}/{base}", f"refs/heads/{base}"):
         proc = run_git(["rev-parse", "--verify", "--quiet", ref], cwd=root, check=False)
@@ -104,31 +61,14 @@ def resolve_base(root: str | Path, remote: str, base: str) -> tuple[str, str]:
 
 
 def add_worktree(root: str | Path, worktree: str | Path, branch: str, base_sha: str) -> None:
-    """Create a worktree on a new branch from `base_sha`.
-
-    Args:
-        root: Repository root.
-        worktree: New worktree path.
-        branch: Branch to create.
-        base_sha: Starting commit.
-
-    """
+    """Create a worktree and branch from `base_sha`."""
 
     Path(worktree).parent.mkdir(parents=True, exist_ok=True)
     run_git(["worktree", "add", "-b", branch, str(worktree), base_sha], cwd=root)
 
 
 def branch_exists(root: str | Path, branch: str) -> bool:
-    """Return whether a local branch exists.
-
-    Args:
-        root: Repository root.
-        branch: Branch name to check.
-
-    Returns:
-        `True` if the branch exists.
-
-    """
+    """Return whether a local branch exists."""
 
     proc = run_git(["rev-parse", "--verify", "--quiet", f"refs/heads/{branch}"], cwd=root, check=False)
 
@@ -136,17 +76,7 @@ def branch_exists(root: str | Path, branch: str) -> bool:
 
 
 def remove_worktree(root: str | Path, worktree: str | Path, force: bool = True) -> bool:
-    """Remove a worktree.
-
-    Args:
-        root: Repository root.
-        worktree: Worktree to remove.
-        force: Pass `--force`.
-
-    Returns:
-        `True` when the worktree was removed or is already absent.
-
-    """
+    """Remove a worktree, succeeding if it is already absent."""
 
     if not Path(worktree).exists():
         return True
@@ -159,27 +89,13 @@ def remove_worktree(root: str | Path, worktree: str | Path, force: bool = True) 
 
 
 def prune_worktrees(root: str | Path) -> None:
-    """Prune metadata for removed worktrees.
-
-    Args:
-        root: Repository root.
-
-    """
+    """Prune metadata for removed worktrees."""
 
     run_git(["worktree", "prune"], cwd=root, check=False)
 
 
 def has_changes(worktree: str | Path, base_sha: str) -> bool:
-    """Return whether worktree has edits or commits after `base_sha`.
-
-    Args:
-        worktree: Worktree path.
-        base_sha: Base commit.
-
-    Returns:
-        `True` if staged, unstaged, or committed changes exist.
-
-    """
+    """Return whether a worktree has edits or commits after `base_sha`."""
 
     if run_git(["status", "--porcelain"], cwd=worktree).stdout.strip():
         return True
@@ -190,14 +106,7 @@ def has_changes(worktree: str | Path, base_sha: str) -> bool:
 
 
 def provision_deps(root: str | Path, worktree: str | Path, strategy: str) -> None:
-    """Seed `node_modules` for a worktree, ignoring failures.
-
-    Args:
-        root: Repository root with source `node_modules`.
-        worktree: Target worktree.
-        strategy: `skip`, `symlink`, `copy`, or `install`.
-
-    """
+    """Seed worktree `node_modules`, ignoring failures."""
 
     src = Path(root) / "node_modules"
     dst = Path(worktree) / "node_modules"
@@ -215,7 +124,7 @@ def provision_deps(root: str | Path, worktree: str | Path, strategy: str) -> Non
         elif strategy == "install":
             _install_deps(worktree)
     except OSError as exc:
-        logger.warning(f"`deps={strategy}` could not seed node_modules: {exc}.")
+        logger.warning(f"`deps={strategy}` could not seed `node_modules`: {exc}.")
 
 
 def _install_deps(worktree: str | Path) -> None:
@@ -230,7 +139,7 @@ def _install_deps(worktree: str | Path) -> None:
         return
 
     if shutil.which(cmd[0]) is None:
-        logger.warning(f"`deps=install` skipped: `{cmd[0]}` is not on PATH.")
+        logger.warning(f"`deps=install` skipped: `{cmd[0]}` is not on `PATH`.")
         return
 
     proc = subprocess.run(cmd, cwd=str(worktree_path), capture_output=True, text=True)
