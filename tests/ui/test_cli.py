@@ -242,3 +242,33 @@ def test_up_without_copilot_exits_cleanly(tmp_path, monkeypatch):
     result = runner.invoke(app, ["up", "--yes"])
     assert result.exit_code == 1
     assert "copilot" in result.output
+
+
+def test_search_groups_and_counts_matches(tmp_path, monkeypatch):
+    import json
+
+    from cmux.engine.store import RunManifest, RunPaths, SessionRecord
+    from cmux.events import Status
+
+    monkeypatch.chdir(tmp_path)
+    paths = RunPaths(tmp_path, "run1")
+    paths.write_manifest(RunManifest(run_id="run1", repo_root=str(tmp_path), config_path="", item_keys=["auth"]))
+    record = SessionRecord(
+        key="auth", name="auth", slug="auth", branch="cmux/auth", base="main",
+        model="m", session_id="s", worktree=str(tmp_path / "auth"), status=Status.DONE,
+    )
+    paths.write_record(record)
+    paths.transcript("auth").write_text(
+        json.dumps({"type": "user.message", "data": {"content": "fix the authorization retry"}}) + "\n"
+    )
+
+    result = runner.invoke(app, ["search", "authorization", "--run", "run1"])
+    assert result.exit_code == 0
+    assert "auth" in result.output
+    assert "match(es) in 1 session(s)" in result.output
+
+
+def test_highlight_marks_the_matched_span():
+    text = cli._highlight("the authorization retry", "authorization", regex=False)
+    start = text.plain.index("authorization")
+    assert any(span.start == start and "yellow" in span.style for span in text.spans)

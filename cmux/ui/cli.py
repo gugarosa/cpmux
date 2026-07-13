@@ -16,6 +16,7 @@ from rich.live import Live
 from rich.markup import escape
 from rich.syntax import Syntax
 from rich.table import Table
+from rich.text import Text
 
 from cmux import __version__, theme
 from cmux.config import ConfigError, Deps, Plan, ResolvedItem, load_plan
@@ -564,9 +565,36 @@ def search(
         return
 
     hits = search_transcripts(items, query, regex)
+    if not hits:
+        theme.print_hint(f"no matches for `{query}`.")
+        return
+
+    by_label: dict[str, list] = {}
     for hit in hits:
-        console.print(f"[cyan]{hit.label}[/cyan] [dim]{hit.role}[/dim] {escape(hit.snippet)}")
-    console.print(f"[dim]{len(hits)} hit(s)[/dim]")
+        by_label.setdefault(hit.label, []).append(hit)
+
+    for label, group in by_label.items():
+        console.print(Text.assemble((label, "bold cyan"), (f"  ({len(group)})", "dim")))
+        for hit in group:
+            line = Text("  ")
+            line.append(f"{hit.role}  ", style="dim")
+            line.append_text(_highlight(hit.snippet, query, regex))
+            console.print(line)
+
+    console.print(f"[dim]{len(hits)} match(es) in {len(by_label)} session(s)[/dim]")
+
+
+def _highlight(snippet: str, query: str, regex: bool) -> Text:
+    text = Text(snippet)
+    try:
+        pattern = re.compile(query if regex else re.escape(query), re.IGNORECASE)
+    except re.error:
+        return text
+
+    for match in pattern.finditer(snippet):
+        text.stylize("bold yellow", match.start(), match.end())
+
+    return text
 
 
 def _search_fts(query: str, label_by_session: dict[str, str]) -> None:

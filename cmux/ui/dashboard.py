@@ -92,6 +92,13 @@ class SendScreen(ModalScreen[str | None]):
         self.dismiss(None)
 
 
+def _pr_cell(record: SessionRecord) -> str:
+    if record.pr_url:
+        return f"#{record.pr_url.rstrip('/').rsplit('/', 1)[-1]}"
+
+    return record.branch
+
+
 class CmuxApp(App):
     """Dashboard for one run."""
 
@@ -191,7 +198,8 @@ class CmuxApp(App):
                 theme.status_text(record.status),
                 record.model,
                 deps_cell(self.deps_by_key.get(record.key, []), status_by_key),
-                record.pr_url or record.branch,
+                _pr_cell(record),
+                key=record.key,
             )
 
         if table.row_count:
