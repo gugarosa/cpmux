@@ -287,14 +287,18 @@ class Supervisor:
     async def _commit_local(self, item: ResolvedItem, record: SessionRecord) -> None:
         worktree = self.paths.worktree(item.key)
         try:
-            committed = await asyncio.to_thread(
+            if not await asyncio.to_thread(git.has_changes, worktree, record.base_sha):
+                record.status = Status.NO_CHANGES
+                return
+
+            await asyncio.to_thread(
                 pr.commit_all,
                 worktree,
                 f"{item.pr_title}\n\ncmux item: {item.key}",
                 pr.gh_env(self.options.strip_github_token),
             )
-            record.status = Status.DONE if committed else Status.NO_CHANGES
-        except pr.PRError as exc:
+            record.status = Status.DONE
+        except (pr.PRError, git.GitError) as exc:
             record.status = Status.FAILED
             record.error = str(exc)
             logger.error(f"`{item.key}` local commit failed: {exc}.")

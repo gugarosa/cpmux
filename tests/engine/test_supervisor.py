@@ -121,6 +121,20 @@ def test_commit_local_marks_no_changes_when_clean(git_repo):
     assert record.status == Status.NO_CHANGES
 
 
+def test_commit_local_marks_done_when_agent_already_committed(git_repo):
+    supervisor = Supervisor.create(_plan(), str(git_repo), Options(open_pr=False))
+    supervisor.prepare()
+    item = supervisor.resolved[0]
+    record = supervisor.records[item.key]
+    (Path(record.worktree) / "new.txt").write_text("hi")
+    git.run_git(["add", "-A"], cwd=record.worktree)
+    git.run_git(["commit", "-qm", "agent work"], cwd=record.worktree)
+
+    asyncio.run(supervisor._commit_local(item, record))
+
+    assert record.status == Status.DONE
+
+
 def test_on_update_persists_live_status_to_disk(git_repo):
     supervisor = Supervisor.create(_plan(), str(git_repo), Options())
     supervisor.prepare()
