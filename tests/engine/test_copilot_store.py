@@ -19,6 +19,7 @@ def _store(tmp_path, rows):
     con.executemany("INSERT INTO search_index(content, session_id, source_type, source_id) VALUES (?, ?, ?, ?)", rows)
     con.commit()
     con.close()
+
     return db
 
 

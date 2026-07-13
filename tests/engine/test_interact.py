@@ -10,6 +10,7 @@ def test_resume_argv_targets_session_and_worktree():
 
 def test_followup_argv_carries_message_and_stays_non_interactive():
     argv = followup_argv("sid", "/wt", "gpt-5.5", ["--allow-tool=write"], "do it")
+
     assert argv[0] == "copilot"
     assert "--resume=sid" in argv
     assert argv[argv.index("-p") + 1] == "do it"

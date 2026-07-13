@@ -41,6 +41,7 @@ def test_new_run_id_starts_with_date_prefix():
 def test_run_paths_resolve_under_run_dir(tmp_path):
     paths = RunPaths(tmp_path, "run1")
     run_dir = tmp_path / ".cmux" / "runs" / "run1"
+
     assert paths.manifest == run_dir / "manifest.json"
     assert paths.owner_file == run_dir / "owner.json"
     assert paths.session_dir("k") == run_dir / "sessions" / "k"
@@ -60,6 +61,7 @@ def test_write_record_read_record_round_trip(tmp_path):
     record = _record()
     paths.write_record(record)
     loaded = paths.read_record("a")
+
     assert loaded.status == record.status
     assert loaded.branch == record.branch
     assert loaded.session_id == record.session_id
@@ -78,6 +80,7 @@ def test_load_run_returns_manifest_and_records(tmp_path):
     paths.write_record(_record())
 
     loaded_manifest, records = load_run(tmp_path, "run1")
+
     assert loaded_manifest.run_id == "run1"
     assert loaded_manifest.item_keys == ["a"]
     assert len(records) == 1

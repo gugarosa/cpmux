@@ -15,6 +15,7 @@ from cmux.ui.dashboard import CmuxApp
 def _build_run(tmp_path, keys):
     paths = RunPaths(tmp_path, "run1")
     paths.write_manifest(RunManifest(run_id="run1", repo_root=str(tmp_path), config_path="", item_keys=list(keys)))
+
     for key in keys:
         record = SessionRecord(
             key=key,
@@ -126,6 +127,7 @@ def test_dashboard_surfaces_item_dependencies(tmp_path):
             run_id="run1", repo_root=str(tmp_path), config_path="", item_keys=["alpha", "beta"], resolved=resolved
         )
     )
+
     for item in resolved:
         record = SessionRecord(
             key=item.key,

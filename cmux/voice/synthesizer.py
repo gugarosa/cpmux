@@ -40,6 +40,7 @@ def synthesize_plan(transcript: str, model: str = "gpt-5.5") -> str:
             else f"{prompt}\n\nYour previous reply was invalid: {error}\nReturn corrected YAML only."
         )
         yaml_text = _extract_yaml(_run_copilot(instruction, model))
+
         try:
             Plan.model_validate(yaml.safe_load(yaml_text) or {})
             return yaml_text
@@ -62,6 +63,7 @@ def _build_prompt(transcript: str) -> str:
 
 def _run_copilot(prompt: str, model: str) -> str:
     argv = ["copilot", "-p", prompt, "-s", "--model", model, "--no-ask-user", "--deny-tool=write", "--deny-tool=shell"]
+
     try:
         proc = subprocess.run(argv, capture_output=True, text=True, check=False)
     except FileNotFoundError as exc:

@@ -100,6 +100,7 @@ def _wait_for_enter(stopped: threading.Event) -> None:
         input()
     except EOFError:
         pass
+
     stopped.set()
 
 

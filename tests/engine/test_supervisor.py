@@ -17,6 +17,7 @@ def _plan():
 
 def test_options_defaults_are_conservative():
     options = Options()
+
     assert options.concurrency is None
     assert options.open_pr is True
     assert options.strip_github_token is True
@@ -26,6 +27,7 @@ def test_options_defaults_are_conservative():
 def test_create_builds_supervisor_from_plan(git_repo):
     repo = git_repo
     sup = Supervisor.create(_plan(), str(repo), Options())
+
     assert isinstance(sup.run_id, str)
     assert sup.run_id
     assert len(sup.resolved) == 2
@@ -41,6 +43,7 @@ def test_prepare_creates_one_record_per_item(git_repo):
     repo = git_repo
     sup = Supervisor.create(_plan(), str(repo), Options())
     sup.prepare()
+
     assert len(sup.records) == len(sup.resolved)
     for item in sup.resolved:
         assert item.key in sup.records
@@ -50,6 +53,7 @@ def test_prepare_records_have_session_and_worktree(git_repo):
     repo = git_repo
     sup = Supervisor.create(_plan(), str(repo), Options())
     sup.prepare()
+
     for record in sup.records.values():
         assert record.session_id
         assert record.base_sha
@@ -74,6 +78,7 @@ def test_prepare_creates_branch_per_item(git_repo):
     repo = git_repo
     sup = Supervisor.create(_plan(), str(repo), Options())
     sup.prepare()
+
     for record in sup.records.values():
         assert git.branch_exists(repo, record.branch) is True
 
@@ -84,6 +89,7 @@ def test_from_run_reloads_resolved_and_records(git_repo):
     sup.prepare()
 
     loaded = Supervisor.from_run(str(repo), sup.run_id)
+
     assert [item.key for item in loaded.resolved] == [item.key for item in sup.resolved]
     assert sorted(loaded.records) == sorted(sup.records)
     for key, record in sup.records.items():

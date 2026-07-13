@@ -242,6 +242,7 @@ class CmuxApp(App):
         suffix = ""
         if not has_content:
             suffix = "  ·  waiting for output…" if record.status in ACTIVE else "  ·  no transcript"
+
         header = self.query_one("#transcript-header", Static)
         header.update(f"[bold]{record.key}[/bold]  ·  {record.model}  ·  {record.branch}  ·  {pr}{suffix}")
 
@@ -300,6 +301,7 @@ class CmuxApp(App):
             self.notify(f"stopped `{record.key}`.")
         else:
             self.notify(f"`{record.key}` was not running.")
+
         self.reload()
 
     def action_search(self) -> None:

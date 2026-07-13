@@ -280,6 +280,7 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
         daemon.clear_owner(supervisor.paths)
 
     _print_completion_summary(supervisor.run_id, records)
+
     if any(record.status in TERMINAL_FAILURE for record in records):
         raise typer.Exit(1)
 
@@ -607,6 +608,7 @@ def _search_fts(query: str, label_by_session: dict[str, str]) -> None:
     for hit in hits:
         label = label_by_session.get(hit.session_id, hit.session_id)
         console.print(f"[cyan]{label}[/cyan] {escape(hit.snippet)}")
+
     console.print(f"[dim]{len(hits)} hit(s)[/dim]")
 
 
