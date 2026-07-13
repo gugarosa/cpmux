@@ -66,6 +66,21 @@ def _icon(icon: tuple[str, str]) -> str:
     return icon[1] if _ascii_only() else icon[0]
 
 
+def icon(unicode_glyph: str, ascii_glyph: str) -> str:
+    """Return the unicode glyph, or its ASCII fallback on a limited terminal.
+
+    Args:
+        unicode_glyph: Preferred glyph.
+        ascii_glyph: Fallback for non-UTF terminals or `CMUX_ASCII`.
+
+    Returns:
+        The glyph appropriate for the current terminal.
+
+    """
+
+    return ascii_glyph if _ascii_only() else unicode_glyph
+
+
 out = Console(highlight=False)
 err = Console(stderr=True, highlight=False)
 

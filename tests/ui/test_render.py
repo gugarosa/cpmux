@@ -38,3 +38,8 @@ def test_event_text_surfaces_session_errors():
 def test_event_text_marks_failed_result_red():
     assert event_text({"type": "result", "exitCode": 1}).style == "red"
     assert event_text({"type": "result", "exitCode": 0}).style == "dim"
+
+
+def test_event_text_falls_back_to_ascii_role_glyphs(monkeypatch):
+    monkeypatch.setenv("CMUX_ASCII", "1")
+    assert event_text({"type": "user.message", "data": {"content": "hi"}}).plain == "> user hi"

@@ -254,8 +254,15 @@ def test_search_groups_and_counts_matches(tmp_path, monkeypatch):
     paths = RunPaths(tmp_path, "run1")
     paths.write_manifest(RunManifest(run_id="run1", repo_root=str(tmp_path), config_path="", item_keys=["auth"]))
     record = SessionRecord(
-        key="auth", name="auth", slug="auth", branch="cmux/auth", base="main",
-        model="m", session_id="s", worktree=str(tmp_path / "auth"), status=Status.DONE,
+        key="auth",
+        name="auth",
+        slug="auth",
+        branch="cmux/auth",
+        base="main",
+        model="m",
+        session_id="s",
+        worktree=str(tmp_path / "auth"),
+        status=Status.DONE,
     )
     paths.write_record(record)
     paths.transcript("auth").write_text(

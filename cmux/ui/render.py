@@ -3,6 +3,7 @@
 
 from rich.text import Text
 
+from cmux import theme
 from cmux.events import SUCCESS, TERMINAL_FAILURE, Status, event_data
 
 
@@ -55,15 +56,16 @@ def event_text(event: dict) -> Text | None:
     data = event_data(event)
 
     if event_type == "user.message":
-        return Text.assemble(("🧑 user ", "bold blue"), str(data.get("content", "")).strip())
+        return Text.assemble((f"{theme.icon('🧑', '>')} user ", "bold blue"), str(data.get("content", "")).strip())
     if event_type == "assistant.message":
         text = str(data.get("content", "")).strip()
-        return Text.assemble(("🤖 assistant ", "bold green"), text) if text else None
+        return Text.assemble((f"{theme.icon('🤖', '*')} assistant ", "bold green"), text) if text else None
     if event_type == "tool.execution_start":
-        return Text.assemble(("🔧 tool ", "cyan"), str(data.get("toolName") or data.get("name") or ""))
+        glyph = theme.icon("🔧", "#")
+        return Text.assemble((f"{glyph} tool ", "cyan"), str(data.get("toolName") or data.get("name") or ""))
     if event_type == "session.error":
         message = str(data.get("message") or data.get("error") or "session error").strip()
-        return Text.assemble(("✖ error ", "bold red"), message)
+        return Text.assemble((f"{theme.icon('✖', 'x')} error ", "bold red"), message)
     if event_type == "result":
         exit_code = event.get("exitCode")
         return Text(f"— result exit={exit_code}", style="dim" if exit_code == 0 else "red")
