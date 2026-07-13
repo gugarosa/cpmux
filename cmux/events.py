@@ -8,7 +8,7 @@ from typing import Any
 
 
 class Status(StrEnum):
-    """Lifecycle status of a single cmux session."""
+    """cmux session lifecycle stage."""
 
     PENDING = "pending"
     STARTING = "starting"
@@ -40,7 +40,7 @@ def _first_str(data: dict[str, Any], *keys: str, default: str = "") -> str:
 
 
 def event_data(event: dict[str, Any]) -> dict[str, Any]:
-    """Return a JSONL event's nested payload or the event itself."""
+    """Return a JSONL event's nested payload or itself."""
 
     data = event.get("data")
 
@@ -49,7 +49,7 @@ def event_data(event: dict[str, Any]) -> dict[str, Any]:
 
 @dataclass
 class SessionState:
-    """Live state of one copilot session."""
+    """Live Copilot session state."""
 
     status: Status = Status.PENDING
     last_text: str = ""

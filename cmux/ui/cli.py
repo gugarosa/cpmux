@@ -56,8 +56,8 @@ app = typer.Typer(
     no_args_is_help=True,
     rich_markup_mode="rich",
     help=(
-        "Run parallel GitHub Copilot CLI agents from one YAML plan. Each item gets an isolated "
-        "git worktree and branch, and opens a draft PR by default."
+        "Run parallel GitHub Copilot CLI agents from a YAML plan. Each item uses an isolated "
+        "git worktree and branch and opens a draft PR by default."
     ),
     epilog=(
         "[bold]Quick start[/bold]\n\n"
@@ -171,9 +171,9 @@ def _plan_table(resolved: list[ResolvedItem]) -> Table:
 
 
 _STARTER_PLAN = """\
-# cmux plan: one Copilot session per item (see the README for all options)
+# One Copilot session per item — see the README for all options
 system: |
-  Shared guidance prepended to every item's prompt.
+  Shared guidance added to every item's prompt.
 defaults:
   model: gpt-5.5
 items:
@@ -209,7 +209,7 @@ def up(
     strip_github_token: bool = typer.Option(
         True,
         "--strip-github-token/--no-strip-github-token",
-        help="Unset ambient GITHUB_TOKEN/GH_TOKEN for gh + git push (keyring fallback).",
+        help="Unset GITHUB_TOKEN/GH_TOKEN for gh and git push (keyring fallback).",
     ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
 ) -> None:
@@ -256,8 +256,8 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
     console.print(_plan_table(resolved))
     action = f"open {len(resolved)} draft PR(s)" if options.open_pr else "commit locally (no PR)"
     prompt = (
-        f"Start {len(resolved)} Copilot session(s) (max {supervisor.concurrency} concurrent) in separate "
-        f"worktrees and {action}? Premium requests may be consumed."
+        f"Start {len(resolved)} Copilot session(s) in separate worktrees (max {supervisor.concurrency} concurrent) "
+        f"and {action}? Premium requests may be consumed."
     )
     if not yes and not typer.confirm(prompt):
         theme.print_hint("cancelled; nothing was started.")
@@ -322,7 +322,7 @@ def _print_completion_summary(run_id: str, records: list[SessionRecord]) -> None
 def plan(
     output: Path = typer.Argument(Path("cmux.yml"), dir_okay=False, help="Output cmux file."),
     text: str | None = typer.Option(None, "--text", help="Plan text (skips the editor)."),
-    voice: bool = typer.Option(False, "--voice", help="Record a spoken plan from the mic (Enter to stop)."),
+    voice: bool = typer.Option(False, "--voice", help="Record a plan from the mic (Enter to stop)."),
     audio: Path | None = typer.Option(None, "--audio", exists=True, dir_okay=False, help="Audio file to transcribe."),
     transcribe_model: str = typer.Option(
         DEFAULT_TRANSCRIBE_MODEL, "--transcribe-model", help="faster-whisper model size (tiny…large-v3)."
@@ -359,7 +359,7 @@ def plan(
     if up:
         _launch_run(output, Options(open_pr=pr), detach, yes)
     else:
-        theme.print_hint(f"review it, then launch with `cmux up {output}` (add `--dry-run` to preview).")
+        theme.print_hint(f"review it, then run `cmux up {output}` (add `--dry-run` to preview).")
 
 
 def _resolve_transcript(text: str | None, audio: Path | None, voice: bool, transcribe_model: str) -> str:
@@ -448,7 +448,7 @@ def enter(
     _, record = _resolve_record(run, key)
     _require_tool("copilot", _COPILOT_HINT)
     if not Path(record.worktree).exists():
-        theme.print_error(f"`{record.worktree}` worktree is gone, the run may have been cleaned.")
+        theme.print_error(f"worktree `{record.worktree}` is missing; the run may have been cleaned.")
         raise typer.Exit(1)
 
     os.execvp("copilot", resume_interactive_argv(record.session_id, record.worktree))
@@ -465,7 +465,7 @@ def send(
     paths, record = _resolve_record(run, key)
     _require_tool("copilot", _COPILOT_HINT)
     if not Path(record.worktree).exists():
-        theme.print_error(f"`{record.worktree}` worktree is gone, the run may have been cleaned.")
+        theme.print_error(f"worktree `{record.worktree}` is missing; the run may have been cleaned.")
         raise typer.Exit(1)
 
     argv = followup_argv(record.session_id, record.worktree, record.model, record.permission_flags, message)
@@ -504,7 +504,7 @@ def logs(
 
     transcript = paths.transcript(key)
     if not transcript.exists() and not follow:
-        theme.print_hint(f"no transcript events yet for `{key}` — add `-f` to wait for them.")
+        theme.print_hint(f"no transcript events for `{key}`; use `-f` to wait.")
         return
 
     if follow and theme.err.is_terminal:
@@ -517,9 +517,9 @@ def logs(
 
 @app.command(rich_help_panel="Monitor")
 def search(
-    query: str = typer.Argument(..., help="Text to find (literal; use --regex for a regular expression)."),
+    query: str = typer.Argument(..., help="Text to find (literal unless --regex)."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
-    all_runs: bool = typer.Option(False, "--all", help="Search every run (cannot be combined with --run)."),
+    all_runs: bool = typer.Option(False, "--all", help="Search every run; conflicts with --run."),
     regex: bool = typer.Option(False, "--regex", help="Interpret QUERY as a regular expression."),
     fts: bool = typer.Option(False, "--fts", help="Rank matches via Copilot's full-text index."),
 ) -> None:
@@ -712,7 +712,7 @@ def _daemon_command(run_id: str = typer.Argument(...)) -> None:
 def _render_event(event: dict) -> None:
     text = event_text(event)
     if text is not None:
-        # Apply the repr highlighter because Text inputs bypass it
+        # Text inputs bypass the repr highlighter
         console.print(console.highlighter(text))
 
 
@@ -738,7 +738,7 @@ def _follow_transcript(transcript: Path, raw: bool, consumed: int) -> None:
             time.sleep(0.5)
     except KeyboardInterrupt:
         if theme.err.is_terminal:
-            theme.err.print("[dim]stopped following; the session continues.[/dim]")
+            theme.err.print("[dim]stopped following; session continues.[/dim]")
 
 
 def _tail_last_assistant(transcript: Path) -> str:

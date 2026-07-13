@@ -16,7 +16,7 @@ _STREAM_LIMIT = 1 << 20
 
 
 class SessionRunner:
-    """Spawn a `copilot` subprocess, stream JSONL, and track state."""
+    """Run a `copilot` subprocess and track JSONL events."""
 
     def __init__(
         self,
@@ -35,7 +35,7 @@ class SessionRunner:
         self._stderr = ""
 
     async def run(self, on_update: OnUpdate | None = None, on_spawn: OnSpawn | None = None) -> SessionState:
-        """Run the session and stream events to its transcript.
+        """Stream session events to the transcript.
 
         Args:
             on_update: Callback after each applied event.
@@ -96,7 +96,7 @@ class SessionRunner:
         return data.decode("utf-8", "replace")
 
     def terminate(self) -> None:
-        """Send SIGTERM to the session's process group if it is still running."""
+        """Send SIGTERM to a running session process group."""
 
         if self.proc is not None and self.proc.returncode is None:
             try:

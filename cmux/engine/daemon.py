@@ -58,7 +58,7 @@ def write_owner(paths: RunPaths, pid: int) -> None:
 
 
 def read_owner(paths: RunPaths) -> int | None:
-    """Read the owner pid, or `None` when unavailable."""
+    """Return the owner PID or `None`."""
 
     if not paths.owner_file.exists():
         return None

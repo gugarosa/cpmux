@@ -22,7 +22,7 @@ STYLE_ACCENT = "magenta"
 
 @dataclass(frozen=True)
 class StatusVisual:
-    """Glyph, ASCII fallback, style, and label for one session status."""
+    """Session status glyph, ASCII fallback, style, and label."""
 
     glyph: str
     ascii_glyph: str
@@ -96,7 +96,7 @@ def format_duration(seconds: float) -> str:
 
 
 def table(title: str | None = None) -> Table:
-    """Build a table with the shared cmux style."""
+    """Build a table with shared cmux styling."""
 
     return Table(
         title=title,
@@ -111,7 +111,7 @@ def table(title: str | None = None) -> Table:
 
 
 def print_error(message: str, hint: str | None = None) -> None:
-    """Print an actionable error, with an optional recovery hint, to stderr."""
+    """Print an error and optional hint to stderr."""
 
     err.print(Text.assemble((f"{_icon(_ICON_ERROR)} ", STYLE_DANGER), message))
     if hint:
@@ -125,7 +125,7 @@ def print_warning(message: str) -> None:
 
 
 def print_success(message: str) -> None:
-    """Print a success confirmation to stdout."""
+    """Print a success message to stdout."""
 
     out.print(Text.assemble((f"{_icon(_ICON_SUCCESS)} ", STYLE_SUCCESS), message))
 

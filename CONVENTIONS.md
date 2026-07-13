@@ -1,14 +1,14 @@
 # cmux — Conventions
 
-Rules and invariants for adding to or changing cmux. cmux adopts the **phitrain
-conventions** (microsoft/aifsdk `.github/rules/` R1–R18 and `phitrain/CONVENTIONS.md`)
-as its style rules. **Code defines how cmux works; this file defines which rules apply.**
+Rules and invariants for adding to or changing cmux. cmux adopts the **phitrain conventions**
+(microsoft/aifsdk `.github/rules/` R1–R18 and `phitrain/CONVENTIONS.md`) as its style
+rules. **Code defines behavior; this file lists the applicable rules.**
 
 For user-facing setup and usage see `README.md`.
 
 ## Architecture invariants
 
-These invariants keep cmux composable. Do not cross them.
+These invariants keep cmux composable; do not violate them.
 
 - **One worktree per item.** Every item runs in its own `git worktree` on a unique
   `cmux/<slug>` branch off `origin/<base>`. Items never share a working tree.
@@ -24,9 +24,9 @@ These invariants keep cmux composable. Do not cross them.
 - **cmux owns only `.cmux/`.** copilot keeps its own transcripts and resumable
   session store under `~/.copilot`; reuse it read-only rather than duplicating it.
 - **A run has one owner.** Its pid is recorded in `daemon.json`: the foreground `up`
-  process, or the detached daemon. While the owner is alive the run is managed; a stale
+  process, or the detached daemon. A live owner means the run is managed. A stale
   owner (present but dead) marks a crash, so non-terminal sessions reconcile to a terminal
-  state instead of hanging as "running" forever.
+  state instead of remaining "running" indefinitely.
 - **Config precedence is `item > defaults > built-in`.** Resolution happens once in
   `Plan.resolve()`; downstream code consumes `ResolvedItem`, never re-merges.
 
@@ -44,15 +44,15 @@ cmux/
 ```
 
 - **Layering is one-directional:** `ui` → {`engine`, `voice`} → `vcs` → foundation. A layer
-  may import the ones below it, never above; foundation imports no subpackage. This keeps
-  `engine` headless without the TUI. Shared code moves
-  down to the lowest layer that needs it (status-to-colour lives in `ui/render.py`
+  may import only the layers below it; foundation imports no subpackage. This keeps `engine`
+  headless without the TUI. Shared code moves to the lowest layer that needs it
+  (status-to-colour lives in `ui/render.py`
   because only the UI reads it; the JSONL `event_data` unwrap lives in `events.py`
   because the engine needs it too).
 - **A subpackage must be a cohesive domain** with a few focused modules,
   not a thin split of one concern. Heavy or optional third-party deps (`sounddevice`,
-  `faster-whisper` behind the `voice` extra) are imported lazily inside the
-  function that needs them, so the core install and `--help` stay light.
+  `faster-whisper` behind the `voice` extra) are imported lazily in the function that
+  needs them to keep the core install and `--help` light.
 - **Absolute imports only**, and `__init__.py` stays empty apart from the header —
   import from the module, not the package.
 - **Tests mirror source 1:1**, so `engine/store.py` is tested by
@@ -110,8 +110,8 @@ Adopted from phitrain (rule ids in parentheses).
 - Double quotes for strings. Readable prose stays within 120 characters. (R9)
 
 **Deliberate divergence: config uses Pydantic v2, not `@dataclass`.** phitrain models
-config with `@dataclass` + `__post_init__` because it is driven by OmegaConf. cmux is a
-declarative YAML tool that needs string→item coercion, discriminated unions,
+config with `@dataclass` + `__post_init__` because it uses OmegaConf. cmux's declarative
+YAML needs string→item coercion, discriminated unions,
 `${ENV}` interpolation, and precise validation errors, all idiomatic in Pydantic v2.
 The config models in `config.py` and on-disk records in `engine/store.py` are therefore
 Pydantic `BaseModel`s. Everything else follows phitrain.

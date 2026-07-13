@@ -22,7 +22,7 @@ _ENV_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 
 
 class Effort(StrEnum):
-    """Reasoning effort passed to `copilot --effort`."""
+    """Reasoning effort for `copilot --effort`."""
 
     none = "none"
     minimal = "minimal"
@@ -43,7 +43,7 @@ class Preset(StrEnum):
 
 
 class Deps(StrEnum):
-    """Dependency seeding strategy for a fresh worktree."""
+    """Dependency setup for a fresh worktree."""
 
     symlink = "symlink"
     copy = "copy"
@@ -55,7 +55,7 @@ def interpolate_env(value: str) -> str:
     """Expand `${VAR}` and `${VAR:-default}` references in a string.
 
     Raises:
-        ValueError: If a variable is unset without a fallback.
+        ValueError: Unset variable without a fallback.
 
     """
 
@@ -143,7 +143,7 @@ class PRSettings(BaseModel):
 
 
 class Defaults(BaseModel):
-    """Run-wide defaults inherited by items."""
+    """Defaults inherited by all items."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -198,7 +198,7 @@ class Item(BaseModel):
     @computed_field  # type: ignore[prop-decorator]
     @property
     def slug(self) -> str:
-        """Branch- and worktree-safe slug derived from name, id, or prompt."""
+        """Branch- and worktree-safe slug from name, id, or prompt."""
 
         return slugify(self.name or self.id or self.prompt)
 
@@ -231,7 +231,7 @@ class ResolvedItem(BaseModel):
     pr_body: str
 
     def spawn_argv(self, worktree: str | Path, session_id: str, log_dir: str | Path) -> list[str]:
-        """Build the headless `copilot` invocation."""
+        """Build the headless `copilot` command."""
 
         argv = [
             "copilot",
@@ -351,10 +351,10 @@ class ConfigError(Exception):
 
 
 def load_plan(path: str | Path) -> Plan:
-    """Load and validate a cmux YAML file.
+    """Parse and validate a cmux YAML file.
 
     Raises:
-        ConfigError: If the file is missing or invalid.
+        ConfigError: Missing or invalid file.
 
     """
 

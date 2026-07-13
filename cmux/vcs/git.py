@@ -76,7 +76,7 @@ def branch_exists(root: str | Path, branch: str) -> bool:
 
 
 def remove_worktree(root: str | Path, worktree: str | Path, force: bool = True) -> bool:
-    """Remove a worktree, succeeding if it is already absent."""
+    """Remove a worktree and treat absence as success."""
 
     if not Path(worktree).exists():
         return True

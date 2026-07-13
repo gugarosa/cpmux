@@ -4,7 +4,7 @@
 
 Write one YAML file with a shared system prompt and a task list. cmux starts one headless
 `copilot` session per task, each in its own git worktree and branch, and opens a draft PR.
-Monitor and steer every session from one place.
+Monitor and steer all sessions.
 
 ## Install
 
@@ -15,12 +15,12 @@ Requires Python ≥ 3.12 and the [`copilot`](https://docs.github.com/copilot/how
 pip install cmux
 ```
 
-Or from source, for development:
+Or from source:
 
 ```bash
 git clone https://github.com/gugarosa/cmux
 cd cmux
-pip install -e ".[dev]"
+pip install -e .
 ```
 
 ## Quickstart
@@ -99,13 +99,13 @@ item's own `env` takes precedence, and `env` values reach the session's subproce
 
 ## Commands
 
-Every read/monitor command accepts `--run <id>` and defaults to the latest run.
+Run-scoped commands accept `--run <id>` and default to the latest run.
 
 | Group | Command | What it does |
 |---|---|---|
 | **Create** | `cmux init [FILE]` | Write a starter plan (defaults to `cmux.yml`). Flag: `--force/-f`. |
 | | `cmux plan [FILE]` | Compose a plan in your editor, or from text, speech, or audio. Flags: `--text`, `--voice`, `--audio` (mutually exclusive), `--transcribe-model`, `--model`, `--force/-f`, `--up`, `--pr/--no-pr`, `--detach/-d`, `--yes/-y`. |
-| **Launch** | `cmux up [FILE]` | Spawn one session per item (defaults to `cmux.yml`). Flags: `--dry-run`, `--detach/-d`, `--concurrency/-j`, `--pr/--no-pr`, `--deps`, `--yes/-y`. |
+| **Launch** | `cmux up [FILE]` | Spawn one session per item (defaults to `cmux.yml`). Flags: `--dry-run`, `--detach/-d`, `--concurrency/-j`, `--pr/--no-pr`, `--deps`, `--strip-github-token/--no-strip-github-token`, `--yes/-y`. |
 | **Monitor** | `cmux ls` | Snapshot each item's status, elapsed time, and activity. |
 | | `cmux attach` | Live, read-only monitor; reconnects to a background run (Ctrl-C to detach). |
 | | `cmux dash` | Interactive TUI: session list, live transcript, search. |
@@ -126,24 +126,25 @@ cmux plan issues.yml                    # compose in $EDITOR → cmux file
 cmux plan issues.yml --text "fix the flaky login test and paginate the notifications"
 cmux plan issues.yml --voice            # record from the mic (Enter to stop) instead
 cmux plan issues.yml --audio memo.wav   # transcribe an existing recording instead
-cmux plan issues.yml --up               # …and launch it straight away
+cmux plan issues.yml --up               # generate and launch it
 ```
 
-`cmux plan` opens your `$EDITOR` to describe the work (or takes `--text`), asks `copilot` to
-synthesize a plan, validates it, and writes the file. Add `--up` to launch it. With `--voice`
-or `--audio`, speech-to-text runs on-device through [faster-whisper](https://github.com/SYSTRAN/faster-whisper),
-so audio never leaves your machine.
+`cmux plan` opens your `$EDITOR` to describe the work (or takes `--text`), then asks `copilot`
+to produce a validated cmux file. Add `--up` to launch it. With `--voice` or `--audio`,
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper) transcribes speech on-device.
+Audio stays local.
 
-For `--voice` or `--audio`, install the optional extra (`--text` and the editor need nothing):
+The `cmux[voice]` extra installs `sounddevice` and `faster-whisper`. `--text` and the editor
+need neither:
 
 ```bash
 pip install "cmux[voice]"
 brew install portaudio     # macOS only: sounddevice needs PortAudio
 ```
 
-The Whisper model downloads automatically on first use and is cached afterward. Pick a size
-with `--transcribe-model` (`tiny`, `base` (default), `small`, `medium`, `large-v3`); larger is
-more accurate but slower.
+The default transcription model is `base`. Select another faster-whisper model with
+`--transcribe-model` (for example, `tiny`, `small`, `medium`, or `large-v3`). Models download
+on first use and are cached; larger models are more accurate but slower.
 
 ## How it works
 
@@ -154,7 +155,8 @@ more accurate but slower.
 - **cmux owns delivery.** Sessions run with `git push` denied. cmux commits each worktree and
   opens one draft PR per item. With `--no-pr`, it commits locally and stops.
 - **JSONL monitoring.** cmux reads copilot's `--output-format json` event stream and writes it
-  to disk. Runs survive detach and reconnect, and crashed sessions resolve to a terminal state.
+  to disk. Runs continue after detach and can be reattached. Crashed sessions resolve to a
+  terminal state.
 
 ```
 issues.yaml ──cmux up──►  session  fix-login-test    → worktree ─ branch ─ draft PR
@@ -162,7 +164,7 @@ issues.yaml ──cmux up──►  session  fix-login-test    → worktree ─ 
    items:   … ───────────►session  dark-mode-contrast→ worktree ─ branch ─ draft PR
                           session  …                    (parallel · isolated)
                                     │
-                cmux attach · dash · ls · logs · search — one place to watch and steer
+                monitor and steer: cmux attach · dash · ls · logs · search
 ```
 
 ## What a run leaves on disk
@@ -182,7 +184,7 @@ cmux writes under a gitignored `.cmux/`:
 
 ## Examples
 
-See [`examples/minimal.yaml`](examples/minimal.yaml) and a realistic twelve-issue frontend run
+See [`examples/minimal.yaml`](examples/minimal.yaml) and a twelve-issue frontend run
 in [`examples/frontend.yaml`](examples/frontend.yaml).
 
 ## Development

@@ -41,7 +41,7 @@ class SearchScreen(ModalScreen[str | None]):
     BINDINGS = [Binding("escape", "close", "Close")]
 
     def __init__(self, items: list[tuple[str, Path]]) -> None:
-        """Create the search overlay.
+        """Initialize transcript search.
 
         Args:
             items: `(label, transcript_path)` pairs.
@@ -76,7 +76,7 @@ class SearchScreen(ModalScreen[str | None]):
 
 
 class SendScreen(ModalScreen[str | None]):
-    """Prompt overlay returning a follow-up message."""
+    """Follow-up message overlay."""
 
     BINDINGS = [Binding("escape", "close", "Close")]
 
@@ -137,7 +137,7 @@ class CmuxApp(App):
 
         Args:
             start_path: Path inside target git repository.
-            run_id: Run identifier to display.
+            run_id: Displayed run identifier.
 
         """
 
@@ -321,7 +321,7 @@ class CmuxApp(App):
                 return
 
     def action_enter(self) -> None:
-        """Suspend the dashboard for an interactive copilot session."""
+        """Open an interactive Copilot session."""
 
         record = self._selected_record()
         if record is None:
@@ -339,7 +339,7 @@ class CmuxApp(App):
         self.reload()
 
     def action_send(self) -> None:
-        """Prompt for a follow-up and send it to the selected session."""
+        """Prompt and send a follow-up."""
 
         record = self._selected_record()
         if record is None:

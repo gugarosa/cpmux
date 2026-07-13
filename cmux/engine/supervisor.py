@@ -62,7 +62,7 @@ class Supervisor:
 
     @classmethod
     def create(cls, plan: Plan, start_path: str, options: Options, config_path: str = "") -> "Supervisor":
-        """Create a supervisor for a new run.
+        """Initialize a new run.
 
         Raises:
             git.GitError: `start_path` is outside a git repository.
@@ -76,7 +76,7 @@ class Supervisor:
 
     @classmethod
     def from_run(cls, start_path: str, run_id: str) -> "Supervisor":
-        """Reconstruct a supervisor from a persisted run."""
+        """Load a supervisor from a persisted run."""
 
         manifest = RunManifest.model_validate_json(RunPaths(start_path, run_id).manifest.read_text())
         options = Options(
@@ -102,7 +102,7 @@ class Supervisor:
         return supervisor
 
     def prepare(self) -> None:
-        """Write the manifest and create one worktree and record per item."""
+        """Create the manifest, worktrees, and session records."""
 
         self.paths.write_manifest(
             RunManifest(
@@ -152,13 +152,13 @@ class Supervisor:
             self.paths.write_record(record)
 
     async def run(self, headless: bool = False) -> list[SessionRecord]:
-        """Run all items under the concurrency limit.
+        """Run items within the concurrency limit.
 
         Args:
-            headless: Whether to disable the live table.
+            headless: Disable the live table.
 
         Returns:
-            Final item records.
+            Final session records.
 
         """
 

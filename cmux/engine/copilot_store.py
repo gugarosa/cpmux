@@ -19,7 +19,7 @@ class InvalidFtsQuery(Exception):
 
 @dataclass
 class FtsHit:
-    """Ranked full-text match from Copilot's session store."""
+    """Ranked match from Copilot's session store."""
 
     session_id: str
     snippet: str
@@ -27,16 +27,16 @@ class FtsHit:
 
 
 def search_sessions(session_ids: list[str], query: str, limit: int = 50, db_path: Path | None = None) -> list[FtsHit]:
-    """Search Copilot turns within selected sessions.
+    """Search turns in selected Copilot sessions.
 
     Args:
-        session_ids: Session ids.
-        query: FTS5 query with operators such as `OR`, `"phrase"`, and `term*`.
-        limit: Maximum hit count.
+        session_ids: Session IDs.
+        query: FTS5 query, including `OR`, `"phrase"`, and `term*`.
+        limit: Hit limit.
         db_path: Session store path.
 
     Returns:
-        Hits ordered by relevance.
+        Relevance-ranked hits.
 
     Raises:
         InvalidFtsQuery: Invalid FTS5 syntax.
@@ -49,19 +49,19 @@ def search_sessions(session_ids: list[str], query: str, limit: int = 50, db_path
 
     store = db_path or _DEFAULT_STORE
     if not store.exists():
-        raise CopilotStoreUnavailable(f"`{store}` copilot session store does not exist.")
+        raise CopilotStoreUnavailable(f"`{store}` Copilot session store not found.")
 
     try:
         connection = sqlite3.connect(f"file:{store}?mode=ro", uri=True, timeout=2.0)
     except sqlite3.OperationalError as exc:
-        raise CopilotStoreUnavailable(f"copilot session store could not be opened: {exc}.") from exc
+        raise CopilotStoreUnavailable(f"`{store}` Copilot session store open failed: {exc}.") from exc
 
     try:
         hits = _query(connection, sorted(set(session_ids)), query, limit)
     except sqlite3.OperationalError as exc:
         message = str(exc).lower()
         if "fts5" in message or "unterminated" in message or "syntax" in message:
-            raise InvalidFtsQuery(f"`{query}` is not a valid search query: {exc}.") from exc
+            raise InvalidFtsQuery(f"`{query}` is invalid: {exc}.") from exc
         raise CopilotStoreUnavailable(f"copilot session store query failed: {exc}.") from exc
     finally:
         connection.close()
