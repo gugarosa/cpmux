@@ -129,6 +129,7 @@ def provision_deps(root: str | Path, worktree: str | Path, strategy: str) -> Non
 
 def _install_deps(worktree: str | Path) -> None:
     worktree_path = Path(worktree)
+
     if (worktree_path / "pnpm-lock.yaml").exists():
         cmd = ["pnpm", "install", "--frozen-lockfile"]
     elif (worktree_path / "package-lock.json").exists():

@@ -129,4 +129,5 @@ def _level_style(level: float) -> str:
 
 def _elapsed(seconds: float) -> str:
     total = int(seconds)
+
     return f"{total // 60}:{total % 60:02d}"

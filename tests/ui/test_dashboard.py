@@ -32,6 +32,7 @@ def _build_run(tmp_path, keys):
         paths.transcript(key).write_text(
             json.dumps({"type": "assistant.message", "data": {"content": f"hello from {key}"}}) + "\n"
         )
+
     return paths
 
 
