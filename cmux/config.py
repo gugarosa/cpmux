@@ -161,7 +161,7 @@ class Defaults(BaseModel):
 
     @field_validator("port_env")
     @classmethod
-    def _valid_env_name(cls, value: str) -> str:
+    def _validate_env_name(cls, value: str) -> str:
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value):
             raise ValueError(f"`port_env` must be a valid environment variable name, got `{value}`.")
 
@@ -190,7 +190,7 @@ class Item(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def _string_shorthand(cls, data: Any) -> Any:
+    def _accept_string_shorthand(cls, data: Any) -> Any:
         if isinstance(data, str):
             return {"prompt": data}
         return data
@@ -279,7 +279,7 @@ class Plan(BaseModel):
 
     @field_validator("items")
     @classmethod
-    def _unique_and_wired(cls, items: list[Item]) -> list[Item]:
+    def _validate_unique_keys_and_dependencies(cls, items: list[Item]) -> list[Item]:
         keys = [item.key for item in items]
         dupes = {key for key in keys if keys.count(key) > 1}
         if dupes:

@@ -14,11 +14,13 @@ from cmux.engine.copilot_store import (
 
 def _store(tmp_path, rows):
     db = tmp_path / "store.db"
-    con = sqlite3.connect(db)
-    con.execute("CREATE VIRTUAL TABLE search_index USING fts5(content, session_id, source_type, source_id)")
-    con.executemany("INSERT INTO search_index(content, session_id, source_type, source_id) VALUES (?, ?, ?, ?)", rows)
-    con.commit()
-    con.close()
+    connection = sqlite3.connect(db)
+    connection.execute("CREATE VIRTUAL TABLE search_index USING fts5(content, session_id, source_type, source_id)")
+    connection.executemany(
+        "INSERT INTO search_index(content, session_id, source_type, source_id) VALUES (?, ?, ?, ?)", rows
+    )
+    connection.commit()
+    connection.close()
 
     return db
 

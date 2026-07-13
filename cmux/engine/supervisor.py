@@ -162,22 +162,22 @@ class Supervisor:
 
         """
 
-        sem = asyncio.Semaphore(self.concurrency)
+        semaphore = asyncio.Semaphore(self.concurrency)
         done_events = {item.key: asyncio.Event() for item in self.resolved}
         self._started_at = time.monotonic()
 
         if headless:
-            await self._run_all(sem, done_events)
+            await self._run_all(semaphore, done_events)
         else:
             with Live(self._render(), console=self.console, refresh_per_second=8, transient=True) as live:
                 self._live = live
-                await self._run_all(sem, done_events)
+                await self._run_all(semaphore, done_events)
                 live.update(self._render())
 
         return list(self.records.values())
 
-    async def _run_all(self, sem: asyncio.Semaphore, done: dict[str, asyncio.Event]) -> None:
-        tasks = [asyncio.create_task(self._run_item(item, sem, done)) for item in self.resolved]
+    async def _run_all(self, semaphore: asyncio.Semaphore, done_events: dict[str, asyncio.Event]) -> None:
+        tasks = [asyncio.create_task(self._run_item(item, semaphore, done_events)) for item in self.resolved]
         try:
             await asyncio.gather(*tasks)
         except asyncio.CancelledError:
@@ -185,11 +185,16 @@ class Supervisor:
                 runner.terminate()
             raise
 
-    async def _run_item(self, item: ResolvedItem, sem: asyncio.Semaphore, done: dict[str, asyncio.Event]) -> None:
+    async def _run_item(
+        self,
+        item: ResolvedItem,
+        semaphore: asyncio.Semaphore,
+        done_events: dict[str, asyncio.Event],
+    ) -> None:
         record = self.records[item.key]
         try:
             for dep in item.depends_on:
-                await done[dep].wait()
+                await done_events[dep].wait()
             if record.status == Status.FAILED:
                 return
 
@@ -203,7 +208,7 @@ class Supervisor:
                 self.paths.write_record(record)
                 return
 
-            async with sem:
+            async with semaphore:
                 record.mark_started()
                 record.status = Status.STARTING
                 self.paths.write_record(record)
@@ -232,7 +237,7 @@ class Supervisor:
         finally:
             record.mark_ended()
             self.paths.write_record(record)
-            done[item.key].set()
+            done_events[item.key].set()
             self._refresh()
 
     def _on_spawn(self, record: SessionRecord, pid: int) -> None:

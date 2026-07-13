@@ -12,7 +12,7 @@ _SNIPPET_AFTER = 80
 
 
 @dataclass
-class Hit:
+class TranscriptHit:
     """Transcript search match."""
 
     label: str
@@ -59,14 +59,14 @@ def _build_snippet(text: str, index: int) -> str:
     return f"{prefix}{window}{suffix}"
 
 
-def search_transcripts(items: list[tuple[str, Path]], query: str, regex: bool = False) -> list[Hit]:
+def search_transcripts(items: list[tuple[str, Path]], query: str, regex: bool = False) -> list[TranscriptHit]:
     """Find matching transcript messages across sessions."""
 
-    hits: list[Hit] = []
+    hits: list[TranscriptHit] = []
     for label, transcript_path in items:
         for role, text in _read_messages(transcript_path):
             index = _match_index(text, query, regex)
             if index >= 0:
-                hits.append(Hit(label=label, role=role, snippet=_build_snippet(text, index)))
+                hits.append(TranscriptHit(label=label, role=role, snippet=_build_snippet(text, index)))
 
     return hits
