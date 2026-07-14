@@ -50,6 +50,10 @@ cpmux attach               # watch it (Ctrl-C stops watching, not the run)
 By default, `cpmux up` starts the run in the background and opens one draft PR per item.
 Pass `--foreground` to stay attached and watch inline (Ctrl-C then stops the run).
 
+Each PR's title and description are written by the session itself from the changes it made,
+following the target repository's pull-request template when one exists. If a session
+doesn't produce one, cpmux falls back to the item name and prompt.
+
 ## The cpmux file
 
 A file has a shared `system` prompt, run-wide `defaults`, and `items`. Each item is either a

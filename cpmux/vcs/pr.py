@@ -5,6 +5,8 @@ import os
 import subprocess
 from pathlib import Path
 
+PR_DRAFT_FILENAME = ".cpmux-pr.md"
+
 
 class PRError(Exception):
     """Raised when a `git` or `gh` PR step fails."""
@@ -121,6 +123,35 @@ def existing_pr_url(worktree: str | Path, base: str, branch: str, env: dict[str,
         return None
 
     return proc.stdout.strip() or None
+
+
+def read_pr_draft(worktree: str | Path) -> tuple[str | None, str | None]:
+    """Read and remove an agent-authored pull-request draft.
+
+    Args:
+        worktree: Worktree that may contain the draft file.
+
+    Returns:
+        The parsed title and body, or `(None, None)` when absent or unusable.
+
+    """
+
+    path = Path(worktree) / PR_DRAFT_FILENAME
+    text = ""
+    if path.is_file() and not path.is_symlink():
+        text = path.read_text(encoding="utf-8", errors="replace").strip()
+
+    path.unlink(missing_ok=True)
+    if not text:
+        return None, None
+
+    lines = text.splitlines()
+    title = lines[0].lstrip("#").strip()
+    body = "\n".join(lines[1:]).strip()
+    if len(title) > 256:
+        return None, body or None
+
+    return title or None, body or None
 
 
 def create_pr(

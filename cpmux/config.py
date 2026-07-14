@@ -18,7 +18,21 @@ from pydantic import (
     model_validator,
 )
 
+from cpmux.vcs.pr import PR_DRAFT_FILENAME
+
 _ENV_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
+
+_PR_INSTRUCTIONS = (
+    "When the task is complete, write the pull-request title and description cpmux will use to a file "
+    f"named `{PR_DRAFT_FILENAME}` in the repository root (your working directory). Format it as Markdown: "
+    "the first line is a level-one heading holding a concise, imperative title, then a blank line, then the "
+    "body. Base the description on the changes you actually made. If the repository defines a pull-request "
+    "template (check `.github/`, the repository root, or `docs/` for a `PULL_REQUEST_TEMPLATE.md` file or a "
+    "`PULL_REQUEST_TEMPLATE/` directory), follow its structure and fill in every applicable section "
+    "truthfully; otherwise summarise the change, list the notable edits, and note how you verified them. Do "
+    f"not run `git add`, `git commit`, or `git push`, and do not stage `{PR_DRAFT_FILENAME}`; cpmux commits "
+    "your work and, when enabled, opens the pull request."
+)
 
 
 class Effort(StrEnum):
@@ -175,7 +189,7 @@ class PRSettings(BaseModel):
     draft: bool = True
     labels: list[str] = Field(default_factory=list)
     title_template: str = "{name}"
-    body_template: str = "Automated by cpmux.\n\n{prompt}"
+    body_template: str = "## Summary\n\n{prompt}\n"
 
 
 class Defaults(BaseModel):
@@ -285,7 +299,7 @@ class ResolvedItem(BaseModel):
         key: Stable item identifier.
         name: Display name.
         slug: Branch- and worktree-safe slug.
-        prompt: Final session prompt.
+        prompt: Resolved task prompt (system and item).
         model: Copilot model.
         effort: Reasoning effort.
         permissions: Permission settings.
@@ -320,6 +334,11 @@ class ResolvedItem(BaseModel):
     pr_title: str
     pr_body: str
 
+    def effective_prompt(self) -> str:
+        """Return the resolved prompt with the pull-request authoring instructions."""
+
+        return f"{self.prompt.rstrip()}\n\n---\n\n{_PR_INSTRUCTIONS}"
+
     def spawn_argv(self, worktree: str | Path, session_id: str, log_dir: str | Path) -> list[str]:
         """Build the headless `copilot` command.
 
@@ -338,7 +357,7 @@ class ResolvedItem(BaseModel):
             "-C",
             str(worktree),
             "-p",
-            self.prompt,
+            self.effective_prompt(),
             "--model",
             self.model,
             "--effort",

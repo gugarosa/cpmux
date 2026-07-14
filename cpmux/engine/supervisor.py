@@ -174,7 +174,7 @@ class Supervisor:
             )
             self.records[item.key] = record
             self.paths.ensure_session_dirs(item.key)
-            self.paths.prompt_file(item.key).write_text(item.prompt)
+            self.paths.prompt_file(item.key).write_text(item.effective_prompt())
 
             try:
                 _, record.base_sha = git.resolve_base(self.repo_root, item.remote, item.base)
@@ -297,10 +297,13 @@ class Supervisor:
     async def _open_pr(self, item: ResolvedItem, record: SessionRecord) -> None:
         worktree = self.paths.worktree(item.key)
         try:
+            title, body = pr.read_pr_draft(worktree)
             if not await asyncio.to_thread(git.has_changes, worktree, record.base_sha):
                 record.status = Status.NO_CHANGES
                 return
 
+            pr_title = title or item.pr_title
+            pr_body = body or item.pr_body
             record.status = Status.OPENING_PR
             self.paths.write_record(record)
             self._refresh()
@@ -310,11 +313,11 @@ class Supervisor:
                 item.remote,
                 item.base,
                 record.branch,
-                item.pr_title,
-                item.pr_body,
+                pr_title,
+                pr_body,
                 item.labels,
                 item.draft,
-                f"{item.pr_title}\n\ncpmux item: {item.key}",
+                f"{pr_title}\n\ncpmux item: {item.key}",
                 self.options.strip_github_token,
             )
             record.status = Status.DONE
@@ -326,14 +329,16 @@ class Supervisor:
     async def _commit_local(self, item: ResolvedItem, record: SessionRecord) -> None:
         worktree = self.paths.worktree(item.key)
         try:
+            title, _ = pr.read_pr_draft(worktree)
             if not await asyncio.to_thread(git.has_changes, worktree, record.base_sha):
                 record.status = Status.NO_CHANGES
                 return
 
+            message = title or item.pr_title
             await asyncio.to_thread(
                 pr.commit_all,
                 worktree,
-                f"{item.pr_title}\n\ncpmux item: {item.key}",
+                f"{message}\n\ncpmux item: {item.key}",
                 pr.gh_env(self.options.strip_github_token),
             )
             record.status = Status.DONE

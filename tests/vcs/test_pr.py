@@ -5,7 +5,14 @@ import subprocess
 
 import pytest
 
-from cpmux.vcs.pr import PRError, commit_all, gh_env, push_branch
+from cpmux.vcs.pr import (
+    PR_DRAFT_FILENAME,
+    PRError,
+    commit_all,
+    gh_env,
+    push_branch,
+    read_pr_draft,
+)
 
 
 def _leave_repo_unchanged(repo):
@@ -75,3 +82,37 @@ def test_push_branch_raises_on_bogus_remote(git_repo):
     repo = git_repo
     with pytest.raises(PRError):
         push_branch(repo, "nope", "feature/x", gh_env(strip_token=False))
+
+
+def test_read_pr_draft_parses_title_and_body_and_consumes_file(tmp_path):
+    (tmp_path / PR_DRAFT_FILENAME).write_text("# Add pagination\n\nAdds pagination to the feed.\n")
+
+    assert read_pr_draft(tmp_path) == ("Add pagination", "Adds pagination to the feed.")
+    assert not (tmp_path / PR_DRAFT_FILENAME).exists()
+
+
+@pytest.mark.parametrize(
+    ("contents", "expected"),
+    [
+        pytest.param(None, (None, None), id="missing-file"),
+        pytest.param("   \n", (None, None), id="empty-file"),
+        pytest.param("plain title\n\nbody", ("plain title", "body"), id="heading-less-first-line"),
+        pytest.param("# Only a title\n", ("Only a title", None), id="title-without-body"),
+        pytest.param(f"# {'x' * 300}\n\nbody", (None, "body"), id="oversized-title-falls-back"),
+    ],
+)
+def test_read_pr_draft_handles_edge_cases(tmp_path, contents, expected):
+    if contents is not None:
+        (tmp_path / PR_DRAFT_FILENAME).write_text(contents)
+
+    assert read_pr_draft(tmp_path) == expected
+
+
+def test_read_pr_draft_ignores_symlinks(tmp_path):
+    secret = tmp_path / "secret.txt"
+    secret.write_text("# Secret\n\nleaked")
+    (tmp_path / PR_DRAFT_FILENAME).symlink_to(secret)
+
+    assert read_pr_draft(tmp_path) == (None, None)
+    assert secret.exists()
+    assert not (tmp_path / PR_DRAFT_FILENAME).exists()

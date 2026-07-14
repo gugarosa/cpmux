@@ -8,6 +8,10 @@ All notable changes to cpmux are documented here. The format follows
 
 ### Added
 
+- Pull requests opened by `cpmux up` now carry a title and description authored by the
+  session from the changes it actually made, following the target repository's
+  pull-request template when one exists. If a session produces none, cpmux falls back to
+  the item name and a short summary of the prompt.
 - `cpmux plan --voice` now shows a live transcript while you speak: a fast model streams
   partial text during recording, and the configured model produces the accurate final
   transcription when you stop.

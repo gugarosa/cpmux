@@ -5,6 +5,7 @@ import pytest
 from pydantic import ValidationError
 
 from cpmux.config import ConfigError, Plan, Preset, interpolate_env, load_plan
+from cpmux.vcs.pr import PR_DRAFT_FILENAME
 
 
 @pytest.mark.parametrize(
@@ -174,6 +175,22 @@ def test_spawn_argv_includes_required_arguments(expected_argument):
     argv = resolved.spawn_argv("/wt/fix-x", "sid-123", "/logs")
 
     assert expected_argument in argv
+
+
+def test_spawn_argv_appends_pr_authoring_instructions():
+    resolved = Plan.model_validate({"items": [{"name": "Fix X", "prompt": "do"}]}).resolve()[0]
+    argv = resolved.spawn_argv("/wt/fix-x", "sid-123", "/logs")
+    prompt = argv[argv.index("-p") + 1]
+
+    assert prompt == resolved.effective_prompt()
+    assert prompt.startswith("do")
+    assert PR_DRAFT_FILENAME in prompt
+
+
+def test_resolve_default_pr_body_is_structured():
+    resolved = Plan.model_validate({"items": [{"prompt": "add a feature"}]}).resolve()[0]
+
+    assert resolved.pr_body == "## Summary\n\nadd a feature\n"
 
 
 @pytest.mark.parametrize(
