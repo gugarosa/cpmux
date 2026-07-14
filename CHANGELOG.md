@@ -6,6 +6,16 @@ All notable changes to cpmux are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `cpmux up` now runs in the background by default; pass `--foreground`/`-f` to stay
+  attached and watch inline.
+
+### Fixed
+
+- Live views (`up --foreground`, `attach`) no longer corrupt the terminal when arrow
+  keys or other input are pressed: keystroke echo is suppressed while a live view renders.
+
 ## [0.1.0]
 
 ### Changed

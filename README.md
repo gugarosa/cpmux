@@ -42,13 +42,13 @@ items:
 Preview the plan, start the sessions in the background, and watch the run:
 
 ```bash
-cpmux up --dry-run          # cpmux.yml is the default
-cpmux up --detach --yes
-cpmux attach
+cpmux up --dry-run         # preview the resolved plan
+cpmux up --yes             # start the run in the background
+cpmux attach               # watch it (Ctrl-C stops watching, not the run)
 ```
 
-By default, cpmux opens one draft PR per item. Press Ctrl-C to stop watching without stopping
-the run.
+By default, `cpmux up` starts the run in the background and opens one draft PR per item.
+Pass `--foreground` to stay attached and watch inline (Ctrl-C then stops the run).
 
 ## The cpmux file
 
@@ -106,7 +106,7 @@ Run-scoped commands accept `--run <id>` and default to the latest run.
 |---|---|---|
 | **Create** | `cpmux init [FILE]` | Write a starter plan (defaults to `cpmux.yml`). Flag: `--force/-f`. |
 | | `cpmux plan [FILE]` | Compose a plan in your editor, or from text, speech, or audio. Flags: `--text`, `--voice`, `--audio` (mutually exclusive), `--transcribe-model`, `--model`, `--force/-f`, `--up`, `--pr/--no-pr`, `--detach/-d`, `--yes/-y`. |
-| **Launch** | `cpmux up [FILE]` | Spawn one session per item (defaults to `cpmux.yml`). Flags: `--dry-run`, `--detach/-d`, `--concurrency/-j`, `--pr/--no-pr`, `--deps`, `--strip-github-token/--no-strip-github-token`, `--yes/-y`. |
+| **Launch** | `cpmux up [FILE]` | Spawn one session per item (defaults to `cpmux.yml`). Flags: `--dry-run`, `--detach/--foreground` (background by default), `--concurrency/-j`, `--pr/--no-pr`, `--deps`, `--strip-github-token/--no-strip-github-token`, `--yes/-y`. |
 | **Monitor** | `cpmux ls` | Snapshot each item's status, elapsed time, and activity. |
 | | `cpmux attach` | Live, read-only monitor; reconnects to a background run (Ctrl-C to detach). |
 | | `cpmux dash` | Interactive TUI: session list, live transcript, search. |

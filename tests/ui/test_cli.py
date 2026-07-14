@@ -1,6 +1,8 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
+import os
+
 import pytest
 from typer.testing import CliRunner
 
@@ -316,3 +318,47 @@ def test_rm_purge_deletes_run_history(monkeypatch):
     result = runner.invoke(app, ["rm", "--purge", "--yes"])
     assert result.exit_code == 0
     assert purged == ["run1"]
+
+
+def test_quiet_terminal_is_noop_without_tty(monkeypatch):
+    monkeypatch.setattr(cli.sys, "stdin", type("S", (), {"isatty": lambda self: False})())
+    with cli._quiet_terminal():
+        pass
+
+
+def test_quiet_terminal_disables_echo_on_tty(monkeypatch):
+    import pty
+    import termios
+
+    master, slave = pty.openpty()
+    try:
+        monkeypatch.setattr(
+            cli.sys, "stdin", type("S", (), {"isatty": lambda self: True, "fileno": lambda self: slave})()
+        )
+        before = termios.tcgetattr(slave)
+        with cli._quiet_terminal():
+            during = termios.tcgetattr(slave)
+            assert not during[3] & termios.ECHO
+            assert not during[3] & termios.ICANON
+        assert termios.tcgetattr(slave)[3] == before[3]
+    finally:
+        os.close(master)
+        os.close(slave)
+
+
+def test_up_defaults_to_detached(monkeypatch, tmp_path):
+    seen = {}
+    monkeypatch.setattr(cli, "_launch_run", lambda file, options, detach, yes: seen.update(detach=detach))
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["up", "--yes"])
+    assert result.exit_code == 0
+    assert seen["detach"] is True
+
+
+def test_up_foreground_flag_stays_attached(monkeypatch, tmp_path):
+    seen = {}
+    monkeypatch.setattr(cli, "_launch_run", lambda file, options, detach, yes: seen.update(detach=detach))
+    monkeypatch.chdir(tmp_path)
+    result = runner.invoke(app, ["up", "--foreground", "--yes"])
+    assert result.exit_code == 0
+    assert seen["detach"] is False

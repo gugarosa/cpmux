@@ -6,8 +6,12 @@ import os
 import re
 import shlex
 import shutil
+import sys
 import tempfile
+import termios
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import click
@@ -203,7 +207,12 @@ def init(
 def up(
     file: Path = typer.Argument(Path("cpmux.yml"), dir_okay=False, help="cpmux plan file (default: cpmux.yml)."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Resolve and print the plan; spawn nothing."),
-    detach: bool = typer.Option(False, "--detach", "-d", help="Run in background and return."),
+    detach: bool = typer.Option(
+        True,
+        "--detach/--foreground",
+        "-d/-f",
+        help="Run in the background and return (default); --foreground stays attached.",
+    ),
     concurrency: int | None = typer.Option(None, "--concurrency", "-j", help="Max parallel sessions."),
     pr: bool = typer.Option(True, "--pr/--no-pr", help="Open one draft PR per item (default: on)."),
     deps: Deps | None = typer.Option(None, "--deps", help="Override dependency strategy."),
@@ -238,6 +247,29 @@ def up(
         deps_override=str(deps) if deps else None,
     )
     _launch_run(file, options, detach, yes)
+
+
+@contextmanager
+def _quiet_terminal() -> Iterator[None]:
+    if not sys.stdin.isatty():
+        yield
+        return
+
+    fd = sys.stdin.fileno()
+    try:
+        saved = termios.tcgetattr(fd)
+    except termios.error:
+        yield
+        return
+
+    quiet = termios.tcgetattr(fd)
+    quiet[3] &= ~(termios.ECHO | termios.ICANON)
+    try:
+        termios.tcsetattr(fd, termios.TCSANOW, quiet)
+        yield
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, saved)
+        termios.tcflush(fd, termios.TCIFLUSH)
 
 
 def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
@@ -275,10 +307,19 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
         return
 
     daemon.write_owner(supervisor.paths, os.getpid())
+    interrupted = False
     try:
-        records = asyncio.run(supervisor.run())
+        with _quiet_terminal():
+            records = asyncio.run(supervisor.run())
+    except KeyboardInterrupt:
+        interrupted = True
+        records = list(supervisor.records.values())
     finally:
         daemon.clear_owner(supervisor.paths)
+
+    if interrupted:
+        theme.print_warning(f"run {supervisor.run_id} interrupted; sessions were stopped.")
+        raise typer.Exit(130)
 
     _print_completion_summary(supervisor.run_id, records)
 
@@ -332,7 +373,9 @@ def plan(
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite an existing output file."),
     up: bool = typer.Option(False, "--up", help="Launch the generated plan."),
     pr: bool = typer.Option(True, "--pr/--no-pr", help="With --up, open one draft PR per item (default: on)."),
-    detach: bool = typer.Option(False, "--detach", "-d", help="With --up, run in background."),
+    detach: bool = typer.Option(
+        True, "--detach/--foreground", "-d/-f", help="With --up, run in the background (default)."
+    ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip launch confirmation."),
 ) -> None:
     """Create a cpmux plan."""
@@ -413,7 +456,7 @@ def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: 
 
     records: list[SessionRecord] = []
     try:
-        with Live(console=console, refresh_per_second=4) as live:
+        with _quiet_terminal(), Live(console=console, refresh_per_second=4) as live:
             while True:
                 _, records = load_run(root, run_id)
                 records = daemon.reconcile(paths, records, persist=False)
