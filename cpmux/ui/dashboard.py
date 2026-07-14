@@ -25,14 +25,14 @@ from textual.widgets import (
     Static,
 )
 
-from cmux import theme
-from cmux.engine import daemon
-from cmux.engine.interact import followup_argv, resume_interactive_argv
-from cmux.engine.session import SessionRunner
-from cmux.engine.store import RunPaths, SessionRecord, load_run
-from cmux.events import ACTIVE, parse_line
-from cmux.ui.render import deps_cell, event_text
-from cmux.ui.search import search_transcripts
+from cpmux import theme
+from cpmux.engine import daemon
+from cpmux.engine.interact import followup_argv, resume_interactive_argv
+from cpmux.engine.session import SessionRunner
+from cpmux.engine.store import RunPaths, SessionRecord, load_run
+from cpmux.events import ACTIVE, parse_line
+from cpmux.ui.render import deps_cell, event_text
+from cpmux.ui.search import search_transcripts
 
 
 class SearchScreen(ModalScreen[str | None]):
@@ -104,7 +104,7 @@ def _pr_cell(record: SessionRecord) -> str:
     return record.branch
 
 
-class CmuxApp(App):
+class CpmuxApp(App):
     """Dashboard for one run."""
 
     CSS = """
@@ -164,7 +164,7 @@ class CmuxApp(App):
         yield Footer()
 
     def on_mount(self) -> None:
-        self.title = f"cmux · {self.run_id}"
+        self.title = f"cpmux · {self.run_id}"
         table = self.query_one("#sessions", DataTable)
         table.cursor_type = "row"
         table.add_columns("item", "status", "model", "deps", "branch / PR")

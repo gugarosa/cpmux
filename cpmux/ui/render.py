@@ -3,8 +3,8 @@
 
 from rich.text import Text
 
-from cmux import theme
-from cmux.events import SUCCESS, TERMINAL_FAILURE, Status, event_data
+from cpmux import theme
+from cpmux.events import SUCCESS, TERMINAL_FAILURE, Status, event_data
 
 
 def deps_cell(deps: list[str], status_by_key: dict[str, Status]) -> Text:

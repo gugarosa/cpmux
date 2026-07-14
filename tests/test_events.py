@@ -3,7 +3,7 @@
 
 import pytest
 
-from cmux.events import SessionState, Status, apply_event, event_data, parse_line
+from cpmux.events import SessionState, Status, apply_event, event_data, parse_line
 
 SAMPLE = [
     {"type": "session.tools_updated", "data": {"model": "gpt-5.5"}},

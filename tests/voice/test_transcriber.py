@@ -6,7 +6,7 @@ import types
 
 import pytest
 
-from cmux.voice.transcriber import VoiceError, transcribe
+from cpmux.voice.transcriber import VoiceError, transcribe
 
 
 class _Segment:

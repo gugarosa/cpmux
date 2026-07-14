@@ -3,8 +3,8 @@
 
 import pytest
 
-from cmux.events import Status
-from cmux.ui.render import deps_cell, event_text
+from cpmux.events import Status
+from cpmux.ui.render import deps_cell, event_text
 
 
 def test_deps_cell_is_dash_without_dependencies():
@@ -80,5 +80,5 @@ def test_event_text_styles_results(exit_code, expected_style):
 
 
 def test_event_text_falls_back_to_ascii_role_glyphs(monkeypatch):
-    monkeypatch.setenv("CMUX_ASCII", "1")
+    monkeypatch.setenv("CPMUX_ASCII", "1")
     assert event_text({"type": "user.message", "data": {"content": "hi"}}).plain == "> user hi"

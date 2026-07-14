@@ -7,8 +7,8 @@ import wave
 
 import pytest
 
-from cmux.voice.recorder import _elapsed, _Level, _meter, record_to_file
-from cmux.voice.transcriber import VoiceError
+from cpmux.voice.recorder import _elapsed, _Level, _meter, record_to_file
+from cpmux.voice.transcriber import VoiceError
 
 
 class _FakeStream:

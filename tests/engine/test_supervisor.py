@@ -6,11 +6,11 @@ from pathlib import Path
 
 import pytest
 
-from cmux.config import Plan
-from cmux.engine.store import RunManifest
-from cmux.engine.supervisor import Options, Supervisor
-from cmux.events import SessionState, Status
-from cmux.vcs import git
+from cpmux.config import Plan
+from cpmux.engine.store import RunManifest
+from cpmux.engine.supervisor import Options, Supervisor
+from cpmux.events import SessionState, Status
+from cpmux.vcs import git
 
 
 def _plan():

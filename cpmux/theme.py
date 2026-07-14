@@ -10,7 +10,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from cmux.events import Status
+from cpmux.events import Status
 
 STYLE_SUCCESS = "green"
 STYLE_DANGER = "red"
@@ -60,7 +60,7 @@ _ICON_INFO = ("›", ">")
 
 
 def _ascii_only() -> bool:
-    if os.environ.get("CMUX_ASCII"):
+    if os.environ.get("CPMUX_ASCII"):
         return True
 
     try:
@@ -129,7 +129,7 @@ def format_duration(seconds: float) -> str:
 
 
 def table(title: str | None = None) -> Table:
-    """Build a table with shared cmux styling.
+    """Build a table with shared cpmux styling.
 
     Args:
         title: Optional table title.

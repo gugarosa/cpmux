@@ -5,7 +5,7 @@ import subprocess
 
 import pytest
 
-from cmux.vcs.pr import PRError, commit_all, gh_env, push_branch
+from cpmux.vcs.pr import PRError, commit_all, gh_env, push_branch
 
 
 def _leave_repo_unchanged(repo):

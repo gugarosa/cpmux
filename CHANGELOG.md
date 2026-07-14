@@ -1,10 +1,33 @@
 # Changelog
 
-All notable changes to cmux are documented here. The format follows
+All notable changes to cpmux are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
+## [0.1.0]
+
+### Changed
+
+- Renamed the project from `cmux` to `cpmux` (the `cmux` name was taken on PyPI):
+  the command, package, `.cpmux/` state directory, `CPMUX_*` environment
+  variables, and the default `cpmux/{slug}` branch prefix all change accordingly.
+
+### Added
+
+- `cpmux rm --purge` to delete a run's on-disk history so it leaves `cpmux ls`.
+- Preflight validation that each item's `paths` exist in its worktree, failing
+  early with a clear error instead of a late `copilot` failure.
+- `branch_template` documented in the voice-plan schema so a spoken branch scope
+  maps to the branch, not `base`.
+
+### Fixed
+
+- A `--no-pr` item whose agent committed its own work now reports `done`
+  (previously `no changes`).
+- The dashboard follow-up now forwards each item's `env` overrides, matching
+  `cpmux send`.
 
 ## [0.0.1]
 
@@ -21,5 +44,6 @@ Initial release.
   composing a plan from an editor, text, speech (`--voice`), or an audio file.
 - On-device speech-to-text via faster-whisper behind the `voice` extra.
 
-[Unreleased]: https://github.com/gugarosa/cmux/compare/v0.0.1...HEAD
-[0.0.1]: https://github.com/gugarosa/cmux/releases/tag/v0.0.1
+[Unreleased]: https://github.com/gugarosa/cpmux/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/gugarosa/cpmux/compare/v0.0.1...v0.1.0
+[0.0.1]: https://github.com/gugarosa/cpmux/releases/tag/v0.0.1

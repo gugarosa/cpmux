@@ -6,8 +6,8 @@ import sys
 
 import pytest
 
-from cmux.engine.session import SessionRunner
-from cmux.events import Status
+from cpmux.engine.session import SessionRunner
+from cpmux.events import Status
 
 
 def _fake_argv(lines):

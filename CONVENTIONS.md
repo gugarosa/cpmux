@@ -1,6 +1,6 @@
-# cmux — Conventions
+# cpmux — Conventions
 
-Rules and invariants for adding to or changing cmux. cmux adopts the **phitrain conventions**
+Rules and invariants for adding to or changing cpmux. cpmux adopts the **phitrain conventions**
 (microsoft/aifsdk `.github/rules/` R1–R18 and `phitrain/CONVENTIONS.md`) as its style
 rules. **Code defines behavior; this file lists the applicable rules.**
 
@@ -8,10 +8,10 @@ For user-facing setup and usage see `README.md`.
 
 ## Architecture invariants
 
-These invariants keep cmux composable; do not violate them.
+These invariants keep cpmux composable; do not violate them.
 
 - **One worktree per item.** Every item runs in its own `git worktree` on a unique
-  `cmux/<slug>` branch off `origin/<base>`. Items never share a working tree.
+  `cpmux/<slug>` branch off `origin/<base>`. Items never share a working tree.
 - **Agents are edit-only; the orchestrator ships.** Sessions run with `git push`
   denied (`--deny-tool='shell(git push)'`). The orchestrator, never the agent,
   commits the diff, pushes the branch, and opens exactly one draft PR per item.
@@ -21,7 +21,7 @@ These invariants keep cmux composable; do not violate them.
 - **Pre-assigned session ids.** The orchestrator assigns each session's
   `--session-id` UUID up front, so a session is always addressable for status,
   resume, and recovery.
-- **cmux owns only `.cmux/`.** copilot keeps its own transcripts and resumable
+- **cpmux owns only `.cpmux/`.** copilot keeps its own transcripts and resumable
   session store under `~/.copilot`; reuse it read-only rather than duplicating it.
 - **A run has one owner.** Its pid is recorded in `daemon.json`: the foreground `up`
   process, or the detached daemon. A live owner means the run is managed. A stale
@@ -35,11 +35,11 @@ These invariants keep cmux composable; do not violate them.
 Modules are grouped by domain. Shared foundation modules stay at the package root.
 
 ```
-cmux/
+cpmux/
   config.py  events.py  logging.py      foundation: config model, JSONL/status, logging
   engine/    supervisor session daemon store interact   run lifecycle + state
   vcs/       git pr                       git worktrees + PR automation
-  voice/     recorder transcriber synthesizer   speech → transcript → cmux plan
+  voice/     recorder transcriber synthesizer   speech → transcript → cpmux plan
   ui/        cli dashboard search render  Typer commands, TUI, transcript rendering
 ```
 
@@ -58,12 +58,12 @@ cmux/
 - **Tests mirror source 1:1**, so `engine/store.py` is tested by
   `tests/engine/test_store.py`. Shared fixtures live in `tests/conftest.py`.
 
-## `.cmux/` layout
+## `.cpmux/` layout
 
-Repo-local and gitignored. cmux stores orchestration bookkeeping here; nothing here is committed.
+Repo-local and gitignored. cpmux stores orchestration bookkeeping here; nothing here is committed.
 
 ```
-.cmux/
+.cpmux/
   runs/<run_id>/
     manifest.json                 resolved run config
     sessions/<key>/
@@ -82,7 +82,7 @@ Adopted from phitrain (rule ids in parentheses).
   (`dict[str, Any]`, `list[str]`); import only `Any`, `Literal`, `Annotated`, … from
   `typing`. ABCs (`Callable`, `Iterable`, …) come from `collections.abc`. (R2)
 - Every `.py` file starts with the two-line copyright/license header.
-- Imports are top-level and absolute (`from cmux.x import y`). Order: stdlib →
+- Imports are top-level and absolute (`from cpmux.x import y`). Order: stdlib →
   third-party → local, blank-separated.
 - Public functions, classes, and their `__init__` carry Google-style docstrings
   (single-sentence summary; one-line `Args:`/`Returns:`/`Raises:` entries). A regular
@@ -95,7 +95,7 @@ Adopted from phitrain (rule ids in parentheses).
 - Data classes (Pydantic models and `@dataclass`, which have no explicit `__init__`)
   document every field in an `Attributes:` section, one line per field
   (`name: what it holds.`).
-- Logging uses `get_logger(__name__)` from `cmux.logging`; **never `print()` in
+- Logging uses `get_logger(__name__)` from `cpmux.logging`; **never `print()` in
   library code** (the CLI presentation layer uses Rich and `typer.echo`). Diagnostic
   `logger.warning`/`logger.error` use a backticked offender and trailing period:
   `` f"`name=value` <verb-phrase>." ``; `logger.info`/`logger.debug` stay plain. (R14)
@@ -110,7 +110,7 @@ Adopted from phitrain (rule ids in parentheses).
 - Double quotes for strings. Readable prose stays within 120 characters. (R9)
 
 **Deliberate divergence: config uses Pydantic v2, not `@dataclass`.** phitrain models
-config with `@dataclass` + `__post_init__` because it uses OmegaConf. cmux's declarative
+config with `@dataclass` + `__post_init__` because it uses OmegaConf. cpmux's declarative
 YAML needs string→item coercion, discriminated unions,
 `${ENV}` interpolation, and precise validation errors, all idiomatic in Pydantic v2.
 The config models in `config.py` and on-disk records in `engine/store.py` are therefore
@@ -147,7 +147,7 @@ black + isort (`profile = black`) + flake8, all at line-length 120, wired throug
 `.pre-commit-config.yaml`.
 
 ```bash
-isort cmux tests && black cmux tests && flake8 cmux tests
+isort cpmux tests && black cpmux tests && flake8 cpmux tests
 pytest
 ```
 

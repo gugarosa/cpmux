@@ -6,8 +6,8 @@ import os
 import sys
 from logging import Formatter, Logger, StreamHandler
 
-FORMATTER = Formatter("[cmux] [%(levelname)s] %(message)s")
-LOG_LEVEL = getattr(logging, os.environ.get("CMUX_LOG_LEVEL", "INFO").upper(), logging.INFO)
+FORMATTER = Formatter("[cpmux] [%(levelname)s] %(message)s")
+LOG_LEVEL = getattr(logging, os.environ.get("CPMUX_LOG_LEVEL", "INFO").upper(), logging.INFO)
 
 
 def _console_handler() -> StreamHandler:
@@ -18,7 +18,7 @@ def _console_handler() -> StreamHandler:
 
 
 def get_logger(logger_name: str) -> Logger:
-    """Return a cmux stderr logger.
+    """Return a cpmux stderr logger.
 
     Args:
         logger_name: Logger name.

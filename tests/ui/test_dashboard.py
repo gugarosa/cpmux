@@ -6,10 +6,10 @@ import json
 
 from textual.widgets import DataTable, RichLog
 
-from cmux.config import Plan
-from cmux.engine.store import RunManifest, RunPaths, SessionRecord
-from cmux.events import Status
-from cmux.ui.dashboard import CmuxApp
+from cpmux.config import Plan
+from cpmux.engine.store import RunManifest, RunPaths, SessionRecord
+from cpmux.events import Status
+from cpmux.ui.dashboard import CpmuxApp
 
 
 def _build_run(tmp_path, keys):
@@ -21,7 +21,7 @@ def _build_run(tmp_path, keys):
             key=key,
             name=key,
             slug=key,
-            branch=f"cmux/{key}",
+            branch=f"cpmux/{key}",
             base="main",
             model="gpt-5.5",
             session_id="sid",
@@ -40,7 +40,7 @@ def test_dashboard_populates_the_session_table(tmp_path):
     _build_run(tmp_path, ["alpha", "beta"])
 
     async def scenario():
-        app = CmuxApp(str(tmp_path), "run1")
+        app = CpmuxApp(str(tmp_path), "run1")
         async with app.run_test():
             assert app.query_one("#sessions", DataTable).row_count == 2
             assert app._selected_record().key == "alpha"
@@ -52,7 +52,7 @@ def test_dashboard_cursor_navigation_changes_selection(tmp_path):
     _build_run(tmp_path, ["alpha", "beta"])
 
     async def scenario():
-        app = CmuxApp(str(tmp_path), "run1")
+        app = CpmuxApp(str(tmp_path), "run1")
         async with app.run_test() as pilot:
             await pilot.press("j")
             assert app._selected_record().key == "beta"
@@ -66,7 +66,7 @@ def test_dashboard_shows_selected_transcript(tmp_path):
     _build_run(tmp_path, ["alpha"])
 
     async def scenario():
-        app = CmuxApp(str(tmp_path), "run1")
+        app = CpmuxApp(str(tmp_path), "run1")
         async with app.run_test():
             assert app._shown_key == "alpha"
 
@@ -83,7 +83,7 @@ def test_dashboard_keeps_scroll_position_across_reload(tmp_path):
     _write_transcript(paths, "alpha", 60)
 
     async def scenario():
-        app = CmuxApp(str(tmp_path), "run1")
+        app = CpmuxApp(str(tmp_path), "run1")
         async with app.run_test(size=(100, 24)) as pilot:
             await pilot.pause()
             log = app.query_one("#transcript", RichLog)
@@ -102,7 +102,7 @@ def test_dashboard_follows_live_output_at_bottom(tmp_path):
     _write_transcript(paths, "alpha", 60)
 
     async def scenario():
-        app = CmuxApp(str(tmp_path), "run1")
+        app = CpmuxApp(str(tmp_path), "run1")
         async with app.run_test(size=(100, 24)) as pilot:
             await pilot.pause()
             log = app.query_one("#transcript", RichLog)
@@ -145,7 +145,7 @@ def test_dashboard_surfaces_item_dependencies(tmp_path):
         paths.transcript(item.key).write_text("")
 
     async def scenario():
-        app = CmuxApp(str(tmp_path), "run1")
+        app = CpmuxApp(str(tmp_path), "run1")
         async with app.run_test():
             assert app.deps_by_key == {"alpha": [], "beta": ["alpha"]}
             table = app.query_one("#sessions", DataTable)
@@ -159,7 +159,7 @@ def test_dashboard_header_shows_selected_session_context(tmp_path):
     _build_run(tmp_path, ["alpha"])
 
     async def scenario():
-        app = CmuxApp(str(tmp_path), "run1")
+        app = CpmuxApp(str(tmp_path), "run1")
         async with app.run_test():
             from textual.widgets import Static
 
@@ -172,10 +172,10 @@ def test_dashboard_header_shows_selected_session_context(tmp_path):
 def test_dashboard_open_pr_without_pr_does_not_open_browser(tmp_path, monkeypatch):
     _build_run(tmp_path, ["alpha"])
     opened = []
-    monkeypatch.setattr("cmux.ui.dashboard.webbrowser.open", lambda url: opened.append(url))
+    monkeypatch.setattr("cpmux.ui.dashboard.webbrowser.open", lambda url: opened.append(url))
 
     async def scenario():
-        app = CmuxApp(str(tmp_path), "run1")
+        app = CpmuxApp(str(tmp_path), "run1")
         async with app.run_test():
             app.action_open_pr()
 

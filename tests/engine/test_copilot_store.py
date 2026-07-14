@@ -5,7 +5,7 @@ import sqlite3
 
 import pytest
 
-from cmux.engine.copilot_store import (
+from cpmux.engine.copilot_store import (
     CopilotStoreUnavailable,
     InvalidFtsQuery,
     search_sessions,

@@ -7,10 +7,10 @@ import sys
 
 import pytest
 
-from cmux.config import Plan
-from cmux.engine.daemon import pid_alive, reconcile, write_owner
-from cmux.engine.store import RunManifest, RunPaths, SessionRecord
-from cmux.events import Status
+from cpmux.config import Plan
+from cpmux.engine.daemon import pid_alive, reconcile, write_owner
+from cpmux.engine.store import RunManifest, RunPaths, SessionRecord
+from cpmux.events import Status
 
 
 def _dead_pid():
@@ -24,7 +24,7 @@ def _record(key, status):
         key=key,
         name=key,
         slug=key,
-        branch=f"cmux/{key}",
+        branch=f"cpmux/{key}",
         base="main",
         model="m",
         session_id="sid",

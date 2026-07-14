@@ -10,13 +10,13 @@ from uuid import uuid4
 from rich.live import Live
 from rich.table import Table
 
-from cmux import theme
-from cmux.config import Plan, ResolvedItem
-from cmux.engine.session import SessionRunner
-from cmux.engine.store import RunManifest, RunPaths, SessionRecord, new_run_id
-from cmux.events import ACTIVE, SUCCESS, TERMINAL_FAILURE, SessionState, Status
-from cmux.logging import get_logger
-from cmux.vcs import git, pr
+from cpmux import theme
+from cpmux.config import Plan, ResolvedItem
+from cpmux.engine.session import SessionRunner
+from cpmux.engine.store import RunManifest, RunPaths, SessionRecord, new_run_id
+from cpmux.events import ACTIVE, SUCCESS, TERMINAL_FAILURE, SessionState, Status
+from cpmux.logging import get_logger
+from cpmux.vcs import git, pr
 
 logger = get_logger(__name__)
 
@@ -314,7 +314,7 @@ class Supervisor:
                 item.pr_body,
                 item.labels,
                 item.draft,
-                f"{item.pr_title}\n\ncmux item: {item.key}",
+                f"{item.pr_title}\n\ncpmux item: {item.key}",
                 self.options.strip_github_token,
             )
             record.status = Status.DONE
@@ -333,7 +333,7 @@ class Supervisor:
             await asyncio.to_thread(
                 pr.commit_all,
                 worktree,
-                f"{item.pr_title}\n\ncmux item: {item.key}",
+                f"{item.pr_title}\n\ncpmux item: {item.key}",
                 pr.gh_env(self.options.strip_github_token),
             )
             record.status = Status.DONE
@@ -393,4 +393,4 @@ class Supervisor:
         failed = sum(status in TERMINAL_FAILURE for status in statuses)
         wall = theme.format_duration(time.monotonic() - self._started_at) if self._started_at else "0:00"
 
-        return f"cmux · run {self.run_id} · {done}/{len(statuses)} done · {active} active · {failed} failed · {wall}"
+        return f"cpmux · run {self.run_id} · {done}/{len(statuses)} done · {active} active · {failed} failed · {wall}"

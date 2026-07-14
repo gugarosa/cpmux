@@ -5,7 +5,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from cmux.events import event_data, parse_line
+from cpmux.events import event_data, parse_line
 
 _SNIPPET_BEFORE = 30
 _SNIPPET_AFTER = 80

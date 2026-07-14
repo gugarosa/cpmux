@@ -7,15 +7,15 @@ import subprocess
 import yaml
 from pydantic import ValidationError
 
-from cmux.config import Plan
-from cmux.voice.transcriber import VoiceError
+from cpmux.config import Plan
+from cpmux.voice.transcriber import VoiceError
 
 _SCHEMA = """\
-cmux YAML fields:
+cpmux YAML fields:
 - `system` (optional): a shared instruction prepended to every task.
 - `defaults` (optional): `model`, `effort` (none|minimal|low|medium|high|xhigh|max),
   `permissions` (readonly|edit|full), `base` (branch to fork from, default `main`),
-  `branch_template` (each item's branch name, default `cmux/{slug}`; keep the `{slug}`
+  `branch_template` (each item's branch name, default `cpmux/{slug}`; keep the `{slug}`
   placeholder, e.g. `alice/feature/{slug}`), `concurrency`, `pr` (`draft`, `labels`).
 - `items` (required, non-empty): task list. Each item is EITHER a plain string
   (the task prompt) OR a mapping with `prompt` plus optional `name`, `model`, `effort`,
@@ -25,7 +25,7 @@ _FENCE = re.compile(r"```(?:ya?ml)?\s*\n(.*?)```", re.DOTALL)
 
 
 def synthesize_plan(transcript: str, model: str = "gpt-5.5") -> str:
-    """Build a validated cmux plan from spoken tasks.
+    """Build a validated cpmux plan from spoken tasks.
 
     Args:
         transcript: Spoken task transcript.
@@ -61,7 +61,7 @@ def synthesize_plan(transcript: str, model: str = "gpt-5.5") -> str:
 
 def _build_prompt(transcript: str) -> str:
     return (
-        "Convert this spoken task list into a cmux YAML plan.\n\n"
+        "Convert this spoken task list into a cpmux YAML plan.\n\n"
         f"{_SCHEMA}\n\n"
         "Rules: one item per distinct task, keep each prompt a concise imperative sentence, "
         "add a shared `system` only if the speaker stated common guidance, and reply with "

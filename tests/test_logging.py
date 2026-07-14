@@ -4,21 +4,21 @@
 import logging
 import sys
 
-from cmux.logging import get_logger
+from cpmux.logging import get_logger
 
 
 def test_get_logger_returns_logger_instance():
-    logger = get_logger("cmux.test.instance")
+    logger = get_logger("cpmux.test.instance")
     assert isinstance(logger, logging.Logger)
 
 
 def test_get_logger_disables_propagation():
-    logger = get_logger("cmux.test.propagate")
+    logger = get_logger("cpmux.test.propagate")
     assert logger.propagate is False
 
 
 def test_get_logger_streams_to_stderr():
-    logger = get_logger("cmux.test.stderr")
+    logger = get_logger("cpmux.test.stderr")
     assert logger.handlers
     handler = logger.handlers[0]
     assert isinstance(handler, logging.StreamHandler)
@@ -26,8 +26,8 @@ def test_get_logger_streams_to_stderr():
 
 
 def test_get_logger_is_idempotent_when_called_twice():
-    first = get_logger("cmux.test.idempotent")
+    first = get_logger("cpmux.test.idempotent")
     count = len(first.handlers)
-    second = get_logger("cmux.test.idempotent")
+    second = get_logger("cpmux.test.idempotent")
     assert first is second
     assert len(second.handlers) == count

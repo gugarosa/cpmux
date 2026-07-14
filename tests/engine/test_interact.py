@@ -1,7 +1,7 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
-from cmux.engine.interact import followup_argv, resume_interactive_argv
+from cpmux.engine.interact import followup_argv, resume_interactive_argv
 
 
 def test_resume_interactive_argv_targets_session_and_worktree():

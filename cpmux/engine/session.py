@@ -7,7 +7,7 @@ import signal
 from collections.abc import Callable
 from pathlib import Path
 
-from cmux.events import SessionState, Status, apply_event, parse_line
+from cpmux.events import SessionState, Status, apply_event, parse_line
 
 OnUpdate = Callable[[str, SessionState, dict], None]
 OnSpawn = Callable[[int], None]

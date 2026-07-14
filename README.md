@@ -1,8 +1,8 @@
-# cmux
+# cpmux
 
 **A declarative multiplexer for GitHub Copilot CLI agents: "tmuxinator for `copilot` sessions."**
 
-Write one YAML file with a shared system prompt and a task list. cmux starts one headless
+Write one YAML file with a shared system prompt and a task list. cpmux starts one headless
 `copilot` session per task, each in its own git worktree and branch, and opens a draft PR.
 Monitor and steer all sessions.
 
@@ -12,21 +12,21 @@ Requires Python ≥ 3.12 and the [`copilot`](https://docs.github.com/copilot/how
 `git`, and `gh` CLIs on your `PATH`.
 
 ```bash
-pip install git+https://github.com/gugarosa/cmux
+pip install git+https://github.com/gugarosa/cpmux
 ```
 
 Or from source, for development:
 
 ```bash
-git clone https://github.com/gugarosa/cmux
-cd cmux
+git clone https://github.com/gugarosa/cpmux
+cd cpmux
 pip install -e .
 ```
 
 ## Quickstart
 
-From the root of the GitHub repository you want to change, create `cmux.yml` (or run
-`cmux init` for a starter):
+From the root of the GitHub repository you want to change, create `cpmux.yml` (or run
+`cpmux init` for a starter):
 
 ```yaml
 system: |
@@ -42,15 +42,15 @@ items:
 Preview the plan, start the sessions in the background, and watch the run:
 
 ```bash
-cmux up --dry-run          # cmux.yml is the default
-cmux up --detach --yes
-cmux attach
+cpmux up --dry-run          # cpmux.yml is the default
+cpmux up --detach --yes
+cpmux attach
 ```
 
-By default, cmux opens one draft PR per item. Press Ctrl-C to stop watching without stopping
+By default, cpmux opens one draft PR per item. Press Ctrl-C to stop watching without stopping
 the run.
 
-## The cmux file
+## The cpmux file
 
 A file has a shared `system` prompt, run-wide `defaults`, and `items`. Each item is either a
 prompt string or a mapping:
@@ -65,13 +65,13 @@ defaults:
   effort: medium           # none | minimal | low | medium | high | xhigh | max
   permissions: edit        # readonly | edit | full (yolo)
   base: main               # branch to fork from and open PRs against
-  branch_template: cmux/{slug}  # each item's branch name; e.g. gderosa/{slug}
+  branch_template: cpmux/{slug}  # each item's branch name; e.g. gderosa/{slug}
   concurrency: 6           # max sessions running at once (1–64)
   deps: symlink            # seed a worktree's node_modules: symlink | copy | install | skip
   port_base: 3000          # give each item a unique port (3000, 3001, …) via $PORT
   pr:
     draft: true
-    labels: [cmux]
+    labels: [cpmux]
 
 items:
   - Fix the flaky login test              # bare string → key is the slug "fix-the-flaky-login-test"
@@ -90,7 +90,7 @@ Item mappings accept `prompt`, `name`, `id`, `model`, `effort`, `permissions`, `
 `branch`, `labels`, `draft`, `paths`, `depends_on`, `env`, and `include_system`.
 
 An item's **key** is its `id` when set, otherwise a slug of its `name` or `prompt`. Pass keys
-to `enter`, `send`, `logs`, and `kill`; `cmux ls` and `--dry-run` print them. Any string field
+to `enter`, `send`, `logs`, and `kill`; `cpmux ls` and `--dry-run` print them. Any string field
 expands `${VAR}` and `${VAR:-default}` from the environment. Set `include_system: false` to
 omit the shared prompt for an item.
 
@@ -104,42 +104,42 @@ Run-scoped commands accept `--run <id>` and default to the latest run.
 
 | Group | Command | What it does |
 |---|---|---|
-| **Create** | `cmux init [FILE]` | Write a starter plan (defaults to `cmux.yml`). Flag: `--force/-f`. |
-| | `cmux plan [FILE]` | Compose a plan in your editor, or from text, speech, or audio. Flags: `--text`, `--voice`, `--audio` (mutually exclusive), `--transcribe-model`, `--model`, `--force/-f`, `--up`, `--pr/--no-pr`, `--detach/-d`, `--yes/-y`. |
-| **Launch** | `cmux up [FILE]` | Spawn one session per item (defaults to `cmux.yml`). Flags: `--dry-run`, `--detach/-d`, `--concurrency/-j`, `--pr/--no-pr`, `--deps`, `--strip-github-token/--no-strip-github-token`, `--yes/-y`. |
-| **Monitor** | `cmux ls` | Snapshot each item's status, elapsed time, and activity. |
-| | `cmux attach` | Live, read-only monitor; reconnects to a background run (Ctrl-C to detach). |
-| | `cmux dash` | Interactive TUI: session list, live transcript, search. |
-| | `cmux logs KEY` | Print a transcript; `--follow/-f` to stream, `--raw` for the JSONL. |
-| | `cmux search QUERY` | Search across transcripts; `--all` for every run, `--regex`, `--fts` to rank via Copilot's index. |
-| **Steer** | `cmux enter KEY` | Drop into an interactive copilot session, resumed in place. |
-| | `cmux send KEY "…"` | Append a follow-up turn and print the reply. |
-| | `cmux kill KEY` | Stop one running session. Flag: `--yes/-y`. |
-| **Teardown** | `cmux down` | Stop a run's background daemon and any live sessions. Flag: `--yes/-y`. |
-| | `cmux rm` | Remove the run's git worktrees. Flags: `--yes/-y`, `--force/-f` (delete uncommitted work), `--purge` (also delete run history). |
+| **Create** | `cpmux init [FILE]` | Write a starter plan (defaults to `cpmux.yml`). Flag: `--force/-f`. |
+| | `cpmux plan [FILE]` | Compose a plan in your editor, or from text, speech, or audio. Flags: `--text`, `--voice`, `--audio` (mutually exclusive), `--transcribe-model`, `--model`, `--force/-f`, `--up`, `--pr/--no-pr`, `--detach/-d`, `--yes/-y`. |
+| **Launch** | `cpmux up [FILE]` | Spawn one session per item (defaults to `cpmux.yml`). Flags: `--dry-run`, `--detach/-d`, `--concurrency/-j`, `--pr/--no-pr`, `--deps`, `--strip-github-token/--no-strip-github-token`, `--yes/-y`. |
+| **Monitor** | `cpmux ls` | Snapshot each item's status, elapsed time, and activity. |
+| | `cpmux attach` | Live, read-only monitor; reconnects to a background run (Ctrl-C to detach). |
+| | `cpmux dash` | Interactive TUI: session list, live transcript, search. |
+| | `cpmux logs KEY` | Print a transcript; `--follow/-f` to stream, `--raw` for the JSONL. |
+| | `cpmux search QUERY` | Search across transcripts; `--all` for every run, `--regex`, `--fts` to rank via Copilot's index. |
+| **Steer** | `cpmux enter KEY` | Drop into an interactive copilot session, resumed in place. |
+| | `cpmux send KEY "…"` | Append a follow-up turn and print the reply. |
+| | `cpmux kill KEY` | Stop one running session. Flag: `--yes/-y`. |
+| **Teardown** | `cpmux down` | Stop a run's background daemon and any live sessions. Flag: `--yes/-y`. |
+| | `cpmux rm` | Remove the run's git worktrees. Flags: `--yes/-y`, `--force/-f` (delete uncommitted work), `--purge` (also delete run history). |
 
 ## Composing a plan
 
-Compose a cmux file in your editor by default, or from text, speech, or audio:
+Compose a cpmux file in your editor by default, or from text, speech, or audio:
 
 ```bash
-cmux plan issues.yml                    # compose in $EDITOR → cmux file
-cmux plan issues.yml --text "fix the flaky login test and paginate the notifications"
-cmux plan issues.yml --voice            # record from the mic (Enter to stop) instead
-cmux plan issues.yml --audio memo.wav   # transcribe an existing recording instead
-cmux plan issues.yml --up               # generate and launch it
+cpmux plan issues.yml                    # compose in $EDITOR → cpmux file
+cpmux plan issues.yml --text "fix the flaky login test and paginate the notifications"
+cpmux plan issues.yml --voice            # record from the mic (Enter to stop) instead
+cpmux plan issues.yml --audio memo.wav   # transcribe an existing recording instead
+cpmux plan issues.yml --up               # generate and launch it
 ```
 
-`cmux plan` opens your `$EDITOR` to describe the work (or takes `--text`), then asks `copilot`
-to produce a validated cmux file. Add `--up` to launch it. With `--voice` or `--audio`,
+`cpmux plan` opens your `$EDITOR` to describe the work (or takes `--text`), then asks `copilot`
+to produce a validated cpmux file. Add `--up` to launch it. With `--voice` or `--audio`,
 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) transcribes speech on-device.
 Audio stays local.
 
-The `cmux[voice]` extra installs `sounddevice` and `faster-whisper`. `--text` and the editor
+The `cpmux[voice]` extra installs `sounddevice` and `faster-whisper`. `--text` and the editor
 need neither:
 
 ```bash
-pip install "cmux[voice] @ git+https://github.com/gugarosa/cmux"
+pip install "cpmux[voice] @ git+https://github.com/gugarosa/cpmux"
 brew install portaudio     # macOS only: sounddevice needs PortAudio
 ```
 
@@ -151,29 +151,29 @@ on first use and are cached; larger models are more accurate but slower.
 
 - **One item, one session.** Each task becomes a headless `copilot -p` run with a
   pre-assigned `--session-id`.
-- **Separate worktrees.** Each session runs in its own `git worktree` on a `cmux/<slug>`
+- **Separate worktrees.** Each session runs in its own `git worktree` on a `cpmux/<slug>`
   branch off `origin/<base>`.
-- **cmux owns delivery.** Sessions run with `git push` denied. cmux commits each worktree and
+- **cpmux owns delivery.** Sessions run with `git push` denied. cpmux commits each worktree and
   opens one draft PR per item. With `--no-pr`, it commits locally and stops.
-- **JSONL monitoring.** cmux reads copilot's `--output-format json` event stream and writes it
+- **JSONL monitoring.** cpmux reads copilot's `--output-format json` event stream and writes it
   to disk. Runs continue after detach and can be reattached. Crashed sessions resolve to a
   terminal state.
 
 ```
-issues.yaml ──cmux up──►  session  fix-login-test    → worktree ─ branch ─ draft PR
+issues.yaml ──cpmux up──►  session  fix-login-test    → worktree ─ branch ─ draft PR
    system:  …             session  paginate-list     → worktree ─ branch ─ draft PR
    items:   … ───────────►session  dark-mode-contrast→ worktree ─ branch ─ draft PR
                           session  …                    (parallel · isolated)
                                     │
-                monitor and steer: cmux attach · dash · ls · logs · search
+                monitor and steer: cpmux attach · dash · ls · logs · search
 ```
 
 ## What a run leaves on disk
 
-cmux writes under a gitignored `.cmux/`:
+cpmux writes under a gitignored `.cpmux/`:
 
 ```
-.cmux/
+.cpmux/
   runs/<run_id>/
     manifest.json               resolved run config
     sessions/<key>/

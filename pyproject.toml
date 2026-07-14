@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "cmux"
+name = "cpmux"
 version = "0.1.0"
 description = "Multiplexer for GitHub Copilot CLI agents"
 readme = "README.md"
@@ -35,14 +35,14 @@ dev = ["pytest>=8.0"]
 voice = ["sounddevice>=0.4", "faster-whisper>=1.0"]
 
 [project.scripts]
-cmux = "cmux.ui.cli:main"
+cpmux = "cpmux.ui.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/gugarosa/cmux"
-Repository = "https://github.com/gugarosa/cmux"
+Homepage = "https://github.com/gugarosa/cpmux"
+Repository = "https://github.com/gugarosa/cpmux"
 
 [tool.hatch.build.targets.wheel]
-packages = ["cmux"]
+packages = ["cpmux"]
 
 [tool.black]
 line-length = 120

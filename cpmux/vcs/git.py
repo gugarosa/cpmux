@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from cmux.logging import get_logger
+from cpmux.logging import get_logger
 
 logger = get_logger(__name__)
 

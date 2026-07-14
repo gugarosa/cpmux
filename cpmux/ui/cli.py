@@ -18,17 +18,17 @@ from rich.syntax import Syntax
 from rich.table import Table
 from rich.text import Text
 
-from cmux import __version__, theme
-from cmux.config import ConfigError, Deps, Plan, ResolvedItem, load_plan
-from cmux.engine import daemon
-from cmux.engine.copilot_store import (
+from cpmux import __version__, theme
+from cpmux.config import ConfigError, Deps, Plan, ResolvedItem, load_plan
+from cpmux.engine import daemon
+from cpmux.engine.copilot_store import (
     CopilotStoreUnavailable,
     InvalidFtsQuery,
     search_sessions,
 )
-from cmux.engine.interact import followup_argv, resume_interactive_argv
-from cmux.engine.session import SessionRunner
-from cmux.engine.store import (
+from cpmux.engine.interact import followup_argv, resume_interactive_argv
+from cpmux.engine.session import SessionRunner
+from cpmux.engine.store import (
     RunPaths,
     SessionRecord,
     all_run_ids,
@@ -36,8 +36,8 @@ from cmux.engine.store import (
     latest_run_id,
     load_run,
 )
-from cmux.engine.supervisor import Options, Supervisor
-from cmux.events import (
+from cpmux.engine.supervisor import Options, Supervisor
+from cpmux.events import (
     ACTIVE,
     SUCCESS,
     TERMINAL,
@@ -45,12 +45,12 @@ from cmux.events import (
     event_data,
     parse_line,
 )
-from cmux.ui.render import event_text
-from cmux.ui.search import search_transcripts
-from cmux.vcs.git import GitError, prune_worktrees, remove_worktree
-from cmux.voice.recorder import record_to_file
-from cmux.voice.synthesizer import synthesize_plan
-from cmux.voice.transcriber import DEFAULT_TRANSCRIBE_MODEL, VoiceError, transcribe
+from cpmux.ui.render import event_text
+from cpmux.ui.search import search_transcripts
+from cpmux.vcs.git import GitError, prune_worktrees, remove_worktree
+from cpmux.voice.recorder import record_to_file
+from cpmux.voice.synthesizer import synthesize_plan
+from cpmux.voice.transcriber import DEFAULT_TRANSCRIBE_MODEL, VoiceError, transcribe
 
 app = typer.Typer(
     add_completion=True,
@@ -62,7 +62,7 @@ app = typer.Typer(
     ),
     epilog=(
         "[bold]Quick start[/bold]\n\n"
-        "cmux init → cmux up cmux.yml --dry-run → cmux up cmux.yml → cmux dash\n\n"
+        "cpmux init → cpmux up cpmux.yml --dry-run → cpmux up cpmux.yml → cpmux dash\n\n"
         "Run-scoped commands target the latest run in the current repository unless --run is given."
     ),
 )
@@ -71,7 +71,7 @@ console = theme.out
 
 def _version(value: bool) -> None:
     if value:
-        console.print(f"cmux {__version__}")
+        console.print(f"cpmux {__version__}")
         raise typer.Exit()
 
 
@@ -88,7 +88,7 @@ def _load_plan_or_exit(file: Path) -> Plan:
     try:
         return load_plan(file)
     except ConfigError as exc:
-        hint = "create one with `cmux init`, or generate one with `cmux plan`." if not Path(file).exists() else None
+        hint = "create one with `cpmux init`, or generate one with `cpmux plan`." if not Path(file).exists() else None
         theme.print_error(str(exc), hint=hint)
         raise typer.Exit(1)
 
@@ -97,8 +97,8 @@ def _run_id_or_exit(run: str | None, root: Path = Path(".")) -> str:
     run_id = run or latest_run_id(root)
     if not run_id:
         theme.print_error(
-            f"no cmux runs found in `{root.resolve()}`.",
-            hint="start one with `cmux up <plan.yml>`, or preview it with `--dry-run`.",
+            f"no cpmux runs found in `{root.resolve()}`.",
+            hint="start one with `cpmux up <plan.yml>`, or preview it with `--dry-run`.",
         )
         raise typer.Exit(1)
 
@@ -111,7 +111,7 @@ def _resolve_record(run: str | None, key: str) -> tuple[RunPaths, SessionRecord]
     if not paths.record_file(key).exists():
         theme.print_error(
             f"no session `{key}` in run `{run_id}`.",
-            hint=f"list the run's items with `cmux ls --run {run_id}`.",
+            hint=f"list the run's items with `cpmux ls --run {run_id}`.",
         )
         raise typer.Exit(1)
 
@@ -185,10 +185,10 @@ items:
 
 @app.command(rich_help_panel="Create & run")
 def init(
-    output: Path = typer.Argument(Path("cmux.yml"), dir_okay=False, help="Plan file to create."),
+    output: Path = typer.Argument(Path("cpmux.yml"), dir_okay=False, help="Plan file to create."),
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite an existing file."),
 ) -> None:
-    """Write a starter cmux plan."""
+    """Write a starter cpmux plan."""
 
     if output.exists() and not force:
         theme.print_error(f"`{output}` already exists.", hint="pass `--force` to overwrite it.")
@@ -196,12 +196,12 @@ def init(
 
     output.write_text(_STARTER_PLAN, encoding="utf-8")
     theme.print_success(f"wrote {output}.")
-    theme.print_hint(f"edit it, then preview with `cmux up {output} --dry-run`.")
+    theme.print_hint(f"edit it, then preview with `cpmux up {output} --dry-run`.")
 
 
 @app.command(rich_help_panel="Create & run")
 def up(
-    file: Path = typer.Argument(Path("cmux.yml"), dir_okay=False, help="cmux plan file (default: cmux.yml)."),
+    file: Path = typer.Argument(Path("cpmux.yml"), dir_okay=False, help="cpmux plan file (default: cpmux.yml)."),
     dry_run: bool = typer.Option(False, "--dry-run", help="Resolve and print the plan; spawn nothing."),
     detach: bool = typer.Option(False, "--detach", "-d", help="Run in background and return."),
     concurrency: int | None = typer.Option(None, "--concurrency", "-j", help="Max parallel sessions."),
@@ -269,9 +269,9 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
         daemon.launch_detached(supervisor.run_id, str(supervisor.repo_root))
         run_id = supervisor.run_id
         theme.print_success(f"started run {run_id} in the background ({len(resolved)} item(s)).")
-        theme.print_hint(f"watch:     cmux dash --run {run_id}")
-        theme.print_hint(f"or:        cmux attach --run {run_id}")
-        theme.print_hint(f"stop:      cmux down --run {run_id}")
+        theme.print_hint(f"watch:     cpmux dash --run {run_id}")
+        theme.print_hint(f"or:        cpmux attach --run {run_id}")
+        theme.print_hint(f"stop:      cpmux down --run {run_id}")
         return
 
     daemon.write_owner(supervisor.paths, os.getpid())
@@ -290,7 +290,7 @@ def _print_completion_summary(run_id: str, records: list[SessionRecord]) -> None
     done = sum(record.status in SUCCESS for record in records)
     failed = sum(record.status in TERMINAL_FAILURE for record in records)
 
-    table = theme.table(title=f"cmux · run {run_id}")
+    table = theme.table(title=f"cpmux · run {run_id}")
     table.add_column("item", style="bold")
     table.add_column("result")
     table.add_column("elapsed", justify="right")
@@ -313,7 +313,7 @@ def _print_completion_summary(run_id: str, records: list[SessionRecord]) -> None
     if failed:
         theme.print_error(
             f"run {run_id} finished with {failed} failed item(s).",
-            hint=f"inspect a failure with `cmux logs <item> --run {run_id}`.",
+            hint=f"inspect a failure with `cpmux logs <item> --run {run_id}`.",
         )
     else:
         theme.print_success(f"run {run_id} finished: {done} item(s) completed.")
@@ -321,7 +321,7 @@ def _print_completion_summary(run_id: str, records: list[SessionRecord]) -> None
 
 @app.command(rich_help_panel="Create & run")
 def plan(
-    output: Path = typer.Argument(Path("cmux.yml"), dir_okay=False, help="Output cmux file."),
+    output: Path = typer.Argument(Path("cpmux.yml"), dir_okay=False, help="Output cpmux file."),
     text: str | None = typer.Option(None, "--text", help="Plan text (skips the editor)."),
     voice: bool = typer.Option(False, "--voice", help="Record a plan from the mic (Enter to stop)."),
     audio: Path | None = typer.Option(None, "--audio", exists=True, dir_okay=False, help="Audio file to transcribe."),
@@ -335,7 +335,7 @@ def plan(
     detach: bool = typer.Option(False, "--detach", "-d", help="With --up, run in background."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip launch confirmation."),
 ) -> None:
-    """Create a cmux plan."""
+    """Create a cpmux plan."""
 
     if sum([bool(text), voice, audio is not None]) > 1:
         theme.print_error("`--text`, `--voice`, and `--audio` are mutually exclusive; choose one.")
@@ -360,7 +360,7 @@ def plan(
     if up:
         _launch_run(output, Options(open_pr=pr), detach, yes)
     else:
-        theme.print_hint(f"review it, then run `cmux up {output}` (add `--dry-run` to preview).")
+        theme.print_hint(f"review it, then run `cpmux up {output}` (add `--dry-run` to preview).")
 
 
 def _resolve_transcript(text: str | None, audio: Path | None, voice: bool, transcribe_model: str) -> str:
@@ -397,7 +397,7 @@ def ls(run: str | None = typer.Option(None, "--run", help="Run id (default: late
     root = Path(".")
     run_id = run or latest_run_id(root)
     if not run_id:
-        theme.print_hint("no cmux runs yet — start one with `cmux up <plan.yml>`.")
+        theme.print_hint("no cpmux runs yet — start one with `cpmux up <plan.yml>`.")
         return
 
     _print_run_summary(root, run_id)
@@ -434,9 +434,9 @@ def dash(run: str | None = typer.Option(None, "--run", help="Run id (default: la
 
     run_id = _run_id_or_exit(run)
 
-    from cmux.ui.dashboard import CmuxApp
+    from cpmux.ui.dashboard import CpmuxApp
 
-    CmuxApp(".", run_id).run()
+    CpmuxApp(".", run_id).run()
 
 
 @app.command(rich_help_panel="Interact")
@@ -499,7 +499,7 @@ def logs(
     if not paths.record_file(key).exists():
         theme.print_error(
             f"no session `{key}` in run `{run_id}`.",
-            hint=f"list the run's items with `cmux ls --run {run_id}`.",
+            hint=f"list the run's items with `cpmux ls --run {run_id}`.",
         )
         raise typer.Exit(1)
 
@@ -547,8 +547,8 @@ def search(
         run_ids = [latest] if latest else []
     if not run_ids:
         theme.print_error(
-            "no cmux runs found here.",
-            hint="start one with `cmux up <plan.yml>`.",
+            "no cpmux runs found here.",
+            hint="start one with `cpmux up <plan.yml>`.",
         )
         raise typer.Exit(1)
 
@@ -618,7 +618,7 @@ def rm(
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
     force: bool = typer.Option(False, "--force", "-f", help="Delete worktrees with uncommitted changes."),
-    purge: bool = typer.Option(False, "--purge", help="Also delete run history so it leaves `cmux ls`."),
+    purge: bool = typer.Option(False, "--purge", help="Also delete run history so it leaves `cpmux ls`."),
 ) -> None:
     """Remove a run's git worktrees."""
 
@@ -628,7 +628,7 @@ def rm(
     if daemon.owner_alive(RunPaths(root, run_id)):
         theme.print_error(
             f"run {run_id} is still active.",
-            hint=f"stop it first with `cmux down --run {run_id}`.",
+            hint=f"stop it first with `cpmux down --run {run_id}`.",
         )
         raise typer.Exit(1)
 
@@ -681,7 +681,7 @@ def down(
 
     signalled = daemon.stop(paths, records)
     theme.print_success(f"stopped {signalled} process(es) for run {run_id}.")
-    theme.print_hint(f"remove the worktrees later with `cmux rm --run {run_id}`.")
+    theme.print_hint(f"remove the worktrees later with `cpmux rm --run {run_id}`.")
 
 
 @app.command(rich_help_panel="Stop & clean up")
@@ -767,7 +767,7 @@ def _run_table(run_id: str, records: list[SessionRecord], paths: RunPaths) -> Ta
     done = sum(record.status in SUCCESS for record in records)
     active = sum(record.status in ACTIVE for record in records)
     failed = sum(record.status in TERMINAL_FAILURE for record in records)
-    title = f"cmux · run {run_id} · {done}/{len(records)} done · {active} active · {failed} failed"
+    title = f"cpmux · run {run_id} · {done}/{len(records)} done · {active} active · {failed} failed"
 
     table = theme.table(title=title)
     table.add_column("item", style="bold", no_wrap=True)
@@ -803,11 +803,11 @@ def _print_run_summary(root: Path, run_id: str | None) -> None:
 
     console.print(_run_table(run_id, records, paths))
     if any(record.status in ACTIVE for record in records):
-        theme.print_hint(f"live view: cmux attach --run {run_id}")
+        theme.print_hint(f"live view: cpmux attach --run {run_id}")
 
 
 def main() -> None:
-    """Run the cmux CLI."""
+    """Run the cpmux CLI."""
 
     app()
 

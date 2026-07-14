@@ -10,8 +10,8 @@ from pathlib import Path
 
 from rich.text import Text
 
-from cmux import theme
-from cmux.voice.transcriber import VoiceError
+from cpmux import theme
+from cpmux.voice.transcriber import VoiceError
 
 _SAMPLE_RATE = 16000
 _CHANNELS = 1
@@ -37,7 +37,7 @@ def record_to_file(path: str | Path) -> Path:
     try:
         import sounddevice
     except ImportError as exc:
-        raise VoiceError("`sounddevice` is unavailable; install `cmux[voice]`.") from exc
+        raise VoiceError("`sounddevice` is unavailable; install `cpmux[voice]`.") from exc
 
     frames: list[bytes] = []
     level = _Level()

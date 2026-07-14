@@ -8,7 +8,7 @@ from typing import Any
 
 
 class Status(StrEnum):
-    """cmux session lifecycle stage."""
+    """cpmux session lifecycle stage."""
 
     PENDING = "pending"
     STARTING = "starting"

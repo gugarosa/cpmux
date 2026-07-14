@@ -175,7 +175,7 @@ class PRSettings(BaseModel):
     draft: bool = True
     labels: list[str] = Field(default_factory=list)
     title_template: str = "{name}"
-    body_template: str = "Automated by cmux.\n\n{prompt}"
+    body_template: str = "Automated by cpmux.\n\n{prompt}"
 
 
 class Defaults(BaseModel):
@@ -202,7 +202,7 @@ class Defaults(BaseModel):
     effort: Effort = Effort.medium
     permissions: Permissions = Field(default_factory=Permissions)
     base: str = "main"
-    branch_template: str = "cmux/{slug}"
+    branch_template: str = "cpmux/{slug}"
     pr: PRSettings = Field(default_factory=PRSettings)
     concurrency: int = Field(default=4, ge=1, le=64)
     deps: Deps = Deps.symlink
@@ -360,7 +360,7 @@ class ResolvedItem(BaseModel):
 
 
 class Plan(BaseModel):
-    """Parsed cmux run configuration.
+    """Parsed cpmux run configuration.
 
     Attributes:
         version: Configuration schema version.
@@ -460,11 +460,11 @@ class Plan(BaseModel):
 
 
 class ConfigError(Exception):
-    """Raised when a cmux YAML file is missing or invalid."""
+    """Raised when a cpmux YAML file is missing or invalid."""
 
 
 def load_plan(path: str | Path) -> Plan:
-    """Parse and validate a cmux YAML file.
+    """Parse and validate a cpmux YAML file.
 
     Args:
         path: YAML configuration path.
@@ -492,7 +492,7 @@ def load_plan(path: str | Path) -> Plan:
     try:
         return Plan.model_validate(raw)
     except ValidationError as exc:
-        raise ConfigError(f"`{config_path}` is not a valid cmux plan:\n{_format_validation(exc)}.") from exc
+        raise ConfigError(f"`{config_path}` is not a valid cpmux plan:\n{_format_validation(exc)}.") from exc
 
 
 def _format_validation(exc: ValidationError) -> str:

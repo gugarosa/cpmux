@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from cmux.engine.store import (
+from cpmux.engine.store import (
     RunManifest,
     RunPaths,
     SessionRecord,
@@ -15,7 +15,7 @@ from cmux.engine.store import (
     load_run,
     new_run_id,
 )
-from cmux.events import Status
+from cpmux.events import Status
 
 
 def _record(key="a"):
@@ -23,7 +23,7 @@ def _record(key="a"):
         key=key,
         name="Item A",
         slug="item-a",
-        branch="cmux/item-a",
+        branch="cpmux/item-a",
         base="main",
         model="gpt-5.5",
         session_id="sess-123",
@@ -46,36 +46,36 @@ def test_new_run_id_starts_with_date_prefix():
 @pytest.mark.parametrize(
     ("path_accessor", "expected_parent"),
     [
-        pytest.param((lambda paths: paths.manifest, "manifest.json"), Path(".cmux/runs/run1"), id="manifest"),
-        pytest.param((lambda paths: paths.owner_file, "owner.json"), Path(".cmux/runs/run1"), id="owner-file"),
+        pytest.param((lambda paths: paths.manifest, "manifest.json"), Path(".cpmux/runs/run1"), id="manifest"),
+        pytest.param((lambda paths: paths.owner_file, "owner.json"), Path(".cpmux/runs/run1"), id="owner-file"),
         pytest.param(
             (lambda paths: paths.session_dir("k"), "k"),
-            Path(".cmux/runs/run1/sessions"),
+            Path(".cpmux/runs/run1/sessions"),
             id="session-directory",
         ),
         pytest.param(
             (lambda paths: paths.prompt_file("k"), "prompt.md"),
-            Path(".cmux/runs/run1/sessions/k"),
+            Path(".cpmux/runs/run1/sessions/k"),
             id="prompt-file",
         ),
         pytest.param(
             (lambda paths: paths.transcript("k"), "transcript.jsonl"),
-            Path(".cmux/runs/run1/sessions/k"),
+            Path(".cpmux/runs/run1/sessions/k"),
             id="transcript",
         ),
         pytest.param(
             (lambda paths: paths.record_file("k"), "session.json"),
-            Path(".cmux/runs/run1/sessions/k"),
+            Path(".cpmux/runs/run1/sessions/k"),
             id="record-file",
         ),
         pytest.param(
             (lambda paths: paths.copilot_log_dir("k"), "copilot-logs"),
-            Path(".cmux/runs/run1/sessions/k"),
+            Path(".cpmux/runs/run1/sessions/k"),
             id="copilot-log-directory",
         ),
         pytest.param(
             (lambda paths: paths.worktree("k"), "k"),
-            Path(".cmux/worktrees/run1"),
+            Path(".cpmux/worktrees/run1"),
             id="worktree-directory",
         ),
     ],
@@ -104,7 +104,7 @@ def test_load_run_returns_manifest_and_records(tmp_path):
     manifest = RunManifest(
         run_id="run1",
         repo_root=str(tmp_path),
-        config_path=str(tmp_path / "cmux.yaml"),
+        config_path=str(tmp_path / "cpmux.yaml"),
         item_keys=["a"],
     )
     paths.write_manifest(manifest)
@@ -124,7 +124,7 @@ def _write_manifest(tmp_path, run_id):
         RunManifest(
             run_id=run_id,
             repo_root=str(tmp_path),
-            config_path=str(tmp_path / "cmux.yaml"),
+            config_path=str(tmp_path / "cpmux.yaml"),
         )
     )
 

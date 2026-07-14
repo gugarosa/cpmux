@@ -10,10 +10,10 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-from cmux.config import ResolvedItem
-from cmux.events import Status
+from cpmux.config import ResolvedItem
+from cpmux.events import Status
 
-CMUX_DIR = ".cmux"
+CPMUX_DIR = ".cpmux"
 
 
 def new_run_id() -> str:
@@ -133,7 +133,7 @@ class RunManifest(BaseModel):
 
 
 class RunPaths:
-    """Paths for one run under `<repo_root>/.cmux`."""
+    """Paths for one run under `<repo_root>/.cpmux`."""
 
     def __init__(self, repo_root: str | Path, run_id: str) -> None:
         """Build paths for a run.
@@ -147,7 +147,7 @@ class RunPaths:
         self.repo_root = Path(repo_root)
         self.run_id = run_id
 
-        self.root = self.repo_root / CMUX_DIR
+        self.root = self.repo_root / CPMUX_DIR
         self.run_dir = self.root / "runs" / run_id
         self.sessions_dir = self.run_dir / "sessions"
         self.worktrees_dir = self.root / "worktrees" / run_id
@@ -232,7 +232,7 @@ def all_run_ids(repo_root: str | Path) -> list[str]:
 
     """
 
-    runs = Path(repo_root) / CMUX_DIR / "runs"
+    runs = Path(repo_root) / CPMUX_DIR / "runs"
     if not runs.is_dir():
         return []
 

@@ -3,8 +3,8 @@
 
 import pytest
 
-from cmux import theme
-from cmux.events import Status
+from cpmux import theme
+from cpmux.events import Status
 
 
 def test_status_visual_covers_every_status():
@@ -34,7 +34,7 @@ def test_status_text_is_styled_by_severity(status, expected_style):
 
 
 def test_status_text_falls_back_to_ascii_glyphs(monkeypatch):
-    monkeypatch.setenv("CMUX_ASCII", "1")
+    monkeypatch.setenv("CPMUX_ASCII", "1")
     assert theme.status_text(Status.DONE).plain == "v done"
 
 

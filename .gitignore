@@ -1,5 +1,5 @@
-# cmux runtime state (worktrees, transcripts, run manifests)
-.cmux/
+# cpmux runtime state (worktrees, transcripts, run manifests)
+.cpmux/
 
 # Python
 __pycache__/

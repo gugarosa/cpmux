@@ -8,9 +8,9 @@ import subprocess
 import sys
 import time
 
-from cmux.engine.store import RunPaths, SessionRecord
-from cmux.events import TERMINAL, Status
-from cmux.logging import get_logger
+from cpmux.engine.store import RunPaths, SessionRecord
+from cpmux.events import TERMINAL, Status
+from cpmux.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -132,7 +132,7 @@ def launch_detached(run_id: str, repo_root: str) -> int:
 
     with (paths.run_dir / "daemon.log").open("ab") as log:
         proc = subprocess.Popen(
-            [sys.executable, "-m", "cmux", "_daemon", run_id],
+            [sys.executable, "-m", "cpmux", "_daemon", run_id],
             cwd=repo_root,
             stdin=subprocess.DEVNULL,
             stdout=log,

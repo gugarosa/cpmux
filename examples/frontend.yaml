@@ -13,12 +13,12 @@ defaults:
   effort: medium
   permissions: edit
   base: main
-  branch_template: cmux/{slug}
+  branch_template: cpmux/{slug}
   concurrency: 6
   deps: symlink
   pr:
     draft: true
-    labels: [frontend, cmux]
+    labels: [frontend, cpmux]
 
 items:
   - Fix layout shift on the pricing page caused by late-loading fonts

@@ -3,9 +3,9 @@
 
 import pytest
 
-from cmux.voice import synthesizer
-from cmux.voice.synthesizer import _extract_yaml, synthesize_plan
-from cmux.voice.transcriber import VoiceError
+from cpmux.voice import synthesizer
+from cpmux.voice.synthesizer import _extract_yaml, synthesize_plan
+from cpmux.voice.transcriber import VoiceError
 
 
 def _reply(text, monkeypatch):

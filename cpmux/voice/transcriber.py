@@ -32,7 +32,7 @@ def transcribe(audio_path: str | Path, model: str = DEFAULT_TRANSCRIBE_MODEL) ->
     try:
         from faster_whisper import WhisperModel
     except ImportError as exc:
-        raise VoiceError("`faster-whisper` is unavailable; install `cmux[voice]`.") from exc
+        raise VoiceError("`faster-whisper` is unavailable; install `cpmux[voice]`.") from exc
 
     try:
         whisper = WhisperModel(model, device="cpu", compute_type="int8")

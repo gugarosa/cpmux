@@ -4,7 +4,7 @@
 import pytest
 from pydantic import ValidationError
 
-from cmux.config import ConfigError, Plan, Preset, interpolate_env, load_plan
+from cpmux.config import ConfigError, Plan, Preset, interpolate_env, load_plan
 
 
 @pytest.mark.parametrize(
@@ -229,16 +229,16 @@ def test_defaults_rejects_invalid_port_env_name():
     ("env_name", "env_value", "value", "expected"),
     [
         pytest.param(
-            "CMUX_TEST_VAR",
+            "CPMUX_TEST_VAR",
             "hello",
-            "say ${CMUX_TEST_VAR}",
+            "say ${CPMUX_TEST_VAR}",
             "say hello",
             id="expands-set-variable",
         ),
         pytest.param(
-            "CMUX_TEST_MISSING",
+            "CPMUX_TEST_MISSING",
             None,
-            "${CMUX_TEST_MISSING:-fallback}",
+            "${CPMUX_TEST_MISSING:-fallback}",
             "fallback",
             id="uses-fallback-for-missing-variable",
         ),
@@ -253,9 +253,9 @@ def test_interpolate_env_expands_and_falls_back(monkeypatch, env_name, env_value
 
 
 def test_interpolate_env_raises_on_unset_var_without_default(monkeypatch):
-    monkeypatch.delenv("CMUX_TEST_MISSING", raising=False)
+    monkeypatch.delenv("CPMUX_TEST_MISSING", raising=False)
     with pytest.raises(ValueError):
-        interpolate_env("${CMUX_TEST_MISSING}")
+        interpolate_env("${CPMUX_TEST_MISSING}")
 
 
 @pytest.mark.parametrize(
@@ -278,7 +278,7 @@ def test_load_plan_invalid_input_raises_config_error(tmp_path, filename, content
 @pytest.mark.parametrize(
     "expected_content",
     [
-        pytest.param("not a valid cmux plan", id="concise-plan-error"),
+        pytest.param("not a valid cpmux plan", id="concise-plan-error"),
         pytest.param("items", id="field-name"),
     ],
 )
