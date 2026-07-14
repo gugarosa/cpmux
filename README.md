@@ -133,7 +133,8 @@ cpmux plan issues.yml --up               # generate and launch it
 `cpmux plan` opens your `$EDITOR` to describe the work (or takes `--text`), then asks `copilot`
 to produce a validated cpmux file. Add `--up` to launch it. With `--voice` or `--audio`,
 [faster-whisper](https://github.com/SYSTRAN/faster-whisper) transcribes speech on-device.
-Audio stays local.
+Audio stays local. `--voice` shows a live transcript as you speak (a fast model streams
+partials while recording; your chosen model produces the accurate final text on stop).
 
 The `cpmux[voice]` extra installs `sounddevice` and `faster-whisper`. `--text` and the editor
 need neither:

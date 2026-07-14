@@ -3,45 +3,54 @@
 
 import struct
 import sys
-import wave
 
 import pytest
 
-from cpmux.voice.recorder import _elapsed, _Level, _meter, record_to_file
+from cpmux.voice.recorder import (
+    _common_word_count,
+    _elapsed,
+    _Level,
+    _meter,
+    _Partial,
+    record_and_transcribe,
+)
 from cpmux.voice.transcriber import VoiceError
 
 
-class _FakeStream:
-    def __init__(self, callback, **kwargs):
-        self._callback = callback
-
-    def __enter__(self):
-        self._callback(b"\x01\x00" * 320, 320, None, None)
-        return self
-
-    def __exit__(self, *args):
-        return False
-
-
-class _FakeSoundDevice:
-    RawInputStream = _FakeStream
-
-
-def test_record_to_file_writes_wav(tmp_path, monkeypatch):
-    monkeypatch.setitem(sys.modules, "sounddevice", _FakeSoundDevice())
-    monkeypatch.setattr("builtins.input", lambda *a: "")
-    out = record_to_file(tmp_path / "rec.wav")
-    assert out.exists()
-    with wave.open(str(out), "rb") as wav:
-        assert wav.getnchannels() == 1
-        assert wav.getframerate() == 16000
-        assert wav.getnframes() > 0
-
-
-def test_record_to_file_without_backend_raises(tmp_path, monkeypatch):
-    monkeypatch.setitem(sys.modules, "sounddevice", None)
+def test_record_and_transcribe_reports_missing_backend(monkeypatch):
+    monkeypatch.setitem(sys.modules, "numpy", None)
     with pytest.raises(VoiceError):
-        record_to_file(tmp_path / "rec.wav")
+        record_and_transcribe("base")
+
+
+@pytest.mark.parametrize(
+    ("previous", "current", "expected"),
+    [
+        pytest.param(["a", "b", "c"], ["a", "b", "x"], 2, id="common_prefix"),
+        pytest.param([], ["a"], 0, id="empty_previous"),
+        pytest.param(["a", "b"], ["a", "b"], 2, id="identical"),
+        pytest.param(["a"], ["b"], 0, id="no_overlap"),
+    ],
+)
+def test_common_word_count(previous, current, expected):
+    assert _common_word_count(previous, current) == expected
+
+
+def test_partial_commits_agreed_prefix():
+    partial = _Partial()
+    partial.update("fix the login")
+    assert partial.snapshot() == ("", "fix the login")
+    partial.update("fix the login bug now")
+    assert partial.snapshot() == ("fix the login", "bug now")
+
+
+def test_partial_commit_is_monotonic():
+    partial = _Partial()
+    partial.update("alpha beta gamma")
+    partial.update("alpha beta gamma delta")
+    assert partial.snapshot()[0] == "alpha beta gamma"
+    partial.update("alpha beta")
+    assert partial.snapshot()[0] == "alpha beta gamma"
 
 
 @pytest.mark.parametrize(

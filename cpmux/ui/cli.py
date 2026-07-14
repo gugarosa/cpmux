@@ -7,7 +7,6 @@ import re
 import shlex
 import shutil
 import sys
-import tempfile
 import termios
 import time
 from collections.abc import Iterator
@@ -52,7 +51,7 @@ from cpmux.events import (
 from cpmux.ui.render import event_text
 from cpmux.ui.search import search_transcripts
 from cpmux.vcs.git import GitError, prune_worktrees, remove_worktree
-from cpmux.voice.recorder import record_to_file
+from cpmux.voice.recorder import record_and_transcribe
 from cpmux.voice.synthesizer import synthesize_plan
 from cpmux.voice.transcriber import DEFAULT_TRANSCRIBE_MODEL, VoiceError, transcribe
 
@@ -424,13 +423,7 @@ def _compose_in_editor() -> str:
 
 
 def _record_and_transcribe(transcribe_model: str) -> str:
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as handle:
-        wav = Path(handle.name)
-    try:
-        record_to_file(wav)
-        return transcribe(wav, transcribe_model)
-    finally:
-        wav.unlink(missing_ok=True)
+    return record_and_transcribe(transcribe_model)
 
 
 @app.command(rich_help_panel="Monitor")

@@ -6,6 +6,12 @@ All notable changes to cpmux are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `cpmux plan --voice` now shows a live transcript while you speak: a fast model streams
+  partial text during recording, and the configured model produces the accurate final
+  transcription when you stop.
+
 ### Changed
 
 - `cpmux up` now runs in the background by default; pass `--foreground`/`-f` to stay

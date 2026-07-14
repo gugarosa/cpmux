@@ -130,8 +130,7 @@ def test_plan_empty_editor_exits_one(tmp_path, monkeypatch):
 
 
 def test_plan_voice_records_instead_of_editor(tmp_path, monkeypatch):
-    monkeypatch.setattr(cli, "record_to_file", lambda wav: wav)
-    monkeypatch.setattr(cli, "transcribe", lambda *args, **kwargs: "spoken plan")
+    monkeypatch.setattr(cli, "record_and_transcribe", lambda *args, **kwargs: "spoken plan")
     monkeypatch.setattr(cli, "synthesize_plan", lambda transcript, model: f"items:\n  - {transcript}\n")
     out = tmp_path / "out.yml"
     result = runner.invoke(app, ["plan", str(out), "--voice"])
