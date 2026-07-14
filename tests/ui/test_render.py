@@ -1,6 +1,8 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
+import pytest
+
 from cmux.events import Status
 from cmux.ui.render import deps_cell, event_text
 
@@ -18,26 +20,63 @@ def test_deps_cell_colors_each_dependency_by_status():
     assert {"green", "yellow", "red", "magenta"} <= styles
 
 
-def test_event_text_renders_known_events():
-    assert event_text({"type": "user.message", "data": {"content": "hi"}}).plain == "🧑 user hi"
-    assert event_text({"type": "assistant.message", "data": {"content": "done"}}).plain == "🤖 assistant done"
-    assert event_text({"type": "tool.execution_start", "data": {"toolName": "write"}}).plain == "🔧 tool write"
-    assert event_text({"type": "result", "exitCode": 0}).plain == "— result exit=0"
+@pytest.mark.parametrize(
+    ("event", "expected_plain"),
+    [
+        pytest.param(
+            {"type": "user.message", "data": {"content": "hi"}},
+            "🧑 user hi",
+            id="user-message",
+        ),
+        pytest.param(
+            {"type": "assistant.message", "data": {"content": "done"}},
+            "🤖 assistant done",
+            id="assistant-message",
+        ),
+        pytest.param(
+            {"type": "tool.execution_start", "data": {"toolName": "write"}},
+            "🔧 tool write",
+            id="tool-execution-start",
+        ),
+        pytest.param(
+            {"type": "result", "exitCode": 0},
+            "— result exit=0",
+            id="successful-result",
+        ),
+        pytest.param(
+            {"type": "session.error", "data": {"message": "token expired"}},
+            "✖ error token expired",
+            id="session-error",
+        ),
+    ],
+)
+def test_event_text_renders(event, expected_plain):
+    assert event_text(event).plain == expected_plain
 
 
-def test_event_text_is_none_for_empty_or_unknown():
-    assert event_text({"type": "assistant.message", "data": {"content": "   "}}) is None
-    assert event_text({"type": "session.idle", "data": {}}) is None
+@pytest.mark.parametrize(
+    "event",
+    [
+        pytest.param(
+            {"type": "assistant.message", "data": {"content": "   "}},
+            id="empty-assistant-message",
+        ),
+        pytest.param({"type": "session.idle", "data": {}}, id="unknown-event"),
+    ],
+)
+def test_event_text_is_none_for_empty_or_unknown(event):
+    assert event_text(event) is None
 
 
-def test_event_text_surfaces_session_errors():
-    text = event_text({"type": "session.error", "data": {"message": "token expired"}})
-    assert text.plain == "✖ error token expired"
-
-
-def test_event_text_marks_failed_result_red():
-    assert event_text({"type": "result", "exitCode": 1}).style == "red"
-    assert event_text({"type": "result", "exitCode": 0}).style == "dim"
+@pytest.mark.parametrize(
+    ("exit_code", "expected_style"),
+    [
+        pytest.param(1, "red", id="failed-result"),
+        pytest.param(0, "dim", id="successful-result"),
+    ],
+)
+def test_event_text_styles_results(exit_code, expected_style):
+    assert event_text({"type": "result", "exitCode": exit_code}).style == expected_style
 
 
 def test_event_text_falls_back_to_ascii_role_glyphs(monkeypatch):

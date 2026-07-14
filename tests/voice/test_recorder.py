@@ -44,22 +44,43 @@ def test_record_to_file_without_backend_raises(tmp_path, monkeypatch):
         record_to_file(tmp_path / "rec.wav")
 
 
-def test_elapsed_formats_minutes_and_seconds():
-    assert _elapsed(0) == "0:00"
-    assert _elapsed(7.9) == "0:07"
-    assert _elapsed(65) == "1:05"
+@pytest.mark.parametrize(
+    ("seconds", "expected"),
+    [
+        pytest.param(0, "0:00", id="zero_seconds"),
+        pytest.param(7.9, "0:07", id="fractional_seconds"),
+        pytest.param(65, "1:05", id="minutes_and_seconds"),
+    ],
+)
+def test_elapsed_formats_time(seconds, expected):
+    assert _elapsed(seconds) == expected
 
 
-def test_level_style_tracks_peak_then_decays():
+@pytest.mark.parametrize(
+    ("samples", "expected"),
+    [
+        pytest.param([struct.pack("<8h", *([16384] * 8))], pytest.approx(0.5, abs=0.01), id="tracks_peak"),
+        pytest.param(
+            [struct.pack("<8h", *([16384] * 8)), b"\x00\x00" * 8],
+            pytest.approx(0.4, abs=0.01),
+            id="decays",
+        ),
+    ],
+)
+def test_level_tracks_peak_and_decay(samples, expected):
     level = _Level()
-    level.update(struct.pack("<8h", *([16384] * 8)))
-    assert level.value == pytest.approx(0.5, abs=0.01)
-
-    level.update(b"\x00\x00" * 8)
-    assert level.value == pytest.approx(0.4, abs=0.01)
+    for sample in samples:
+        level.update(sample)
+    assert level.value == expected
 
 
-def test_meter_fills_with_level_and_shows_time():
+@pytest.mark.parametrize(
+    "expected",
+    [
+        pytest.param("0:07", id="elapsed_time"),
+        pytest.param("█" * 24, id="filled_level"),
+    ],
+)
+def test_meter_shows_level_and_time(expected):
     text = _meter(7, 1.0).plain
-    assert "0:07" in text
-    assert "█" * 24 in text
+    assert expected in text

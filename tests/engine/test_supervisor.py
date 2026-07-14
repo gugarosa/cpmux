@@ -4,6 +4,8 @@
 import asyncio
 from pathlib import Path
 
+import pytest
+
 from cmux.config import Plan
 from cmux.engine.store import RunManifest
 from cmux.engine.supervisor import Options, Supervisor
@@ -135,25 +137,23 @@ def test_commit_local_marks_done_when_agent_already_committed(git_repo):
     assert record.status == Status.DONE
 
 
-def test_on_update_persists_live_status_to_disk(git_repo):
+@pytest.mark.parametrize(
+    ("session_status", "record_status"),
+    [
+        pytest.param(Status.RUNNING, Status.RUNNING, id="running-persists-live-status"),
+        pytest.param(Status.DONE, Status.FINALIZING, id="done-maps-to-finalizing"),
+    ],
+)
+def test_on_update_maps_session_status(git_repo, session_status, record_status):
     supervisor = Supervisor.create(_plan(), str(git_repo), Options())
     supervisor.prepare()
     key = supervisor.resolved[0].key
+
     assert supervisor.paths.read_record(key).status == Status.PENDING
 
-    supervisor._on_update(key, SessionState(status=Status.RUNNING), {})
+    supervisor._on_update(key, SessionState(status=session_status), {})
 
-    assert supervisor.paths.read_record(key).status == Status.RUNNING
-
-
-def test_on_update_maps_session_done_to_finalizing(git_repo):
-    supervisor = Supervisor.create(_plan(), str(git_repo), Options())
-    supervisor.prepare()
-    key = supervisor.resolved[0].key
-
-    supervisor._on_update(key, SessionState(status=Status.DONE), {})
-
-    assert supervisor.paths.read_record(key).status == Status.FINALIZING
+    assert supervisor.paths.read_record(key).status == record_status
 
 
 def test_finalize_marks_failed_on_unexpected_error(git_repo):

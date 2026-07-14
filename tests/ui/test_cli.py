@@ -1,6 +1,7 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
+import pytest
 from typer.testing import CliRunner
 
 from cmux.ui import cli
@@ -9,19 +10,42 @@ from cmux.ui.cli import app
 runner = CliRunner()
 
 
-def test_version_reports_name_and_exits_zero():
-    result = runner.invoke(app, ["--version"])
-    assert result.exit_code == 0
-    assert "cmux" in result.output
+@pytest.mark.parametrize(
+    ("argv", "expected_exit_code", "expected_substrings"),
+    [
+        pytest.param(["--version"], 0, ("cmux",), id="version-reports-name"),
+        pytest.param(["--help"], 0, ("Create & run", "Monitor"), id="help-groups-command-panels"),
+    ],
+)
+def test_root_options_report_expected_output(argv, expected_exit_code, expected_substrings):
+    result = runner.invoke(app, argv)
+    assert result.exit_code == expected_exit_code
+    for expected_substring in expected_substrings:
+        assert expected_substring in result.output
 
 
-def test_up_dry_run_resolves_plan_without_spawning(tmp_path):
+@pytest.mark.parametrize(
+    ("plan", "expected_substrings"),
+    [
+        pytest.param(
+            "version: 1\nitems:\n  - fix the bug\n  - add a feature\n",
+            ("spawn commands", "fix-the-bug"),
+            id="resolved-plan-with-spawn-preview",
+        ),
+        pytest.param(
+            "defaults:\n  port_base: 3000\nitems:\n  - fix a\n  - fix b\n",
+            ("PORT=3000", "PORT=3001"),
+            id="assigned-ports",
+        ),
+    ],
+)
+def test_up_dry_run_reports_plan_details(tmp_path, plan, expected_substrings):
     path = tmp_path / "p.yaml"
-    path.write_text("version: 1\nitems:\n  - fix the bug\n  - add a feature\n")
+    path.write_text(plan)
     result = runner.invoke(app, ["up", str(path), "--dry-run"])
     assert result.exit_code == 0
-    assert "spawn commands" in result.output
-    assert "fix-the-bug" in result.output
+    for expected_substring in expected_substrings:
+        assert expected_substring in result.output
 
 
 def test_ls_without_any_run_is_an_empty_state(tmp_path, monkeypatch):
@@ -31,16 +55,17 @@ def test_ls_without_any_run_is_an_empty_state(tmp_path, monkeypatch):
     assert "no cmux runs yet" in result.output
 
 
-def test_logs_without_cmux_dir_exits_one(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    ("argv", "expected_exit_code"),
+    [
+        pytest.param(["logs", "whatever"], 1, id="logs"),
+        pytest.param(["enter", "whatever"], 1, id="enter"),
+    ],
+)
+def test_commands_without_cmux_dir_exit_one(tmp_path, monkeypatch, argv, expected_exit_code):
     monkeypatch.chdir(tmp_path)
-    result = runner.invoke(app, ["logs", "whatever"])
-    assert result.exit_code == 1
-
-
-def test_enter_without_cmux_dir_exits_one(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    result = runner.invoke(app, ["enter", "whatever"])
-    assert result.exit_code == 1
+    result = runner.invoke(app, argv)
+    assert result.exit_code == expected_exit_code
 
 
 def test_up_missing_config_path_exits_nonzero(tmp_path):
@@ -112,19 +137,17 @@ def test_plan_voice_records_instead_of_editor(tmp_path, monkeypatch):
     assert out.read_text() == "items:\n  - spoken plan\n"
 
 
-def test_up_dry_run_shows_assigned_ports(tmp_path):
-    path = tmp_path / "p.yaml"
-    path.write_text("defaults:\n  port_base: 3000\nitems:\n  - fix a\n  - fix b\n")
-    result = runner.invoke(app, ["up", str(path), "--dry-run"])
-    assert result.exit_code == 0
-    assert "PORT=3000" in result.output
-    assert "PORT=3001" in result.output
-
-
-def test_search_fts_rejects_regex_combination(tmp_path, monkeypatch):
+@pytest.mark.parametrize(
+    ("argv", "expected_exit_code"),
+    [
+        pytest.param(["search", "login", "--fts", "--regex"], 1, id="search-fts-with-regex"),
+        pytest.param(["plan", "out.yml", "--text", "x", "--voice"], 1, id="plan-text-with-voice"),
+    ],
+)
+def test_commands_with_conflicting_options_exit_one(tmp_path, monkeypatch, argv, expected_exit_code):
     monkeypatch.chdir(tmp_path)
-    result = runner.invoke(app, ["search", "login", "--fts", "--regex"])
-    assert result.exit_code == 1
+    result = runner.invoke(app, argv)
+    assert result.exit_code == expected_exit_code
 
 
 def test_search_fts_reports_store_unavailable(tmp_path, monkeypatch):
@@ -215,24 +238,11 @@ def test_plan_refuses_to_overwrite_existing_output(tmp_path, monkeypatch):
     assert "ran" not in called
 
 
-def test_plan_rejects_multiple_input_modes(tmp_path, monkeypatch):
-    monkeypatch.chdir(tmp_path)
-    result = runner.invoke(app, ["plan", "out.yml", "--text", "x", "--voice"])
-    assert result.exit_code == 1
-
-
 def test_search_rejects_invalid_regex(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["search", "[", "--regex"])
     assert result.exit_code == 1
     assert "regex" in result.output
-
-
-def test_help_groups_commands_into_panels():
-    result = runner.invoke(app, ["--help"])
-    assert result.exit_code == 0
-    assert "Create & run" in result.output
-    assert "Monitor" in result.output
 
 
 def test_up_without_copilot_exits_cleanly(tmp_path, monkeypatch):

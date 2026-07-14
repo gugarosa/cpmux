@@ -5,6 +5,8 @@ import os
 import subprocess
 import sys
 
+import pytest
+
 from cmux.config import Plan
 from cmux.engine.daemon import pid_alive, reconcile, write_owner
 from cmux.engine.store import RunManifest, RunPaths, SessionRecord
@@ -31,58 +33,75 @@ def _record(key, status):
     )
 
 
-def test_pid_alive_true_for_current_process():
-    assert pid_alive(os.getpid())
-
-
-def test_pid_alive_false_for_dead_pid():
-    assert not pid_alive(_dead_pid())
-
-
-def test_reconcile_marks_orphaned_when_owner_dead(tmp_path):
-    paths = RunPaths(tmp_path, "run1")
-    record = _record("a", Status.RUNNING)
+def _reconcile_scenario(tmp_path, run_id, status, owner_pid, **reconcile_kwargs):
+    paths = RunPaths(tmp_path, run_id)
+    record = _record("a", status)
     paths.write_record(record)
-    write_owner(paths, _dead_pid())
+    write_owner(paths, owner_pid)
 
-    reconcile(paths, [record])
-
-    assert record.status == Status.FAILED
-    assert paths.read_record("a").status == Status.FAILED
+    return paths, record, reconcile_kwargs
 
 
-def test_reconcile_skips_when_owner_alive(tmp_path):
-    paths = RunPaths(tmp_path, "run2")
-    record = _record("a", Status.RUNNING)
-    paths.write_record(record)
-    write_owner(paths, os.getpid())
-
-    reconcile(paths, [record])
-
-    assert record.status == Status.RUNNING
-
-
-def test_reconcile_leaves_terminal_records_untouched(tmp_path):
-    paths = RunPaths(tmp_path, "run3")
-    record = _record("a", Status.DONE)
-    paths.write_record(record)
-    write_owner(paths, _dead_pid())
-
-    reconcile(paths, [record])
-
-    assert record.status == Status.DONE
+@pytest.mark.parametrize(
+    ("pid", "expected"),
+    [
+        pytest.param(os.getpid, True, id="current-process"),
+        pytest.param(_dead_pid, False, id="dead-process"),
+    ],
+)
+def test_pid_alive_reports_process_state(pid, expected):
+    assert pid_alive(pid()) == expected
 
 
-def test_reconcile_without_persist_leaves_disk_untouched(tmp_path):
-    paths = RunPaths(tmp_path, "run4")
-    record = _record("a", Status.RUNNING)
-    paths.write_record(record)
-    write_owner(paths, _dead_pid())
+@pytest.mark.parametrize(
+    ("scenario_setup", "expected_outcome"),
+    [
+        pytest.param(
+            lambda tmp_path: _reconcile_scenario(tmp_path, "run1", Status.RUNNING, _dead_pid()),
+            (Status.FAILED, Status.FAILED),
+            id="dead-owner-persists-failure",
+        ),
+        pytest.param(
+            lambda tmp_path: _reconcile_scenario(
+                tmp_path,
+                "run4",
+                Status.RUNNING,
+                _dead_pid(),
+                persist=False,
+            ),
+            (Status.FAILED, Status.RUNNING),
+            id="dead-owner-memory-only",
+        ),
+    ],
+)
+def test_reconcile_orphaned_record_outcomes(tmp_path, scenario_setup, expected_outcome):
+    paths, record, reconcile_kwargs = scenario_setup(tmp_path)
+    reconcile(paths, [record], **reconcile_kwargs)
 
-    reconcile(paths, [record], persist=False)
+    assert record.status == expected_outcome[0]
+    assert paths.read_record("a").status == expected_outcome[1]
 
-    assert record.status == Status.FAILED
-    assert paths.read_record("a").status == Status.RUNNING
+
+@pytest.mark.parametrize(
+    ("scenario_setup", "expected_outcome"),
+    [
+        pytest.param(
+            lambda tmp_path: _reconcile_scenario(tmp_path, "run2", Status.RUNNING, os.getpid()),
+            Status.RUNNING,
+            id="live-owner",
+        ),
+        pytest.param(
+            lambda tmp_path: _reconcile_scenario(tmp_path, "run3", Status.DONE, _dead_pid()),
+            Status.DONE,
+            id="terminal-record",
+        ),
+    ],
+)
+def test_reconcile_preserves_ignored_record_status(tmp_path, scenario_setup, expected_outcome):
+    paths, record, reconcile_kwargs = scenario_setup(tmp_path)
+    reconcile(paths, [record], **reconcile_kwargs)
+
+    assert record.status == expected_outcome
 
 
 def test_manifest_roundtrips_resolved_items(tmp_path):

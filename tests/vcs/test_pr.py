@@ -8,6 +8,24 @@ import pytest
 from cmux.vcs.pr import PRError, commit_all, gh_env, push_branch
 
 
+def _leave_repo_unchanged(repo):
+    return "noop", _skip_commit_log_assertion
+
+
+def _add_new_file(repo):
+    (repo / "new.txt").write_text("hello")
+    return "add new file", _assert_commit_logged
+
+
+def _assert_commit_logged(repo):
+    log = subprocess.run(["git", "log", "--pretty=%s"], cwd=repo, check=True, capture_output=True, text=True)
+    assert "add new file" in log.stdout
+
+
+def _skip_commit_log_assertion(repo):
+    pass
+
+
 def test_gh_env_strips_tokens_when_requested(monkeypatch):
     monkeypatch.setenv("GITHUB_TOKEN", "x")
     monkeypatch.setenv("GH_TOKEN", "y")
@@ -24,17 +42,18 @@ def test_gh_env_keeps_token_when_not_stripping(monkeypatch):
     assert env["GITHUB_TOKEN"] == "x"
 
 
-def test_commit_all_returns_false_without_changes(git_repo):
+@pytest.mark.parametrize(
+    ("mutate", "expected_bool"),
+    [
+        pytest.param(_leave_repo_unchanged, False, id="no-changes"),
+        pytest.param(_add_new_file, True, id="new-file"),
+    ],
+)
+def test_commit_all_reports_change_state(git_repo, mutate, expected_bool):
     repo = git_repo
-    assert commit_all(repo, "noop", gh_env(strip_token=False)) is False
-
-
-def test_commit_all_commits_new_file(git_repo):
-    repo = git_repo
-    (repo / "new.txt").write_text("hello")
-    assert commit_all(repo, "add new file", gh_env(strip_token=False)) is True
-    log = subprocess.run(["git", "log", "--pretty=%s"], cwd=repo, check=True, capture_output=True, text=True)
-    assert "add new file" in log.stdout
+    message, verify_commit = mutate(repo)
+    assert commit_all(repo, message, gh_env(strip_token=False)) is expected_bool
+    verify_commit(repo)
 
 
 def test_push_branch_creates_branch_on_remote(git_repo):

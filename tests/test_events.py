@@ -1,6 +1,8 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
+import pytest
+
 from cmux.events import SessionState, Status, apply_event, event_data, parse_line
 
 SAMPLE = [
@@ -21,42 +23,90 @@ SAMPLE = [
 ]
 
 
-def test_apply_event_marks_done_and_captures_session_and_usage():
+@pytest.mark.parametrize(
+    ("event_stream", "expected_status"),
+    [
+        pytest.param(SAMPLE, Status.DONE, id="successful-result"),
+        pytest.param(
+            [{"type": "tool.execution_start", "data": {"toolName": "write"}}],
+            Status.TOOL,
+            id="tool-start",
+        ),
+        pytest.param(
+            [
+                {"type": "tool.execution_start", "data": {"toolName": "write"}},
+                {"type": "tool.execution_complete", "data": {"success": True}},
+            ],
+            Status.RUNNING,
+            id="tool-complete",
+        ),
+        pytest.param(
+            [{"type": "result", "sessionId": "z", "exitCode": 1, "usage": {}}],
+            Status.FAILED,
+            id="failed-result",
+        ),
+    ],
+)
+def test_apply_event_updates_status(event_stream, expected_status):
+    state = SessionState()
+    for event in event_stream:
+        apply_event(state, event)
+
+    assert state.status == expected_status
+
+
+def test_apply_event_captures_session_and_usage():
     state = SessionState()
     for event in SAMPLE:
         apply_event(state, event)
 
-    assert state.status == Status.DONE
     assert state.session_id == "abc-123"
     assert state.last_text == "PONG"
     assert state.premium_requests == 3
     assert state.files_modified == ["a.ts"]
 
 
-def test_apply_event_updates_status_on_tool_events():
+def test_apply_event_captures_current_tool():
     state = SessionState()
     apply_event(state, {"type": "tool.execution_start", "data": {"toolName": "write"}})
-    assert state.status == Status.TOOL
     assert state.current_tool == "write"
-    apply_event(state, {"type": "tool.execution_complete", "data": {"success": True}})
-    assert state.status == Status.RUNNING
 
 
-def test_apply_event_captures_failure_exit_code():
-    state = SessionState()
-    apply_event(state, {"type": "result", "sessionId": "z", "exitCode": 1, "usage": {}})
-    assert state.status == Status.FAILED
+@pytest.mark.parametrize(
+    "line",
+    [
+        pytest.param("", id="empty"),
+        pytest.param("   ", id="whitespace"),
+        pytest.param("not json", id="invalid-json"),
+    ],
+)
+def test_parse_line_returns_none_for_invalid_input(line):
+    assert parse_line(line) is None
 
 
-def test_parse_line_tolerant():
-    assert parse_line("") is None
-    assert parse_line("   ") is None
-    assert parse_line("not json") is None
+def test_parse_line_returns_decoded_object():
     assert parse_line('{"type":"x"}') == {"type": "x"}
 
 
-def test_event_data_unwraps_nested_payload_or_returns_event():
-    assert event_data({"type": "x", "data": {"content": "hi"}}) == {"content": "hi"}
+@pytest.mark.parametrize(
+    ("event", "expected"),
+    [
+        pytest.param(
+            {"type": "x", "data": {"content": "hi"}},
+            {"content": "hi"},
+            id="nested-payload",
+        ),
+        pytest.param(
+            {"type": "x", "data": "not-a-dict"},
+            {"type": "x", "data": "not-a-dict"},
+            id="non-dict-payload",
+        ),
+    ],
+)
+def test_event_data_selects_mapping_payload(event, expected):
+    assert event_data(event) == expected
+
+
+def test_event_data_returns_bare_event_identity():
     bare = {"type": "result", "exitCode": 0}
     assert event_data(bare) is bare
-    assert event_data({"type": "x", "data": "not-a-dict"}) == {"type": "x", "data": "not-a-dict"}

@@ -39,18 +39,34 @@ def test_search_sessions_returns_ranked_turn_hits(tmp_path):
     assert all("checkpoint" not in hit.snippet for hit in hits)
 
 
-def test_search_sessions_is_empty_for_empty_inputs(tmp_path):
+@pytest.mark.parametrize(
+    ("session_ids", "query"),
+    [
+        pytest.param([], "login", id="no-session-ids"),
+        pytest.param(["s1"], "   ", id="blank-query"),
+    ],
+)
+def test_search_sessions_is_empty_for_empty_inputs(tmp_path, session_ids, query):
     db = _store(tmp_path, [("x", "s1", "turn", "0")])
-    assert search_sessions([], "login", db_path=db) == []
-    assert search_sessions(["s1"], "   ", db_path=db) == []
+    assert search_sessions(session_ids, query, db_path=db) == []
 
 
-def test_search_sessions_raises_on_invalid_query(tmp_path):
-    db = _store(tmp_path, [("x", "s1", "turn", "0")])
-    with pytest.raises(InvalidFtsQuery):
-        search_sessions(["s1"], "foo AND", db_path=db)
-
-
-def test_search_sessions_raises_when_store_missing(tmp_path):
-    with pytest.raises(CopilotStoreUnavailable):
-        search_sessions(["s1"], "login", db_path=tmp_path / "absent.db")
+@pytest.mark.parametrize(
+    ("setup", "expected_exc"),
+    [
+        pytest.param(
+            lambda tmp_path: (_store(tmp_path, [("x", "s1", "turn", "0")]), "foo AND"),
+            InvalidFtsQuery,
+            id="invalid-fts-query",
+        ),
+        pytest.param(
+            lambda tmp_path: (tmp_path / "absent.db", "login"),
+            CopilotStoreUnavailable,
+            id="missing-store",
+        ),
+    ],
+)
+def test_search_sessions_raises_for_error_cases(tmp_path, setup, expected_exc):
+    db, query = setup(tmp_path)
+    with pytest.raises(expected_exc):
+        search_sessions(["s1"], query, db_path=db)

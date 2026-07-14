@@ -4,6 +4,8 @@
 import asyncio
 import sys
 
+import pytest
+
 from cmux.engine.session import SessionRunner
 from cmux.events import Status
 
@@ -35,26 +37,31 @@ def test_run_success_reduces_state_and_writes_transcript(tmp_path):
     assert len(lines) == 2
 
 
-def test_run_failure_sets_failed_status_from_result(tmp_path):
+@pytest.mark.parametrize(
+    ("key", "argv", "expected_exit_code"),
+    [
+        pytest.param(
+            "k2",
+            _fake_argv([{"type": "result", "sessionId": "sid-2", "exitCode": 1}]),
+            1,
+            id="result-event-exit-code",
+        ),
+        pytest.param(
+            "k3",
+            [sys.executable, "-c", "import sys; sys.exit(3)"],
+            3,
+            id="process-exit-code",
+        ),
+    ],
+)
+def test_run_failure_sets_failed_status(tmp_path, key, argv, expected_exit_code):
     transcript = tmp_path / "transcript.jsonl"
-    argv = _fake_argv([{"type": "result", "sessionId": "sid-2", "exitCode": 1}])
-    runner = SessionRunner("k2", argv, transcript)
+    runner = SessionRunner(key, argv, transcript)
 
     state = asyncio.run(runner.run())
 
     assert state.status == Status.FAILED
-    assert state.exit_code == 1
-
-
-def test_run_failure_from_nonzero_exit(tmp_path):
-    transcript = tmp_path / "transcript.jsonl"
-    argv = [sys.executable, "-c", "import sys; sys.exit(3)"]
-    runner = SessionRunner("k3", argv, transcript)
-
-    state = asyncio.run(runner.run())
-
-    assert state.status == Status.FAILED
-    assert state.exit_code == 3
+    assert state.exit_code == expected_exit_code
 
 
 def test_run_invokes_on_update_callback(tmp_path):

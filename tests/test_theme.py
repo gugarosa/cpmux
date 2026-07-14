@@ -1,6 +1,8 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
+import pytest
+
 from cmux import theme
 from cmux.events import Status
 
@@ -9,14 +11,26 @@ def test_status_visual_covers_every_status():
     assert set(theme.STATUS_VISUAL) == set(Status)
 
 
-def test_status_text_shows_glyph_and_human_label():
-    assert theme.status_text(Status.OPENING_PR).plain == "⇪ opening PR"
-    assert theme.status_text(Status.KILLED).plain == "■ stopped"
+@pytest.mark.parametrize(
+    ("status", "expected_plain"),
+    [
+        pytest.param(Status.OPENING_PR, "⇪ opening PR", id="opening-pr"),
+        pytest.param(Status.KILLED, "■ stopped", id="killed"),
+    ],
+)
+def test_status_text_shows_glyph_and_human_label(status, expected_plain):
+    assert theme.status_text(status).plain == expected_plain
 
 
-def test_status_text_is_styled_by_severity():
-    assert theme.status_text(Status.DONE).style == "green"
-    assert theme.status_text(Status.FAILED).style == "red"
+@pytest.mark.parametrize(
+    ("status", "expected_style"),
+    [
+        pytest.param(Status.DONE, "green", id="done"),
+        pytest.param(Status.FAILED, "red", id="failed"),
+    ],
+)
+def test_status_text_is_styled_by_severity(status, expected_style):
+    assert theme.status_text(status).style == expected_style
 
 
 def test_status_text_falls_back_to_ascii_glyphs(monkeypatch):
@@ -31,7 +45,13 @@ def test_print_error_writes_to_stderr(capsys):
     assert captured.out == ""
 
 
-def test_format_duration_uses_minutes_then_hours():
-    assert theme.format_duration(7) == "0:07"
-    assert theme.format_duration(65) == "1:05"
-    assert theme.format_duration(3725) == "1:02:05"
+@pytest.mark.parametrize(
+    ("seconds", "expected"),
+    [
+        pytest.param(7, "0:07", id="seconds-only"),
+        pytest.param(65, "1:05", id="minutes"),
+        pytest.param(3725, "1:02:05", id="hours"),
+    ],
+)
+def test_format_duration(seconds, expected):
+    assert theme.format_duration(seconds) == expected

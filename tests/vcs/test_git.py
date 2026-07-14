@@ -17,6 +17,33 @@ from cmux.vcs.git import (
 )
 
 
+def _leave_worktree_clean(worktree):
+    pass
+
+
+def _add_untracked_file(worktree):
+    (worktree / "new.txt").write_text("y")
+
+
+def _existing_worktree(repo):
+    _, sha = resolve_base(repo, "origin", "main")
+    worktree = repo / "wt"
+    add_worktree(repo, worktree, "feature/x", sha)
+    return worktree, _assert_worktree_removed
+
+
+def _absent_worktree(repo):
+    return repo / "never-existed", _skip_path_assertion
+
+
+def _assert_worktree_removed(worktree):
+    assert not worktree.exists()
+
+
+def _skip_path_assertion(worktree):
+    pass
+
+
 def test_is_git_repo_true_for_repo(git_repo):
     assert is_git_repo(git_repo) is True
 
@@ -59,34 +86,33 @@ def test_add_worktree_creates_dir_and_branch(git_repo):
     assert (git_repo / "wt").is_dir()
 
 
-def test_has_changes_false_for_clean_worktree(git_repo):
+@pytest.mark.parametrize(
+    ("mutate_worktree", "expected"),
+    [
+        pytest.param(_leave_worktree_clean, False, id="clean-worktree"),
+        pytest.param(_add_untracked_file, True, id="untracked-file"),
+    ],
+)
+def test_has_changes_reports_worktree_state(git_repo, mutate_worktree, expected):
     repo = git_repo
     _, sha = resolve_base(repo, "origin", "main")
     worktree = git_repo / "wt"
     add_worktree(repo, worktree, "feature/x", sha)
-    assert has_changes(worktree, sha) is False
+    mutate_worktree(worktree)
+    assert has_changes(worktree, sha) is expected
 
 
-def test_has_changes_true_after_new_file(git_repo):
-    repo = git_repo
-    _, sha = resolve_base(repo, "origin", "main")
-    worktree = git_repo / "wt"
-    add_worktree(repo, worktree, "feature/x", sha)
-    (worktree / "new.txt").write_text("y")
-    assert has_changes(worktree, sha) is True
-
-
-def test_remove_worktree_removes_dir(git_repo):
-    repo = git_repo
-    _, sha = resolve_base(repo, "origin", "main")
-    worktree = git_repo / "wt"
-    add_worktree(repo, worktree, "feature/x", sha)
-    assert remove_worktree(repo, worktree) is True
-    assert not worktree.exists()
-
-
-def test_remove_worktree_absent_is_success(git_repo):
-    assert remove_worktree(git_repo, git_repo / "never-existed") is True
+@pytest.mark.parametrize(
+    ("path_state", "expected"),
+    [
+        pytest.param(_existing_worktree, True, id="existing-worktree"),
+        pytest.param(_absent_worktree, True, id="absent-worktree"),
+    ],
+)
+def test_remove_worktree_handles_path_state(git_repo, path_state, expected):
+    worktree, verify_path = path_state(git_repo)
+    assert remove_worktree(git_repo, worktree) is expected
+    verify_path(worktree)
 
 
 def test_run_git_raises_on_bad_subcommand(git_repo):

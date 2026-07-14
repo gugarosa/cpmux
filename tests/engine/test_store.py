@@ -1,6 +1,10 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
+from pathlib import Path
+
+import pytest
+
 from cmux.engine.store import (
     RunManifest,
     RunPaths,
@@ -39,22 +43,48 @@ def test_new_run_id_starts_with_date_prefix():
     assert run_id[:8].isdigit()
 
 
-def test_run_paths_resolve_under_run_dir(tmp_path):
+@pytest.mark.parametrize(
+    ("path_accessor", "expected_parent"),
+    [
+        pytest.param((lambda paths: paths.manifest, "manifest.json"), Path(".cmux/runs/run1"), id="manifest"),
+        pytest.param((lambda paths: paths.owner_file, "owner.json"), Path(".cmux/runs/run1"), id="owner-file"),
+        pytest.param(
+            (lambda paths: paths.session_dir("k"), "k"),
+            Path(".cmux/runs/run1/sessions"),
+            id="session-directory",
+        ),
+        pytest.param(
+            (lambda paths: paths.prompt_file("k"), "prompt.md"),
+            Path(".cmux/runs/run1/sessions/k"),
+            id="prompt-file",
+        ),
+        pytest.param(
+            (lambda paths: paths.transcript("k"), "transcript.jsonl"),
+            Path(".cmux/runs/run1/sessions/k"),
+            id="transcript",
+        ),
+        pytest.param(
+            (lambda paths: paths.record_file("k"), "session.json"),
+            Path(".cmux/runs/run1/sessions/k"),
+            id="record-file",
+        ),
+        pytest.param(
+            (lambda paths: paths.copilot_log_dir("k"), "copilot-logs"),
+            Path(".cmux/runs/run1/sessions/k"),
+            id="copilot-log-directory",
+        ),
+        pytest.param(
+            (lambda paths: paths.worktree("k"), "k"),
+            Path(".cmux/worktrees/run1"),
+            id="worktree-directory",
+        ),
+    ],
+)
+def test_run_paths_resolve_under_expected_parent(tmp_path, path_accessor, expected_parent):
     paths = RunPaths(tmp_path, "run1")
-    run_dir = tmp_path / ".cmux" / "runs" / "run1"
+    accessor, expected_name = path_accessor
 
-    assert paths.manifest == run_dir / "manifest.json"
-    assert paths.owner_file == run_dir / "owner.json"
-    assert paths.session_dir("k") == run_dir / "sessions" / "k"
-    assert paths.prompt_file("k") == run_dir / "sessions" / "k" / "prompt.md"
-    assert paths.transcript("k") == run_dir / "sessions" / "k" / "transcript.jsonl"
-    assert paths.record_file("k") == run_dir / "sessions" / "k" / "session.json"
-    assert paths.copilot_log_dir("k") == run_dir / "sessions" / "k" / "copilot-logs"
-
-
-def test_run_paths_worktree_resolves_under_worktrees_dir(tmp_path):
-    paths = RunPaths(tmp_path, "run1")
-    assert paths.worktree("k") == tmp_path / ".cmux" / "worktrees" / "run1" / "k"
+    assert accessor(paths) == tmp_path / expected_parent / expected_name
 
 
 def test_write_record_read_record_round_trip(tmp_path):

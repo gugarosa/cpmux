@@ -7,15 +7,28 @@ from pydantic import ValidationError
 from cmux.config import ConfigError, Plan, Preset, interpolate_env, load_plan
 
 
-def test_item_accepts_string_shorthand():
+@pytest.mark.parametrize(
+    ("extract_value", "expected"),
+    [
+        pytest.param(lambda plan: plan.items[0].prompt, "fix the bug", id="prompt"),
+        pytest.param(lambda plan: plan.resolve()[0].model, "gpt-5.5", id="default-model"),
+        pytest.param(lambda plan: plan.resolve()[0].permissions.preset, Preset.edit, id="default-permissions"),
+    ],
+)
+def test_item_accepts_string_shorthand(extract_value, expected):
     plan = Plan.model_validate({"items": ["fix the bug"]})
-    assert plan.items[0].prompt == "fix the bug"
-    resolved = plan.resolve()[0]
-    assert resolved.model == "gpt-5.5"
-    assert resolved.permissions.preset == Preset.edit
+    assert extract_value(plan) == expected
 
 
-def test_resolve_applies_precedence_labels_and_system_prompt():
+@pytest.mark.parametrize(
+    ("extract_value", "expected"),
+    [
+        pytest.param(lambda resolved: resolved[0].model, "gpt-5.5", id="default-model"),
+        pytest.param(lambda resolved: resolved[1].model, "claude-opus-4.8", id="item-model"),
+        pytest.param(lambda resolved: resolved[1].labels, ["batch", "refactor"], id="merged-labels"),
+    ],
+)
+def test_resolve_applies_precedence_and_labels(extract_value, expected):
     plan = Plan.model_validate(
         {
             "system": "SYS",
@@ -32,13 +45,37 @@ def test_resolve_applies_precedence_labels_and_system_prompt():
         }
     )
 
-    resolved = plan.resolve()
+    assert extract_value(plan.resolve()) == expected
 
-    assert resolved[0].model == "gpt-5.5"
-    assert resolved[1].model == "claude-opus-4.8"
-    assert resolved[1].labels == ["batch", "refactor"]
-    assert resolved[0].prompt.startswith("SYS")
-    assert resolved[0].prompt.rstrip().endswith("a simple task")
+
+@pytest.mark.parametrize(
+    ("matches_prompt", "expected"),
+    [
+        pytest.param(lambda prompt, expected: prompt.startswith(expected), "SYS", id="system-prefix"),
+        pytest.param(
+            lambda prompt, expected: prompt.rstrip().endswith(expected),
+            "a simple task",
+            id="item-prompt-suffix",
+        ),
+    ],
+)
+def test_resolve_applies_system_prompt_boundaries(matches_prompt, expected):
+    plan = Plan.model_validate(
+        {
+            "system": "SYS",
+            "defaults": {"pr": {"labels": ["batch"]}},
+            "items": [
+                "a simple task",
+                {
+                    "name": "Big refactor",
+                    "prompt": "do it",
+                    "model": "claude-opus-4.8",
+                    "labels": ["refactor"],
+                },
+            ],
+        }
+    )
+    assert matches_prompt(plan.resolve()[0].prompt, expected)
 
 
 def test_resolve_omits_system_when_include_system_false():
@@ -46,18 +83,26 @@ def test_resolve_omits_system_when_include_system_false():
     assert plan.resolve()[0].prompt == "solo"
 
 
-def test_to_flags_for_full_preset():
-    plan = Plan.model_validate({"items": [{"prompt": "x", "permissions": "full"}]})
-    flags = plan.resolve()[0].permissions.to_flags()
+@pytest.mark.parametrize(
+    ("preset", "expected_flags_present", "expected_flags_absent"),
+    [
+        pytest.param("full", ("--allow-all-tools",), (), id="full-allows-all-tools"),
+        pytest.param(
+            None,
+            ("--allow-tool=shell", "--deny-tool=shell(git push)"),
+            ("--no-ask-user",),
+            id="default-edit-allows-shell-but-denies-push",
+        ),
+    ],
+)
+def test_to_flags_preset_permissions(preset, expected_flags_present, expected_flags_absent):
+    items = ["x"] if preset is None else [{"prompt": "x", "permissions": preset}]
+    flags = Plan.model_validate({"items": items}).resolve()[0].permissions.to_flags()
 
-    assert "--allow-all-tools" in flags
-
-
-def test_to_flags_edit_preset_gates_push_but_allows_shell():
-    flags = Plan.model_validate({"items": ["x"]}).resolve()[0].permissions.to_flags()
-    assert "--allow-tool=shell" in flags
-    assert "--deny-tool=shell(git push)" in flags
-    assert "--no-ask-user" not in flags
+    for expected_flag in expected_flags_present:
+        assert expected_flag in flags
+    for expected_flag in expected_flags_absent:
+        assert expected_flag not in flags
 
 
 def test_resolve_feeds_item_paths_into_add_dir():
@@ -67,14 +112,22 @@ def test_resolve_feeds_item_paths_into_add_dir():
     assert "--add-dir" in flags and "src/settings" in flags
 
 
-def test_plan_rejects_duplicate_item_keys():
+@pytest.mark.parametrize(
+    "bad_plan_dict",
+    [
+        pytest.param(
+            {"items": [{"prompt": "a", "id": "x"}, {"prompt": "b", "id": "x"}]},
+            id="duplicate-item-keys",
+        ),
+        pytest.param(
+            {"items": [{"prompt": "x", "depends_on": ["nope"]}]},
+            id="unknown-dependency",
+        ),
+    ],
+)
+def test_plan_rejects_invalid_items(bad_plan_dict):
     with pytest.raises(ValidationError):
-        Plan.model_validate({"items": [{"prompt": "a", "id": "x"}, {"prompt": "b", "id": "x"}]})
-
-
-def test_plan_rejects_unknown_dependencies():
-    with pytest.raises(ValidationError):
-        Plan.model_validate({"items": [{"prompt": "x", "depends_on": ["nope"]}]})
+        Plan.model_validate(bad_plan_dict)
 
 
 def test_plan_interpolates_env(monkeypatch):
@@ -89,37 +142,82 @@ def test_plan_uses_env_default_when_missing(monkeypatch):
     assert "v=def" in plan.items[0].prompt
 
 
-def test_spawn_argv_targets_session_worktree_and_model():
+@pytest.mark.parametrize(
+    ("extract_value", "expected"),
+    [
+        pytest.param(lambda argv: argv[0], "copilot", id="copilot-command"),
+        pytest.param(
+            lambda argv: argv[argv.index("--session-id") + 1],
+            "sid-123",
+            id="session-id",
+        ),
+        pytest.param(lambda argv: argv[argv.index("-C") + 1], "/wt/fix-x", id="worktree"),
+    ],
+)
+def test_spawn_argv_targets_session_worktree_and_model(extract_value, expected):
     resolved = Plan.model_validate({"items": [{"name": "Fix X", "prompt": "do"}]}).resolve()[0]
     argv = resolved.spawn_argv("/wt/fix-x", "sid-123", "/logs")
 
-    assert argv[0] == "copilot"
-    assert argv[argv.index("--session-id") + 1] == "sid-123"
-    assert argv[argv.index("-C") + 1] == "/wt/fix-x"
-    assert "--output-format" in argv and "json" in argv
-    assert "--no-ask-user" in argv
+    assert extract_value(argv) == expected
 
 
-def test_resolve_assigns_a_port_per_item():
-    resolved = Plan.model_validate({"defaults": {"port_base": 3000}, "items": ["a", "b", "c"]}).resolve()
-    assert [item.env["PORT"] for item in resolved] == ["3000", "3001", "3002"]
+@pytest.mark.parametrize(
+    "expected_argument",
+    [
+        pytest.param("--output-format", id="output-format-option"),
+        pytest.param("json", id="json-output-format"),
+        pytest.param("--no-ask-user", id="no-ask-user"),
+    ],
+)
+def test_spawn_argv_includes_required_arguments(expected_argument):
+    resolved = Plan.model_validate({"items": [{"name": "Fix X", "prompt": "do"}]}).resolve()[0]
+    argv = resolved.spawn_argv("/wt/fix-x", "sid-123", "/logs")
+
+    assert expected_argument in argv
 
 
-def test_resolve_prefers_explicit_env_port():
-    resolved = Plan.model_validate(
-        {"defaults": {"port_base": 3000}, "items": [{"name": "a", "prompt": "x", "env": {"PORT": "9999"}}]}
-    ).resolve()
-    assert resolved[0].env["PORT"] == "9999"
+@pytest.mark.parametrize(
+    ("plan_dict", "extract_value", "expected"),
+    [
+        pytest.param(
+            {"defaults": {"port_base": 3000}, "items": ["a", "b", "c"]},
+            lambda resolved: [item.env["PORT"] for item in resolved],
+            ["3000", "3001", "3002"],
+            id="sequential-ports",
+        ),
+        pytest.param(
+            {
+                "defaults": {"port_base": 3000},
+                "items": [{"name": "a", "prompt": "x", "env": {"PORT": "9999"}}],
+            },
+            lambda resolved: resolved[0].env["PORT"],
+            "9999",
+            id="explicit-port-wins",
+        ),
+    ],
+)
+def test_resolve_assigns_port_values(plan_dict, extract_value, expected):
+    assert extract_value(Plan.model_validate(plan_dict).resolve()) == expected
 
 
-def test_resolve_names_the_injected_port_variable():
-    resolved = Plan.model_validate({"defaults": {"port_base": 4000, "port_env": "DEV_PORT"}, "items": ["a"]}).resolve()
-    assert resolved[0].env == {"DEV_PORT": "4000"}
-
-
-def test_resolve_leaves_env_untouched_without_port_base():
-    resolved = Plan.model_validate({"items": [{"name": "a", "prompt": "x", "env": {"FOO": "bar"}}]}).resolve()
-    assert resolved[0].env == {"FOO": "bar"}
+@pytest.mark.parametrize(
+    ("plan_dict", "expected_env"),
+    [
+        pytest.param(
+            {"defaults": {"port_base": 4000, "port_env": "DEV_PORT"}, "items": ["a"]},
+            {"DEV_PORT": "4000"},
+            id="custom-port-variable",
+        ),
+        pytest.param(
+            {"items": [{"name": "a", "prompt": "x", "env": {"FOO": "bar"}}]},
+            {"FOO": "bar"},
+            id="no-port-base",
+        ),
+    ],
+)
+def test_resolve_sets_expected_env_mapping(plan_dict, expected_env):
+    resolved = Plan.model_validate(plan_dict).resolve()
+    assert resolved[0].env == expected_env
 
 
 def test_defaults_rejects_invalid_port_env_name():
@@ -127,11 +225,31 @@ def test_defaults_rejects_invalid_port_env_name():
         Plan.model_validate({"defaults": {"port_base": 4000, "port_env": "1bad"}, "items": ["a"]})
 
 
-def test_interpolate_env_expands_and_falls_back(monkeypatch):
-    monkeypatch.setenv("CMUX_TEST_VAR", "hello")
-    assert interpolate_env("say ${CMUX_TEST_VAR}") == "say hello"
-    monkeypatch.delenv("CMUX_TEST_MISSING", raising=False)
-    assert interpolate_env("${CMUX_TEST_MISSING:-fallback}") == "fallback"
+@pytest.mark.parametrize(
+    ("env_name", "env_value", "value", "expected"),
+    [
+        pytest.param(
+            "CMUX_TEST_VAR",
+            "hello",
+            "say ${CMUX_TEST_VAR}",
+            "say hello",
+            id="expands-set-variable",
+        ),
+        pytest.param(
+            "CMUX_TEST_MISSING",
+            None,
+            "${CMUX_TEST_MISSING:-fallback}",
+            "fallback",
+            id="uses-fallback-for-missing-variable",
+        ),
+    ],
+)
+def test_interpolate_env_expands_and_falls_back(monkeypatch, env_name, env_value, value, expected):
+    monkeypatch.delenv(env_name, raising=False)
+    if env_value is not None:
+        monkeypatch.setenv(env_name, env_value)
+
+    assert interpolate_env(value) == expected
 
 
 def test_interpolate_env_raises_on_unset_var_without_default(monkeypatch):
@@ -140,32 +258,66 @@ def test_interpolate_env_raises_on_unset_var_without_default(monkeypatch):
         interpolate_env("${CMUX_TEST_MISSING}")
 
 
-def test_load_plan_missing_file_raises_config_error(tmp_path):
-    with pytest.raises(ConfigError):
-        load_plan(tmp_path / "nope.yaml")
+@pytest.mark.parametrize(
+    ("filename", "contents"),
+    [
+        pytest.param("nope.yaml", None, id="missing-file"),
+        pytest.param("bad.yaml", "- just\n- a\n- list\n", id="non-mapping-top-level"),
+        pytest.param("bad.yaml", "items: []\n", id="invalid-plan"),
+    ],
+)
+def test_load_plan_invalid_input_raises_config_error(tmp_path, filename, contents):
+    path = tmp_path / filename
+    if contents is not None:
+        path.write_text(contents)
 
-
-def test_load_plan_non_mapping_top_level_raises_config_error(tmp_path):
-    path = tmp_path / "bad.yaml"
-    path.write_text("- just\n- a\n- list\n")
     with pytest.raises(ConfigError):
         load_plan(path)
 
 
-def test_load_plan_reads_valid_file(tmp_path):
+@pytest.mark.parametrize(
+    "expected_content",
+    [
+        pytest.param("not a valid cmux plan", id="concise-plan-error"),
+        pytest.param("items", id="field-name"),
+    ],
+)
+def test_load_plan_invalid_includes_concise_field_errors(tmp_path, expected_content):
+    path = tmp_path / "bad.yaml"
+    path.write_text("items: []\n")
+
+    with pytest.raises(ConfigError) as excinfo:
+        load_plan(path)
+
+    assert expected_content in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    "unexpected_content",
+    [
+        pytest.param("for Plan", id="pydantic-model-boilerplate"),
+    ],
+)
+def test_load_plan_invalid_omits_verbose_field_errors(tmp_path, unexpected_content):
+    path = tmp_path / "bad.yaml"
+    path.write_text("items: []\n")
+
+    with pytest.raises(ConfigError) as excinfo:
+        load_plan(path)
+
+    assert unexpected_content not in str(excinfo.value)
+
+
+@pytest.mark.parametrize(
+    ("extract_value", "expected"),
+    [
+        pytest.param(lambda plan: len(plan.items), 1, id="one-item"),
+        pytest.param(lambda plan: plan.resolve()[0].prompt, "fix a thing", id="resolved-prompt"),
+    ],
+)
+def test_load_plan_reads_valid_file(tmp_path, extract_value, expected):
     path = tmp_path / "ok.yaml"
     path.write_text("version: 1\nitems:\n  - fix a thing\n")
     plan = load_plan(path)
-    assert len(plan.items) == 1
-    assert plan.resolve()[0].prompt == "fix a thing"
 
-
-def test_load_plan_invalid_reports_concise_field_errors(tmp_path):
-    path = tmp_path / "bad.yaml"
-    path.write_text("items: []\n")
-    with pytest.raises(ConfigError) as excinfo:
-        load_plan(path)
-    message = str(excinfo.value)
-    assert "not a valid cmux plan" in message
-    assert "items" in message
-    assert "for Plan" not in message
+    assert extract_value(plan) == expected
