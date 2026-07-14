@@ -153,10 +153,10 @@ pytest
 
 ## Status and roadmap
 
-- **v0/v1/v2 (current):** foreground and detached (`--detach`) runs; `ls`/`attach` live
-  monitor; an interactive Textual `dash` (session list + live transcript + `/` search +
-  `e` to drop into a native `copilot --resume`); `enter`/`send` interaction; cross-session
-  `search`; `logs --follow`; `down`/`kill`; crash reconciliation via the run owner.
-- **v2 remaining:** ACP transport for live permission prompts; optional remote `/delegate`
-  mode; `depends_on` DAG surfacing; dev-server/port management; reuse of copilot's own FTS
-  index for search.
+- **Current:** foreground and detached (`--detach`) runs; `ls`/`attach` live monitor; an
+  interactive Textual `dash` (session list + live transcript + `/` search + `e` to drop into a
+  native `copilot --resume`); `enter`/`send` interaction; cross-session `search` (with `--fts`
+  over copilot's own index); `logs --follow`; `down`/`kill`/`rm`; per-item dev-server ports
+  (`port_base`); `depends_on` ordering; voice/text/audio plan composition; crash reconciliation
+  via the run owner.
+- **Remaining:** ACP transport for live permission prompts; optional remote `/delegate` mode.

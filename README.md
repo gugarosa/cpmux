@@ -12,10 +12,10 @@ Requires Python ≥ 3.12 and the [`copilot`](https://docs.github.com/copilot/how
 `git`, and `gh` CLIs on your `PATH`.
 
 ```bash
-pip install cmux
+pip install git+https://github.com/gugarosa/cmux
 ```
 
-Or from source:
+Or from source, for development:
 
 ```bash
 git clone https://github.com/gugarosa/cmux
@@ -139,7 +139,7 @@ The `cmux[voice]` extra installs `sounddevice` and `faster-whisper`. `--text` an
 need neither:
 
 ```bash
-pip install "cmux[voice]"
+pip install "cmux[voice] @ git+https://github.com/gugarosa/cmux"
 brew install portaudio     # macOS only: sounddevice needs PortAudio
 ```
 
