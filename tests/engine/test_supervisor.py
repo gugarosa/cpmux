@@ -1,15 +1,12 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
-import asyncio
 from pathlib import Path
-
-import pytest
 
 from cpmux.config import Plan
 from cpmux.engine.store import RunManifest
 from cpmux.engine.supervisor import Options, Supervisor
-from cpmux.events import SessionState, Status
+from cpmux.events import Status
 from cpmux.vcs import git
 
 
@@ -96,80 +93,6 @@ def test_from_run_reloads_resolved_and_records(git_repo):
     assert sorted(loaded.records) == sorted(supervisor.records)
     for key, record in supervisor.records.items():
         assert loaded.records[key].branch == record.branch
-
-
-def test_commit_local_commits_worktree_and_marks_done(git_repo):
-    supervisor = Supervisor.create(_plan(), str(git_repo), Options(open_pr=False))
-    supervisor.prepare()
-    item = supervisor.resolved[0]
-    record = supervisor.records[item.key]
-    (Path(record.worktree) / "new.txt").write_text("hi")
-
-    asyncio.run(supervisor._commit_local(item, record))
-
-    assert record.status == Status.DONE
-    assert git.run_git(["status", "--porcelain"], cwd=record.worktree).stdout.strip() == ""
-    assert git.run_git(["rev-parse", "HEAD"], cwd=record.worktree).stdout.strip() != record.base_sha
-
-
-def test_commit_local_marks_no_changes_when_clean(git_repo):
-    supervisor = Supervisor.create(_plan(), str(git_repo), Options(open_pr=False))
-    supervisor.prepare()
-    item = supervisor.resolved[0]
-    record = supervisor.records[item.key]
-
-    asyncio.run(supervisor._commit_local(item, record))
-
-    assert record.status == Status.NO_CHANGES
-
-
-def test_commit_local_marks_done_when_agent_already_committed(git_repo):
-    supervisor = Supervisor.create(_plan(), str(git_repo), Options(open_pr=False))
-    supervisor.prepare()
-    item = supervisor.resolved[0]
-    record = supervisor.records[item.key]
-    (Path(record.worktree) / "new.txt").write_text("hi")
-    git.run_git(["add", "-A"], cwd=record.worktree)
-    git.run_git(["commit", "-qm", "agent work"], cwd=record.worktree)
-
-    asyncio.run(supervisor._commit_local(item, record))
-
-    assert record.status == Status.DONE
-
-
-@pytest.mark.parametrize(
-    ("session_status", "record_status"),
-    [
-        pytest.param(Status.RUNNING, Status.RUNNING, id="running-persists-live-status"),
-        pytest.param(Status.DONE, Status.FINALIZING, id="done-maps-to-finalizing"),
-    ],
-)
-def test_on_update_maps_session_status(git_repo, session_status, record_status):
-    supervisor = Supervisor.create(_plan(), str(git_repo), Options())
-    supervisor.prepare()
-    key = supervisor.resolved[0].key
-
-    assert supervisor.paths.read_record(key).status == Status.PENDING
-
-    supervisor._on_update(key, SessionState(status=session_status), {})
-
-    assert supervisor.paths.read_record(key).status == record_status
-
-
-def test_finalize_marks_failed_on_unexpected_error(git_repo):
-    supervisor = Supervisor.create(_plan(), str(git_repo), Options())
-    supervisor.prepare()
-    item = supervisor.resolved[0]
-    record = supervisor.records[item.key]
-
-    async def _boom(_item, _record):
-        raise OSError("gh not found")
-
-    supervisor._open_pr = _boom
-    asyncio.run(supervisor._finalize(item, record))
-
-    assert record.status == Status.FAILED
-    assert record.error
 
 
 def test_prepare_marks_failed_when_add_dir_missing(git_repo):

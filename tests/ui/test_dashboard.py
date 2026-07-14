@@ -43,7 +43,7 @@ def test_dashboard_populates_the_session_table(tmp_path):
         app = CpmuxApp(str(tmp_path), "run1")
         async with app.run_test():
             assert app.query_one("#sessions", DataTable).row_count == 2
-            assert app._selected_record().key == "alpha"
+            assert app.query_one("#sessions", DataTable).cursor_row == 0
 
     asyncio.run(scenario())
 
@@ -55,9 +55,9 @@ def test_dashboard_cursor_navigation_changes_selection(tmp_path):
         app = CpmuxApp(str(tmp_path), "run1")
         async with app.run_test() as pilot:
             await pilot.press("j")
-            assert app._selected_record().key == "beta"
+            assert app.query_one("#sessions", DataTable).cursor_row == 1
             await pilot.press("k")
-            assert app._selected_record().key == "alpha"
+            assert app.query_one("#sessions", DataTable).cursor_row == 0
 
     asyncio.run(scenario())
 

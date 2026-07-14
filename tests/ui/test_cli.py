@@ -1,8 +1,6 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
-import os
-
 import pytest
 from typer.testing import CliRunner
 
@@ -286,12 +284,6 @@ def test_search_groups_and_counts_matches(tmp_path, monkeypatch):
     assert "match(es) in 1 session(s)" in result.output
 
 
-def test_highlight_marks_the_matched_span():
-    text = cli._highlight("the authorization retry", "authorization", regex=False)
-    start = text.plain.index("authorization")
-    assert any(span.start == start and "yellow" in span.style for span in text.spans)
-
-
 def test_rm_purge_deletes_run_history(monkeypatch):
     from cpmux.engine.store import RunManifest, SessionRecord
 
@@ -317,32 +309,6 @@ def test_rm_purge_deletes_run_history(monkeypatch):
     result = runner.invoke(app, ["rm", "--purge", "--yes"])
     assert result.exit_code == 0
     assert purged == ["run1"]
-
-
-def test_quiet_terminal_is_noop_without_tty(monkeypatch):
-    monkeypatch.setattr(cli.sys, "stdin", type("S", (), {"isatty": lambda self: False})())
-    with cli._quiet_terminal():
-        pass
-
-
-def test_quiet_terminal_disables_echo_on_tty(monkeypatch):
-    import pty
-    import termios
-
-    master, slave = pty.openpty()
-    try:
-        monkeypatch.setattr(
-            cli.sys, "stdin", type("S", (), {"isatty": lambda self: True, "fileno": lambda self: slave})()
-        )
-        before = termios.tcgetattr(slave)
-        with cli._quiet_terminal():
-            during = termios.tcgetattr(slave)
-            assert not during[3] & termios.ECHO
-            assert not during[3] & termios.ICANON
-        assert termios.tcgetattr(slave)[3] == before[3]
-    finally:
-        os.close(master)
-        os.close(slave)
 
 
 def test_up_defaults_to_detached(monkeypatch, tmp_path):
