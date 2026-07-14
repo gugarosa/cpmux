@@ -3,19 +3,20 @@
 
 from pathlib import Path
 
-DEFAULT_TRANSCRIBE_MODEL = "base"
+DEFAULT_TRANSCRIBE_MODEL = "large-v3-turbo"
 
 
 class VoiceError(Exception):
     """Recording, transcription, or synthesis failed."""
 
 
-def transcribe(audio_path: str | Path, model: str = DEFAULT_TRANSCRIBE_MODEL) -> str:
+def transcribe(audio_path: str | Path, model: str = DEFAULT_TRANSCRIBE_MODEL, language: str | None = None) -> str:
     """Transcribe audio on-device with faster-whisper.
 
     Args:
         audio_path: Audio file to transcribe.
         model: Faster-whisper model name.
+        language: Spoken language code, or None to auto-detect.
 
     Returns:
         The transcribed text.
@@ -36,7 +37,12 @@ def transcribe(audio_path: str | Path, model: str = DEFAULT_TRANSCRIBE_MODEL) ->
 
     try:
         whisper = WhisperModel(model, device="cpu", compute_type="int8")
-        segments, _ = whisper.transcribe(str(audio_path))
+        segments, _ = whisper.transcribe(
+            str(audio_path),
+            language=language,
+            vad_filter=True,
+            condition_on_previous_text=False,
+        )
         text = " ".join(segment.text for segment in segments).strip()
     except Exception as exc:
         raise VoiceError(f"`{model}` transcription failed: {exc}.") from exc

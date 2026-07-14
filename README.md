@@ -143,9 +143,10 @@ pip install "cpmux[voice] @ git+https://github.com/gugarosa/cpmux"
 brew install portaudio     # macOS only: sounddevice needs PortAudio
 ```
 
-The default transcription model is `base`. Select another faster-whisper model with
-`--transcribe-model` (for example, `tiny`, `small`, `medium`, or `large-v3`). Models download
-on first use and are cached; larger models are more accurate but slower.
+The default transcription model is `large-v3-turbo` (near-`large-v3` accuracy, much faster
+decoding). It downloads on first use (~1.6 GB) and is cached. Pick a lighter one with
+`--transcribe-model` (for example, `small`, `distil-large-v3`, or `base`); larger models are
+more accurate but slower on CPU.
 
 ## How it works
 

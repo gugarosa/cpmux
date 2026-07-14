@@ -63,9 +63,19 @@ def _build_prompt(transcript: str) -> str:
     return (
         "Convert this spoken task list into a cpmux YAML plan.\n\n"
         f"{_SCHEMA}\n\n"
-        "Rules: one item per distinct task, keep each prompt a concise imperative sentence, "
-        "add a shared `system` only if the speaker stated common guidance, and reply with "
-        "ONLY a single ```yaml code block.\n\n"
+        "How to build it:\n"
+        "- First, privately list every distinct task the speaker described, and under each list every "
+        "specific they attached to it (files, paths, libraries, versions, constraints, acceptance "
+        "criteria, ordering). Then write the YAML from that list.\n"
+        "- One item per distinct task. Each item's `prompt` is a self-contained imperative that keeps "
+        "every specific the speaker gave; prefer copying their wording over paraphrasing, and "
+        "multi-sentence prompts are fine.\n"
+        "- Do not summarize, generalize, merge, or drop any detail. If the speaker said it, it must "
+        "appear in the plan.\n"
+        "- Put shared guidance (style, testing, language, model, effort, branch naming) in `system` or "
+        "`defaults`; put per-task files in `paths` and stated ordering in `depends_on`.\n"
+        "- Before answering, re-read the transcript and confirm every task and constraint is covered.\n\n"
+        "Reply with ONLY a single ```yaml code block.\n\n"
         f"Spoken task list:\n{transcript}"
     )
 

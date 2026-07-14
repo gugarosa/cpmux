@@ -367,7 +367,7 @@ def plan(
     voice: bool = typer.Option(False, "--voice", help="Record a plan from the mic (Enter to stop)."),
     audio: Path | None = typer.Option(None, "--audio", exists=True, dir_okay=False, help="Audio file to transcribe."),
     transcribe_model: str = typer.Option(
-        DEFAULT_TRANSCRIBE_MODEL, "--transcribe-model", help="faster-whisper model size (tiny…large-v3)."
+        DEFAULT_TRANSCRIBE_MODEL, "--transcribe-model", help="faster-whisper model (e.g. small, large-v3-turbo)."
     ),
     model: str = typer.Option("gpt-5.5", "--model", help="Copilot model for plan synthesis."),
     force: bool = typer.Option(False, "--force", "-f", help="Overwrite an existing output file."),

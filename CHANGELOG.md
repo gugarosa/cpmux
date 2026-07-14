@@ -10,6 +10,11 @@ All notable changes to cpmux are documented here. The format follows
 
 - `cpmux up` now runs in the background by default; pass `--foreground`/`-f` to stay
   attached and watch inline.
+- Voice dictation now defaults to the `large-v3-turbo` model (was `base`) and enables
+  VAD filtering, substantially improving transcription accuracy (first use downloads
+  ~1.6 GB, cached afterward; override with `--transcribe-model`).
+- Voice plan synthesis now instructs the model to preserve every dictated detail instead
+  of producing a concise summary, so plans no longer drop tasks or constraints.
 
 ### Fixed
 

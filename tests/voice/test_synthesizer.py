@@ -43,3 +43,9 @@ def test_extract_yaml_returns_content(text, expected):
 )
 def test_schema_documents_branch_scoping(key):
     assert key in synthesizer._SCHEMA
+
+
+def test_build_prompt_preserves_detail_and_transcript():
+    prompt = synthesizer._build_prompt("fix login and add pagination to notifications")
+    assert "Do not summarize" in prompt
+    assert "fix login and add pagination to notifications" in prompt

@@ -28,7 +28,7 @@ def _install_fake_whisper(monkeypatch, segments=None, load_error=None, transcrib
             if load_error is not None:
                 raise load_error
 
-        def transcribe(self, path):
+        def transcribe(self, path, **kwargs):
             if transcribe_error is not None:
                 return _raising_generator(transcribe_error), object()
             return list(segments or []), object()
