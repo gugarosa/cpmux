@@ -50,7 +50,7 @@ def test_elapsed_formats_minutes_and_seconds():
     assert _elapsed(65) == "1:05"
 
 
-def test_level_tracks_peak_then_decays():
+def test_level_style_tracks_peak_then_decays():
     level = _Level()
     level.update(struct.pack("<8h", *([16384] * 8)))
     assert level.value == pytest.approx(0.5, abs=0.01)

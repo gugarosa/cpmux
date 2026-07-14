@@ -10,7 +10,7 @@ def _write(path, events):
     path.write_text("\n".join(json.dumps(e) for e in events) + "\n")
 
 
-def test_search_finds_user_and_assistant_text(tmp_path):
+def test_search_transcripts_finds_user_and_assistant_text(tmp_path):
     transcript = tmp_path / "transcript.jsonl"
     _write(
         transcript,
@@ -27,25 +27,25 @@ def test_search_finds_user_and_assistant_text(tmp_path):
     assert hits[0].label == "k"
 
 
-def test_search_case_insensitive(tmp_path):
+def test_search_transcripts_is_case_insensitive(tmp_path):
     transcript = tmp_path / "t.jsonl"
     _write(transcript, [{"type": "assistant.message", "data": {"content": "ParseISO Helper"}}])
     assert search_transcripts([("k", transcript)], "parseiso")
 
 
-def test_search_regex(tmp_path):
+def test_search_transcripts_matches_regex(tmp_path):
     transcript = tmp_path / "t.jsonl"
     _write(transcript, [{"type": "assistant.message", "data": {"content": "error code 429"}}])
     assert len(search_transcripts([("k", transcript)], r"\d{3}", regex=True)) == 1
 
 
-def test_search_ignores_deltas_and_missing_files(tmp_path):
+def test_search_transcripts_ignores_deltas_and_missing_files(tmp_path):
     transcript = tmp_path / "t.jsonl"
     _write(transcript, [{"type": "assistant.message_delta", "data": {"deltaContent": "foo"}}])
     assert search_transcripts([("k", transcript), ("missing", tmp_path / "nope.jsonl")], "foo") == []
 
 
-def test_search_snippet_marks_truncation(tmp_path):
+def test_search_transcripts_snippet_marks_truncation(tmp_path):
     transcript = tmp_path / "t.jsonl"
     content = "x" * 200 + " NEEDLE " + "y" * 200
     _write(transcript, [{"type": "assistant.message", "data": {"content": content}}])

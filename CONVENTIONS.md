@@ -133,8 +133,11 @@ Pydantic `BaseModel`s. Everything else follows phitrain.
 
 - Tests mirror the source layout: `tests/<subpackage>/test_<module>.py`, with foundation
   modules tested at the `tests/` root and shared fixtures in `tests/conftest.py`.
-- Test functions use `test_behavior_under_condition`, are plain functions, and carry no
-  docstrings or type hints.
+- Test functions are named `test_<function_or_class_name>_<behavior>`: lead with the exact
+  function, method, or class under test (snake_cased, any leading underscore dropped), then
+  the behavior — e.g. `test_resolve_base_falls_back_to_head`,
+  `test_run_paths_resolve_under_run_dir`. They are plain functions with no docstrings or type
+  hints.
 - Asserts are bare `assert <expr>`, with no failure-message strings; the test name carries
   the intent. (R15)
 

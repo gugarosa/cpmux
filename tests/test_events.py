@@ -33,7 +33,7 @@ def test_apply_event_marks_done_and_captures_session_and_usage():
     assert state.files_modified == ["a.ts"]
 
 
-def test_tool_events_update_status():
+def test_apply_event_updates_status_on_tool_events():
     state = SessionState()
     apply_event(state, {"type": "tool.execution_start", "data": {"toolName": "write"}})
     assert state.status == Status.TOOL
@@ -42,7 +42,7 @@ def test_tool_events_update_status():
     assert state.status == Status.RUNNING
 
 
-def test_failure_exit_code():
+def test_apply_event_captures_failure_exit_code():
     state = SessionState()
     apply_event(state, {"type": "result", "sessionId": "z", "exitCode": 1, "usage": {}})
     assert state.status == Status.FAILED

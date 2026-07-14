@@ -4,7 +4,7 @@
 from cmux.engine.interact import followup_argv, resume_interactive_argv
 
 
-def test_resume_argv_targets_session_and_worktree():
+def test_resume_interactive_argv_targets_session_and_worktree():
     assert resume_interactive_argv("sid", "/wt") == ["copilot", "--resume=sid", "-C", "/wt"]
 
 

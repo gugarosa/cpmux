@@ -19,7 +19,7 @@ def test_status_text_is_styled_by_severity():
     assert theme.status_text(Status.FAILED).style == "red"
 
 
-def test_ascii_fallback_swaps_glyphs(monkeypatch):
+def test_status_text_falls_back_to_ascii_glyphs(monkeypatch):
     monkeypatch.setenv("CMUX_ASCII", "1")
     assert theme.status_text(Status.DONE).plain == "v done"
 
