@@ -40,7 +40,15 @@ def _first_str(data: dict[str, Any], *keys: str, default: str = "") -> str:
 
 
 def event_data(event: dict[str, Any]) -> dict[str, Any]:
-    """Return a JSONL event's nested payload or itself."""
+    """Return a JSONL event's nested payload or itself.
+
+    Args:
+        event: Decoded JSONL event.
+
+    Returns:
+        Nested event payload or the event itself.
+
+    """
 
     data = event.get("data")
 
@@ -49,7 +57,20 @@ def event_data(event: dict[str, Any]) -> dict[str, Any]:
 
 @dataclass
 class SessionState:
-    """Live Copilot session state."""
+    """Live Copilot session state.
+
+    Attributes:
+        status: Current lifecycle stage.
+        last_text: Latest complete assistant message.
+        current_tool: Name of the active tool.
+        tool_count: Number of tools started.
+        exit_code: Process exit code.
+        session_id: Copilot session identifier.
+        premium_requests: Number of premium requests used.
+        files_modified: Paths modified by the session.
+        error: Session error message.
+
+    """
 
     status: Status = Status.PENDING
     last_text: str = ""
@@ -72,7 +93,16 @@ class SessionState:
 
 
 def apply_event(state: SessionState, event: dict[str, Any]) -> SessionState:
-    """Fold a decoded JSONL event into the session state."""
+    """Fold a decoded JSONL event into the session state.
+
+    Args:
+        state: Session state to update.
+        event: Decoded JSONL event.
+
+    Returns:
+        Updated session state.
+
+    """
 
     event_type = event.get("type", "")
     data = event_data(event)
@@ -119,7 +149,15 @@ def apply_event(state: SessionState, event: dict[str, Any]) -> SessionState:
 
 
 def parse_line(line: str) -> dict[str, Any] | None:
-    """Decode a JSONL line, returning `None` for invalid input."""
+    """Decode a JSONL line.
+
+    Args:
+        line: JSONL text to decode.
+
+    Returns:
+        Decoded event, or None for invalid input.
+
+    """
 
     line = line.strip()
     if not line:

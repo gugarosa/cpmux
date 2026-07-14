@@ -19,7 +19,14 @@ class InvalidFtsQuery(Exception):
 
 @dataclass
 class FtsHit:
-    """Ranked match from Copilot's session store."""
+    """Ranked match from Copilot's session store.
+
+    Attributes:
+        session_id: Copilot session identifier.
+        snippet: Matched text excerpt.
+        rank: Relevance rank.
+
+    """
 
     session_id: str
     snippet: str
@@ -31,7 +38,7 @@ def search_sessions(session_ids: list[str], query: str, limit: int = 50, db_path
 
     Args:
         session_ids: Session IDs.
-        query: FTS5 query, including `OR`, `"phrase"`, and `term*`.
+        query: FTS5 query.
         limit: Hit limit.
         db_path: Session store path.
 
@@ -39,8 +46,8 @@ def search_sessions(session_ids: list[str], query: str, limit: int = 50, db_path
         Relevance-ranked hits.
 
     Raises:
-        InvalidFtsQuery: Invalid FTS5 syntax.
-        CopilotStoreUnavailable: Missing or unreadable store.
+        InvalidFtsQuery: Query has invalid FTS5 syntax.
+        CopilotStoreUnavailable: Store is missing or unreadable.
 
     """
 

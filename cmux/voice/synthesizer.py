@@ -27,6 +27,13 @@ _FENCE = re.compile(r"```(?:ya?ml)?\s*\n(.*?)```", re.DOTALL)
 def synthesize_plan(transcript: str, model: str = "gpt-5.5") -> str:
     """Build a validated cmux plan from spoken tasks.
 
+    Args:
+        transcript: Spoken task transcript.
+        model: Copilot model used for synthesis.
+
+    Returns:
+        The validated plan YAML.
+
     Raises:
         VoiceError: If synthesis or validation fails.
 

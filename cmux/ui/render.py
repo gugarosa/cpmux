@@ -10,8 +10,12 @@ from cmux.events import SUCCESS, TERMINAL_FAILURE, Status, event_data
 def deps_cell(deps: list[str], status_by_key: dict[str, Status]) -> Text:
     """Render dependencies by status.
 
+    Args:
+        deps: Dependency keys.
+        status_by_key: Statuses keyed by dependency.
+
     Returns:
-        Styled dependencies: green successful, red failed, yellow pending, magenta unknown.
+        Styled dependency text.
 
     """
 
@@ -39,8 +43,11 @@ def deps_cell(deps: list[str], status_by_key: dict[str, Status]) -> Text:
 def event_text(event: dict) -> Text | None:
     """Render a transcript event.
 
+    Args:
+        event: Transcript event.
+
     Returns:
-        Styled text, or `None` for empty or unsupported events.
+        Styled event text or None for empty or unsupported events.
 
     """
 

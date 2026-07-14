@@ -13,6 +13,13 @@ class VoiceError(Exception):
 def transcribe(audio_path: str | Path, model: str = DEFAULT_TRANSCRIBE_MODEL) -> str:
     """Transcribe audio on-device with faster-whisper.
 
+    Args:
+        audio_path: Audio file to transcribe.
+        model: Faster-whisper model name.
+
+    Returns:
+        The transcribed text.
+
     Raises:
         VoiceError: If transcription is unavailable or fails.
 

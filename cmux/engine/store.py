@@ -17,7 +17,12 @@ CMUX_DIR = ".cmux"
 
 
 def new_run_id() -> str:
-    """Return a time-sortable run identifier."""
+    """Create a time-sortable run identifier.
+
+    Returns:
+        A time-sortable run identifier.
+
+    """
 
     return f"{time.strftime('%Y%m%d-%H%M%S')}-{uuid4().hex[:6]}"
 
@@ -27,7 +32,31 @@ def _now() -> str:
 
 
 class SessionRecord(BaseModel):
-    """Persisted session state and git metadata."""
+    """Persisted session state and git metadata.
+
+    Attributes:
+        key: Configured item key.
+        name: Human-readable session name.
+        slug: Filesystem-safe session name.
+        branch: Git branch name.
+        base: Base branch name.
+        model: Copilot model name.
+        session_id: Copilot session identifier.
+        worktree: Git worktree path.
+        permission_flags: Copilot permission flags.
+        env: Session environment variables.
+        status: Current session status.
+        pid: Session process identifier.
+        started_at: ISO-formatted start time.
+        ended_at: ISO-formatted end time.
+        exit_code: Session process exit code.
+        error: Session error message.
+        pr_url: Pull request URL.
+        premium_requests: Premium request count.
+        files_modified: Modified file paths.
+        base_sha: Base commit SHA.
+
+    """
 
     key: str
     name: str
@@ -73,7 +102,22 @@ class SessionRecord(BaseModel):
 
 
 class RunManifest(BaseModel):
-    """Resolved run configuration in `manifest.json`."""
+    """Resolved run configuration in `manifest.json`.
+
+    Attributes:
+        run_id: Run identifier.
+        created_at: ISO-formatted creation time.
+        repo_root: Repository root path.
+        config_path: Configuration file path.
+        system: System prompt.
+        item_keys: Resolved item keys.
+        resolved: Resolved run items.
+        open_pr: Whether to open pull requests.
+        concurrency: Maximum concurrent sessions.
+        strip_github_token: Whether to remove the GitHub token.
+        deps_override: Dependency override command.
+
+    """
 
     run_id: str
     created_at: str = Field(default_factory=_now)
@@ -92,6 +136,14 @@ class RunPaths:
     """Paths for one run under `<repo_root>/.cmux`."""
 
     def __init__(self, repo_root: str | Path, run_id: str) -> None:
+        """Build paths for a run.
+
+        Args:
+            repo_root: Repository root for the run.
+            run_id: Run identifier.
+
+        """
+
         self.repo_root = Path(repo_root)
         self.run_id = run_id
 
@@ -170,7 +222,15 @@ class RunPaths:
 
 
 def all_run_ids(repo_root: str | Path) -> list[str]:
-    """List run IDs newest first."""
+    """List run IDs newest first.
+
+    Args:
+        repo_root: Repository root containing run history.
+
+    Returns:
+        Run identifiers ordered newest first.
+
+    """
 
     runs = Path(repo_root) / CMUX_DIR / "runs"
     if not runs.is_dir():
@@ -180,7 +240,15 @@ def all_run_ids(repo_root: str | Path) -> list[str]:
 
 
 def latest_run_id(repo_root: str | Path) -> str | None:
-    """Return the latest run ID."""
+    """Return the latest run ID.
+
+    Args:
+        repo_root: Repository root containing run history.
+
+    Returns:
+        Latest run identifier, or None when no runs exist.
+
+    """
 
     ids = all_run_ids(repo_root)
 
@@ -188,7 +256,16 @@ def latest_run_id(repo_root: str | Path) -> str | None:
 
 
 def load_run(repo_root: str | Path, run_id: str) -> tuple[RunManifest, list[SessionRecord]]:
-    """Load a manifest and existing session records."""
+    """Load a manifest and existing session records.
+
+    Args:
+        repo_root: Repository root containing run history.
+        run_id: Run identifier.
+
+    Returns:
+        Run manifest and existing session records.
+
+    """
 
     paths = RunPaths(repo_root, run_id)
     manifest = RunManifest.model_validate_json(paths.manifest.read_text())
@@ -203,7 +280,13 @@ def load_run(repo_root: str | Path, run_id: str) -> tuple[RunManifest, list[Sess
 
 
 def delete_run(repo_root: str | Path, run_id: str) -> None:
-    """Delete a run's on-disk history and worktree directory."""
+    """Delete a run's on-disk history and worktree directory.
+
+    Args:
+        repo_root: Repository root containing run history.
+        run_id: Run identifier.
+
+    """
 
     paths = RunPaths(repo_root, run_id)
     rmtree(paths.run_dir, ignore_errors=True)

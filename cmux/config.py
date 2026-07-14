@@ -54,6 +54,12 @@ class Deps(StrEnum):
 def interpolate_env(value: str) -> str:
     """Expand `${VAR}` and `${VAR:-default}` references in a string.
 
+    Args:
+        value: String containing environment references.
+
+    Returns:
+        String with environment references expanded.
+
     Raises:
         ValueError: Unset variable without a fallback.
 
@@ -82,7 +88,15 @@ def _walk_interpolate(obj: Any) -> Any:
 
 
 def slugify(text: str) -> str:
-    """Convert text to a branch- and worktree-safe slug."""
+    """Convert text to a branch- and worktree-safe slug.
+
+    Args:
+        text: Text to normalize.
+
+    Returns:
+        Branch- and worktree-safe slug.
+
+    """
 
     text = text.strip().lower().splitlines()[0] if text.strip() else "task"
     text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
@@ -91,7 +105,16 @@ def slugify(text: str) -> str:
 
 
 class Permissions(BaseModel):
-    """Permission preset with allow, deny, and network options."""
+    """Permission preset with allow, deny, and network options.
+
+    Attributes:
+        preset: Base permission preset.
+        allow: Additional allowed tool specifications.
+        deny: Additional denied tool specifications.
+        add_dir: Additional accessible directories.
+        allow_url: Allowed network URL patterns.
+
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -109,7 +132,12 @@ class Permissions(BaseModel):
         return data
 
     def to_flags(self) -> list[str]:
-        """Return `copilot` permission flags."""
+        """Return `copilot` permission flags.
+
+        Returns:
+            List of Copilot permission flags.
+
+        """
 
         flags: list[str] = []
         if self.preset in (Preset.full, Preset.yolo):
@@ -132,7 +160,15 @@ class Permissions(BaseModel):
 
 
 class PRSettings(BaseModel):
-    """Pull-request defaults applied unless overridden."""
+    """Pull-request defaults applied unless overridden.
+
+    Attributes:
+        draft: Whether pull requests start as drafts.
+        labels: Default pull-request labels.
+        title_template: Pull-request title template.
+        body_template: Pull-request body template.
+
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -143,7 +179,22 @@ class PRSettings(BaseModel):
 
 
 class Defaults(BaseModel):
-    """Defaults inherited by all items."""
+    """Defaults inherited by all items.
+
+    Attributes:
+        model: Default Copilot model.
+        effort: Default reasoning effort.
+        permissions: Default permission settings.
+        base: Default base branch.
+        branch_template: Branch name template.
+        pr: Default pull-request settings.
+        concurrency: Maximum concurrent sessions.
+        deps: Dependency setup mode.
+        remote: Git remote name.
+        port_base: Starting port for item allocation.
+        port_env: Environment variable receiving the allocated port.
+
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -169,7 +220,25 @@ class Defaults(BaseModel):
 
 
 class Item(BaseModel):
-    """Task prompt with optional per-item overrides."""
+    """Task prompt with optional per-item overrides.
+
+    Attributes:
+        prompt: Task prompt.
+        name: Display name override.
+        id: Stable identifier override.
+        model: Copilot model override.
+        effort: Reasoning effort override.
+        permissions: Permission settings override.
+        branch: Branch name override.
+        base: Base branch override.
+        labels: Additional pull-request labels.
+        draft: Pull-request draft override.
+        paths: Additional accessible paths.
+        depends_on: Required item identifiers.
+        env: Session environment variables.
+        include_system: Whether to prepend the plan system prompt.
+
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -210,7 +279,28 @@ class Item(BaseModel):
 
 
 class ResolvedItem(BaseModel):
-    """Resolved session configuration."""
+    """Resolved session configuration.
+
+    Attributes:
+        key: Stable item identifier.
+        name: Display name.
+        slug: Branch- and worktree-safe slug.
+        prompt: Final session prompt.
+        model: Copilot model.
+        effort: Reasoning effort.
+        permissions: Permission settings.
+        branch: Branch name.
+        base: Base branch.
+        labels: Pull-request labels.
+        draft: Whether the pull request is a draft.
+        depends_on: Required item identifiers.
+        env: Session environment variables.
+        deps: Dependency setup mode.
+        remote: Git remote name.
+        pr_title: Pull-request title.
+        pr_body: Pull-request body.
+
+    """
 
     key: str
     name: str
@@ -231,7 +321,17 @@ class ResolvedItem(BaseModel):
     pr_body: str
 
     def spawn_argv(self, worktree: str | Path, session_id: str, log_dir: str | Path) -> list[str]:
-        """Build the headless `copilot` command."""
+        """Build the headless `copilot` command.
+
+        Args:
+            worktree: Working directory for the Copilot process.
+            session_id: Copilot session identifier.
+            log_dir: Directory for Copilot logs.
+
+        Returns:
+            Headless Copilot command arguments.
+
+        """
 
         argv = [
             "copilot",
@@ -260,7 +360,15 @@ class ResolvedItem(BaseModel):
 
 
 class Plan(BaseModel):
-    """Parsed cmux run configuration."""
+    """Parsed cmux run configuration.
+
+    Attributes:
+        version: Configuration schema version.
+        system: System prompt prepended to eligible items.
+        defaults: Defaults inherited by items.
+        items: Declared task items.
+
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -298,7 +406,12 @@ class Plan(BaseModel):
         return items
 
     def resolve(self) -> list[ResolvedItem]:
-        """Resolve items in declaration order."""
+        """Resolve items in declaration order.
+
+        Returns:
+            Items resolved in declaration order.
+
+        """
 
         defaults = self.defaults
         resolved: list[ResolvedItem] = []
@@ -352,6 +465,12 @@ class ConfigError(Exception):
 
 def load_plan(path: str | Path) -> Plan:
     """Parse and validate a cmux YAML file.
+
+    Args:
+        path: YAML configuration path.
+
+    Returns:
+        Validated run plan.
 
     Raises:
         ConfigError: Missing or invalid file.

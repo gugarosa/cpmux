@@ -16,6 +16,9 @@ def gh_env(strip_token: bool = True) -> dict[str, str]:
     Args:
         strip_token: Remove ambient GitHub tokens so `gh` uses the keyring.
 
+    Returns:
+        The configured subprocess environment.
+
     """
 
     env = os.environ.copy()
@@ -36,7 +39,20 @@ def _run(
 
 
 def commit_all(worktree: str | Path, message: str, env: dict[str, str]) -> bool:
-    """Commit worktree changes, returning whether a commit was made."""
+    """Commit all worktree changes.
+
+    Args:
+        worktree: Worktree containing the changes.
+        message: Commit message.
+        env: Subprocess environment.
+
+    Returns:
+        Whether a commit was created.
+
+    Raises:
+        PRError: The commit failed.
+
+    """
 
     _run(["git", "add", "-A"], worktree, env)
     if _run(["git", "diff", "--cached", "--quiet"], worktree, env).returncode == 0:
@@ -50,7 +66,18 @@ def commit_all(worktree: str | Path, message: str, env: dict[str, str]) -> bool:
 
 
 def push_branch(worktree: str | Path, remote: str, branch: str, env: dict[str, str]) -> None:
-    """Push the worktree's HEAD to `branch` on `remote`."""
+    """Push the worktree branch to a remote.
+
+    Args:
+        worktree: Worktree containing the branch.
+        remote: Remote to push to.
+        branch: Remote branch name.
+        env: Subprocess environment.
+
+    Raises:
+        PRError: The push failed.
+
+    """
 
     proc = _run(["git", "push", "-u", remote, f"HEAD:refs/heads/{branch}"], worktree, env)
     if proc.returncode != 0:
@@ -58,7 +85,18 @@ def push_branch(worktree: str | Path, remote: str, branch: str, env: dict[str, s
 
 
 def existing_pr_url(worktree: str | Path, base: str, branch: str, env: dict[str, str]) -> str | None:
-    """Return the open PR URL for `branch`, if any."""
+    """Find an open pull request for a branch.
+
+    Args:
+        worktree: Worktree in which to run GitHub CLI.
+        base: Pull request base branch.
+        branch: Pull request head branch.
+        env: Subprocess environment.
+
+    Returns:
+        The pull request URL when one exists.
+
+    """
 
     proc = _run(
         [
@@ -95,7 +133,25 @@ def create_pr(
     draft: bool,
     env: dict[str, str],
 ) -> str:
-    """Create a pull request for `branch` and return its URL."""
+    """Create a pull request.
+
+    Args:
+        worktree: Worktree in which to run GitHub CLI.
+        base: Pull request base branch.
+        branch: Pull request head branch.
+        title: Pull request title.
+        body: Pull request body.
+        labels: Labels to apply.
+        draft: Whether to create a draft pull request.
+        env: Subprocess environment.
+
+    Returns:
+        The created pull request URL.
+
+    Raises:
+        PRError: Pull request creation failed.
+
+    """
 
     cmd = ["gh", "pr", "create", "--base", base, "--head", branch, "--title", title, "--body-file", "-"]
     if draft:
@@ -122,7 +178,24 @@ def open_pull_request(
     commit_message: str,
     strip_token: bool = True,
 ) -> str:
-    """Commit, push, and reuse or create a PR."""
+    """Commit changes and open a pull request.
+
+    Args:
+        worktree: Worktree containing the changes.
+        remote: Remote to push to.
+        base: Pull request base branch.
+        branch: Pull request head branch.
+        title: Pull request title.
+        body: Pull request body.
+        labels: Labels to apply.
+        draft: Whether to create a draft pull request.
+        commit_message: Commit message.
+        strip_token: Whether to remove ambient GitHub tokens.
+
+    Returns:
+        The existing or created pull request URL.
+
+    """
 
     env = gh_env(strip_token)
 

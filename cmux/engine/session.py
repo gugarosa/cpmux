@@ -25,6 +25,16 @@ class SessionRunner:
         transcript_path: str | Path,
         env: dict[str, str] | None = None,
     ) -> None:
+        """Initialize a session runner.
+
+        Args:
+            key: Session key.
+            argv: Subprocess arguments.
+            transcript_path: Transcript file path.
+            env: Environment overrides.
+
+        """
+
         self.key = key
         self.argv = argv
         self.transcript_path = Path(transcript_path)
@@ -38,11 +48,11 @@ class SessionRunner:
         """Stream session events to the transcript.
 
         Args:
-            on_update: Callback after each applied event.
-            on_spawn: Callback after the subprocess starts.
+            on_update: Applied-event callback.
+            on_spawn: Subprocess-start callback.
 
         Returns:
-            Final session state.
+            Terminal session state.
 
         """
 

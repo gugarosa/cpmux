@@ -23,6 +23,12 @@ _METER_GAIN = 2.5
 def record_to_file(path: str | Path) -> Path:
     """Record the default microphone until Enter is pressed.
 
+    Args:
+        path: Destination audio file.
+
+    Returns:
+        The destination path.
+
     Raises:
         VoiceError: If capture is unavailable or fails.
 
@@ -37,6 +43,8 @@ def record_to_file(path: str | Path) -> Path:
     level = _Level()
 
     def on_audio(indata: object, _frames: int, _time: object, _status: object) -> None:
+        """Collect an audio block and update the input level."""
+
         block = bytes(indata)
         frames.append(block)
         level.update(block)
@@ -68,6 +76,8 @@ class _Level:
         self.value = 0.0
 
     def update(self, block: bytes) -> None:
+        """Update the peak level from an audio block."""
+
         samples = array("h")
         samples.frombytes(block[: len(block) - len(block) % _SAMPLE_WIDTH])
         if not samples:

@@ -18,7 +18,15 @@ def _console_handler() -> StreamHandler:
 
 
 def get_logger(logger_name: str) -> Logger:
-    """Return a cmux stderr logger."""
+    """Return a cmux stderr logger.
+
+    Args:
+        logger_name: Logger name.
+
+    Returns:
+        Configured stderr logger.
+
+    """
 
     logger = logging.getLogger(logger_name)
     logger.setLevel(LOG_LEVEL)

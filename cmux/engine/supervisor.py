@@ -23,7 +23,15 @@ logger = get_logger(__name__)
 
 @dataclass
 class Options:
-    """Runtime options for a run."""
+    """Runtime options for a run.
+
+    Attributes:
+        concurrency: Concurrent session limit.
+        open_pr: Whether to open pull requests.
+        strip_github_token: Whether to remove GitHub tokens.
+        deps_override: Dependency provisioning override.
+
+    """
 
     concurrency: int | None = None
     open_pr: bool = True
@@ -44,6 +52,19 @@ class Supervisor:
         system: str = "",
         config_path: str = "",
     ) -> None:
+        """Initialize a supervisor.
+
+        Args:
+            repo_root: Repository root.
+            run_id: Run identifier.
+            resolved: Resolved run items.
+            options: Runtime options.
+            concurrency: Concurrent session limit.
+            system: System prompt.
+            config_path: Configuration file path.
+
+        """
+
         self.repo_root = Path(repo_root)
         self.run_id = run_id
         self.resolved = resolved
@@ -64,8 +85,17 @@ class Supervisor:
     def create(cls, plan: Plan, start_path: str, options: Options, config_path: str = "") -> "Supervisor":
         """Initialize a new run.
 
+        Args:
+            plan: Run plan.
+            start_path: Path within the repository.
+            options: Runtime options.
+            config_path: Configuration file path.
+
+        Returns:
+            New run supervisor.
+
         Raises:
-            git.GitError: `start_path` is outside a git repository.
+            git.GitError: Path is outside a git repository.
 
         """
 
@@ -76,7 +106,16 @@ class Supervisor:
 
     @classmethod
     def from_run(cls, start_path: str, run_id: str) -> "Supervisor":
-        """Load a supervisor from a persisted run."""
+        """Load a supervisor from a persisted run.
+
+        Args:
+            start_path: Path within the repository.
+            run_id: Run identifier.
+
+        Returns:
+            Restored run supervisor.
+
+        """
 
         manifest = RunManifest.model_validate_json(RunPaths(start_path, run_id).manifest.read_text())
         options = Options(

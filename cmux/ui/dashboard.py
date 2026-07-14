@@ -41,21 +41,20 @@ class SearchScreen(ModalScreen[str | None]):
     BINDINGS = [Binding("escape", "close", "Close")]
 
     def __init__(self, items: list[tuple[str, Path]]) -> None:
-        """Initialize transcript search.
-
-        Args:
-            items: `(label, transcript_path)` pairs.
-
-        """
+        """Initialize transcript search."""
 
         super().__init__()
         self.items = items
 
     def compose(self) -> ComposeResult:
+        """Build the search overlay's widgets."""
+
         yield Input(placeholder="search transcripts…", id="query")
         yield ListView(id="results")
 
     def on_input_changed(self, event: Input.Changed) -> None:
+        """Filter results as the query changes."""
+
         results = self.query_one("#results", ListView)
         results.clear()
 
@@ -67,6 +66,8 @@ class SearchScreen(ModalScreen[str | None]):
             results.append(ListItem(Label(f"{hit.label}  ·  {hit.role}  ·  {hit.snippet}"), name=hit.label))
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
+        """Return the selected session key."""
+
         self.dismiss(event.item.name)
 
     def action_close(self) -> None:
@@ -81,9 +82,13 @@ class SendScreen(ModalScreen[str | None]):
     BINDINGS = [Binding("escape", "close", "Close")]
 
     def compose(self) -> ComposeResult:
+        """Build the message overlay's widgets."""
+
         yield Input(placeholder="follow-up message…", id="message")
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
+        """Return the submitted message."""
+
         self.dismiss(event.value.strip() or None)
 
     def action_close(self) -> None:
@@ -133,13 +138,7 @@ class CmuxApp(App):
     ]
 
     def __init__(self, start_path: str, run_id: str) -> None:
-        """Create the dashboard.
-
-        Args:
-            start_path: Path inside target git repository.
-            run_id: Displayed run identifier.
-
-        """
+        """Create the dashboard."""
 
         super().__init__()
 
@@ -152,6 +151,8 @@ class CmuxApp(App):
         self._transcript_len = 0
 
     def compose(self) -> ComposeResult:
+        """Build the dashboard's widgets."""
+
         yield Header()
 
         with Horizontal():
@@ -256,6 +257,8 @@ class CmuxApp(App):
                 log.write(renderable)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """Show the highlighted session transcript."""
+
         record = self._selected_record()
         if record is not None and record.key != self._shown_key:
             self._refresh_transcript(force=True)

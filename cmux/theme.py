@@ -22,7 +22,15 @@ STYLE_ACCENT = "magenta"
 
 @dataclass(frozen=True)
 class StatusVisual:
-    """Session status glyph, ASCII fallback, style, and label."""
+    """Session status presentation.
+
+    Attributes:
+        glyph: Unicode status glyph.
+        ascii_glyph: ASCII fallback glyph.
+        style: Rich text style.
+        label: Human-readable status label.
+
+    """
 
     glyph: str
     ascii_glyph: str
@@ -67,7 +75,16 @@ def _icon(icon: tuple[str, str]) -> str:
 
 
 def icon(unicode_glyph: str, ascii_glyph: str) -> str:
-    """Return the terminal-compatible glyph."""
+    """Return the terminal-compatible glyph.
+
+    Args:
+        unicode_glyph: Preferred Unicode glyph.
+        ascii_glyph: ASCII fallback glyph.
+
+    Returns:
+        Glyph supported by the terminal.
+
+    """
 
     return ascii_glyph if _ascii_only() else unicode_glyph
 
@@ -77,7 +94,15 @@ err = Console(stderr=True, highlight=False)
 
 
 def status_text(status: Status) -> Text:
-    """Render a styled status glyph and label."""
+    """Render a styled status glyph and label.
+
+    Args:
+        status: Session lifecycle stage.
+
+    Returns:
+        Styled status text.
+
+    """
 
     visual = STATUS_VISUAL[status]
     glyph = visual.ascii_glyph if _ascii_only() else visual.glyph
@@ -86,7 +111,15 @@ def status_text(status: Status) -> Text:
 
 
 def format_duration(seconds: float) -> str:
-    """Format a duration as `M:SS`, or `H:MM:SS` past an hour."""
+    """Format a duration for display.
+
+    Args:
+        seconds: Duration in seconds.
+
+    Returns:
+        Duration formatted as M:SS or H:MM:SS.
+
+    """
 
     total = int(seconds)
     hours, remainder = divmod(total, 3600)
@@ -96,7 +129,15 @@ def format_duration(seconds: float) -> str:
 
 
 def table(title: str | None = None) -> Table:
-    """Build a table with shared cmux styling."""
+    """Build a table with shared cmux styling.
+
+    Args:
+        title: Optional table title.
+
+    Returns:
+        Styled table.
+
+    """
 
     return Table(
         title=title,
@@ -111,7 +152,13 @@ def table(title: str | None = None) -> Table:
 
 
 def print_error(message: str, hint: str | None = None) -> None:
-    """Print an error and optional hint to stderr."""
+    """Print an error and optional hint to stderr.
+
+    Args:
+        message: Error message.
+        hint: Optional recovery hint.
+
+    """
 
     err.print(Text.assemble((f"{_icon(_ICON_ERROR)} ", STYLE_DANGER), message))
     if hint:
@@ -119,18 +166,33 @@ def print_error(message: str, hint: str | None = None) -> None:
 
 
 def print_warning(message: str) -> None:
-    """Print a warning to stderr."""
+    """Print a warning to stderr.
+
+    Args:
+        message: Warning message.
+
+    """
 
     err.print(Text.assemble((f"{_icon(_ICON_WARNING)} ", STYLE_WARNING), message))
 
 
 def print_success(message: str) -> None:
-    """Print a success message to stdout."""
+    """Print a success message to stdout.
+
+    Args:
+        message: Success message.
+
+    """
 
     out.print(Text.assemble((f"{_icon(_ICON_SUCCESS)} ", STYLE_SUCCESS), message))
 
 
 def print_hint(message: str) -> None:
-    """Print a dim next-step hint to stdout."""
+    """Print a dim next-step hint to stdout.
+
+    Args:
+        message: Hint message.
+
+    """
 
     out.print(Text(f"{_icon(_ICON_INFO)} {message}", style=STYLE_MUTED))
