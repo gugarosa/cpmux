@@ -104,6 +104,24 @@ def test_reconcile_preserves_ignored_record_status(tmp_path, scenario_setup, exp
     assert record.status == expected_outcome
 
 
+def test_reconcile_reaps_orphaned_child(tmp_path):
+    child = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"], start_new_session=True)
+    try:
+        paths = RunPaths(tmp_path, "run5")
+        record = _record("a", Status.RUNNING)
+        record.pid = child.pid
+        paths.write_record(record)
+        write_owner(paths, _dead_pid())
+
+        reconcile(paths, [record])
+
+        assert child.wait(timeout=6) is not None
+        assert record.status == Status.FAILED
+    finally:
+        if child.poll() is None:
+            child.kill()
+
+
 def test_manifest_roundtrips_resolved_items(tmp_path):
     resolved = Plan.model_validate({"system": "S", "items": ["do a thing"]}).resolve()
     paths = RunPaths(tmp_path, "r")

@@ -362,11 +362,11 @@ class Supervisor:
 
     def _render(self) -> Table:
         table = theme.table(title=self._title())
-        table.add_column("item", style="bold", no_wrap=True)
+        table.add_column("item", style="bold", ratio=2, no_wrap=True, overflow="ellipsis")
         table.add_column("status", no_wrap=True)
         table.add_column("elapsed", no_wrap=True, justify="right")
-        table.add_column("detail", overflow="ellipsis")
-        table.add_column("branch / PR", no_wrap=True)
+        table.add_column("detail", ratio=3, overflow="ellipsis")
+        table.add_column("branch / PR", ratio=2, no_wrap=True, overflow="ellipsis")
 
         for item in self.resolved:
             record = self.records[item.key]
@@ -395,7 +395,15 @@ class Supervisor:
         statuses = [record.status for record in self.records.values()]
         done = sum(status in SUCCESS for status in statuses)
         active = sum(status in ACTIVE for status in statuses)
-        failed = sum(status in TERMINAL_FAILURE for status in statuses)
+        stopped = sum(status == Status.KILLED for status in statuses)
+        failed = sum(status in TERMINAL_FAILURE for status in statuses) - stopped
+        premium = sum(record.premium_requests or 0 for record in self.records.values())
         wall = theme.format_duration(time.monotonic() - self._started_at) if self._started_at else "0:00"
 
-        return f"cpmux · run {self.run_id} · {done}/{len(statuses)} done · {active} active · {failed} failed · {wall}"
+        title = f"cpmux · run {self.run_id} · {done}/{len(statuses)} done · {active} active · {failed} failed"
+        if stopped:
+            title += f" · {stopped} stopped"
+        if premium:
+            title += f" · {premium} premium"
+
+        return f"{title} · {wall}"
