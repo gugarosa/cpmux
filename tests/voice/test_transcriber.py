@@ -49,21 +49,37 @@ def test_transcribe_missing_file_raises(tmp_path):
         transcribe(tmp_path / "gone.wav")
 
 
-@pytest.mark.parametrize(
-    "install",
-    [
-        pytest.param(lambda mp: mp.setitem(sys.modules, "faster_whisper", None), id="no_backend"),
-        pytest.param(lambda mp: _install_fake_whisper(mp, segments=[_Segment("   ")]), id="empty_text"),
-        pytest.param(lambda mp: _install_fake_whisper(mp, load_error=RuntimeError("x")), id="load_failure"),
-        pytest.param(
-            lambda mp: _install_fake_whisper(mp, transcribe_error=RuntimeError("x")),
-            id="inference_failure",
-        ),
-    ],
-)
-def test_transcribe_raises_voice_error(tmp_path, monkeypatch, install):
+def test_transcribe_raises_when_backend_missing(tmp_path, monkeypatch):
     audio = tmp_path / "clip.wav"
     audio.write_bytes(b"RIFF")
-    install(monkeypatch)
+    monkeypatch.setitem(sys.modules, "faster_whisper", None)
+
+    with pytest.raises(VoiceError):
+        transcribe(audio)
+
+
+def test_transcribe_raises_on_empty_text(tmp_path, monkeypatch):
+    audio = tmp_path / "clip.wav"
+    audio.write_bytes(b"RIFF")
+    _install_fake_whisper(monkeypatch, segments=[_Segment("   ")])
+
+    with pytest.raises(VoiceError):
+        transcribe(audio)
+
+
+def test_transcribe_raises_on_load_failure(tmp_path, monkeypatch):
+    audio = tmp_path / "clip.wav"
+    audio.write_bytes(b"RIFF")
+    _install_fake_whisper(monkeypatch, load_error=RuntimeError("x"))
+
+    with pytest.raises(VoiceError):
+        transcribe(audio)
+
+
+def test_transcribe_raises_on_inference_failure(tmp_path, monkeypatch):
+    audio = tmp_path / "clip.wav"
+    audio.write_bytes(b"RIFF")
+    _install_fake_whisper(monkeypatch, transcribe_error=RuntimeError("x"))
+
     with pytest.raises(VoiceError):
         transcribe(audio)
