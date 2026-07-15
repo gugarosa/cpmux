@@ -297,6 +297,13 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
         theme.print_error(str(exc))
         raise typer.Exit(1)
 
+    if run_git(["rev-parse", "--verify", "--quiet", "HEAD"], supervisor.repo_root, check=False).returncode != 0:
+        theme.print_error(
+            "this repository has no commits yet.",
+            hint="make an initial commit (`git commit`) so cpmux has a base to branch from.",
+        )
+        raise typer.Exit(1)
+
     if options.open_pr:
         configured = set(run_git(["remote"], supervisor.repo_root, check=False).stdout.split())
         missing = sorted({item.remote for item in resolved} - configured)
