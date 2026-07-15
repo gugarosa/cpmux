@@ -1,5 +1,10 @@
 # cpmux
 
+[![PyPI](https://img.shields.io/pypi/v/cpmux.svg)](https://pypi.org/project/cpmux/)
+[![Python](https://img.shields.io/pypi/pyversions/cpmux.svg)](https://pypi.org/project/cpmux/)
+[![CI](https://github.com/gugarosa/cpmux/actions/workflows/ci.yml/badge.svg)](https://github.com/gugarosa/cpmux/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **A declarative multiplexer for GitHub Copilot CLI agents: "tmuxinator for `copilot` sessions."**
 
 Write one YAML file with a shared system prompt and a task list. cpmux starts one headless

@@ -6,6 +6,10 @@ All notable changes to cpmux are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-15
+
+First release published to PyPI.
+
 ### Added
 
 - Pull requests opened by `cpmux up` now carry a title and description authored by the
@@ -15,9 +19,17 @@ All notable changes to cpmux are documented here. The format follows
 - `cpmux plan --voice` now shows a live transcript while you speak: a fast model streams
   partial text during recording, and the configured model produces the accurate final
   transcription when you stop.
+- `cpmux rm --purge` to delete a run's on-disk history so it leaves `cpmux ls`.
+- Preflight validation that each item's `paths` exist in its worktree, failing
+  early with a clear error instead of a late `copilot` failure.
+- `branch_template` documented in the voice-plan schema so a spoken branch scope
+  maps to the branch, not `base`.
 
 ### Changed
 
+- Renamed the project from `cmux` to `cpmux` (the `cmux` name was taken on PyPI):
+  the command, package, `.cpmux/` state directory, `CPMUX_*` environment
+  variables, and the default `cpmux/{slug}` branch prefix all change accordingly.
 - `cpmux up` now runs in the background by default; pass `--foreground`/`-f` to stay
   attached and watch inline.
 - Voice dictation now defaults to the `large-v3-turbo` model (was `base`) and enables
@@ -28,27 +40,13 @@ All notable changes to cpmux are documented here. The format follows
 
 ### Fixed
 
+- Invalid plans are rejected up front with clear, traceback-free errors — duplicate ids,
+  dependency cycles, unknown template placeholders, port overflows, and blank fields all
+  report an actionable message instead of a stack trace.
+- Crashed runs recover cleanly: orphaned sessions are reaped and marked failed, the run
+  owner is cleared, and premium-request usage is surfaced in run summaries.
 - Live views (`up --foreground`, `attach`) no longer corrupt the terminal when arrow
   keys or other input are pressed: keystroke echo is suppressed while a live view renders.
-
-## [0.1.0]
-
-### Changed
-
-- Renamed the project from `cmux` to `cpmux` (the `cmux` name was taken on PyPI):
-  the command, package, `.cpmux/` state directory, `CPMUX_*` environment
-  variables, and the default `cpmux/{slug}` branch prefix all change accordingly.
-
-### Added
-
-- `cpmux rm --purge` to delete a run's on-disk history so it leaves `cpmux ls`.
-- Preflight validation that each item's `paths` exist in its worktree, failing
-  early with a clear error instead of a late `copilot` failure.
-- `branch_template` documented in the voice-plan schema so a spoken branch scope
-  maps to the branch, not `base`.
-
-### Fixed
-
 - A `--no-pr` item whose agent committed its own work now reports `done`
   (previously `no changes`).
 - The dashboard follow-up now forwards each item's `env` overrides, matching
