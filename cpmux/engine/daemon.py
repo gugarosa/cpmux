@@ -163,11 +163,14 @@ def reconcile(paths: RunPaths, records: list[SessionRecord], persist: bool = Tru
 
     for record in records:
         if record.status not in TERMINAL:
+            _terminate(record.pid)
             record.status = Status.FAILED
             record.error = record.error or "run owner exited."
             record.mark_ended()
             if persist:
                 paths.write_record(record)
+
+    clear_owner(paths)
 
     return records
 

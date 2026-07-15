@@ -4,7 +4,7 @@
 import pytest
 from pydantic import ValidationError
 
-from cpmux.config import ConfigError, Plan, Preset, interpolate_env, load_plan
+from cpmux.config import ConfigError, Plan, Preset, interpolate_env, load_plan, slugify
 from cpmux.vcs.pr import PR_DRAFT_FILENAME
 
 
@@ -110,6 +110,8 @@ def test_resolve_feeds_item_paths_into_add_dir():
             {"defaults": {"pr": {"title_template": "{bogus}"}}, "items": ["t"]},
             id="unknown-title-placeholder",
         ),
+        pytest.param({"defaults": {"model": ""}, "items": ["t"]}, id="empty-default-model"),
+        pytest.param({"defaults": {"base": "  "}, "items": ["t"]}, id="empty-default-base"),
     ],
 )
 def test_plan_rejects_invalid_items(bad_plan_dict):
@@ -120,6 +122,10 @@ def test_plan_rejects_invalid_items(bad_plan_dict):
 def test_resolve_title_template_supports_prompt():
     plan = Plan.model_validate({"defaults": {"pr": {"title_template": "{prompt}"}}, "items": ["do the thing"]})
     assert plan.resolve()[0].pr_title == "do the thing"
+
+
+def test_slugify_transliterates_accents():
+    assert slugify("Fix the café crash") == "fix-the-cafe-crash"
 
 
 def test_plan_interpolates_env(monkeypatch):

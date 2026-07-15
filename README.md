@@ -69,10 +69,12 @@ defaults:
   effort: medium           # none | minimal | low | medium | high | xhigh | max
   permissions: edit        # readonly | edit | full (yolo)
   base: main               # branch to fork from and open PRs against
-  branch_template: cpmux/{slug}  # each item's branch name; e.g. gderosa/{slug}
+  remote: origin           # git remote to push branches and open PRs on
+  branch_template: cpmux/{slug}  # each item's branch name; {slug} or {id}, e.g. gderosa/{slug}
   concurrency: 6           # max sessions running at once (1–64)
   deps: symlink            # seed a worktree's node_modules: symlink | copy | install | skip
   port_base: 3000          # give each item a unique port (3000, 3001, …) via $PORT
+  port_env: PORT           # rename the port variable (default $PORT)
   pr:
     draft: true
     labels: [cpmux]
@@ -92,6 +94,13 @@ items:
 
 Item mappings accept `prompt`, `name`, `id`, `model`, `effort`, `permissions`, `base`,
 `branch`, `labels`, `draft`, `paths`, `depends_on`, `env`, and `include_system`.
+
+The `pr` block also accepts `title_template` and `body_template`; both expand `{name}`,
+`{slug}`, and `{prompt}`, while `branch_template` expands `{slug}` and `{id}`. `permissions`
+may be a bare preset or a mapping that extends one —
+`{preset: edit, allow: [...], deny: [...], add_dir: [...], allow_url: [...]}` — adding
+`copilot` tool and network rules. An optional top-level `version` selects the schema
+(currently only `1`).
 
 An item's **key** is its `id` when set, otherwise a slug of its `name` or `prompt`. Pass keys
 to `enter`, `send`, `logs`, and `kill`; `cpmux ls` and `--dry-run` print them. Any string field

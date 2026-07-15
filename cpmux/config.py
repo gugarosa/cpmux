@@ -4,6 +4,7 @@
 import os
 import re
 import string
+import unicodedata
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -14,6 +15,7 @@ from pydantic import (
     ConfigDict,
     Field,
     ValidationError,
+    ValidationInfo,
     computed_field,
     field_validator,
     model_validator,
@@ -114,6 +116,7 @@ def slugify(text: str) -> str:
     """
 
     text = text.strip().lower().splitlines()[0] if text.strip() else "task"
+    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
     text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
 
     return (text or "task")[:50]
@@ -253,6 +256,14 @@ class Defaults(BaseModel):
     def _validate_env_name(cls, value: str) -> str:
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value):
             raise ValueError(f"`port_env` must be a valid environment variable name, got `{value}`.")
+
+        return value
+
+    @field_validator("model", "base")
+    @classmethod
+    def _reject_empty(cls, value: str, info: ValidationInfo) -> str:
+        if not value.strip():
+            raise ValueError(f"`{info.field_name}` must not be empty.")
 
         return value
 

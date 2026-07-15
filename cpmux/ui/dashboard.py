@@ -183,7 +183,9 @@ class CpmuxApp(App):
         self.deps_by_key = {item.key: list(item.depends_on) for item in manifest.resolved}
         self.records = daemon.reconcile(self.paths, records, persist=False)
         active = sum(record.status in ACTIVE for record in self.records)
-        self.sub_title = f"{active}/{len(self.records)} active · updated {time.strftime('%H:%M:%S')}"
+        premium = sum(record.premium_requests or 0 for record in self.records)
+        premium_note = f" · {premium} premium" if premium else ""
+        self.sub_title = f"{active}/{len(self.records)} active{premium_note} · updated {time.strftime('%H:%M:%S')}"
         self._refresh_table()
         self._refresh_transcript()
 
@@ -369,6 +371,6 @@ class CpmuxApp(App):
         record.exit_code = state.exit_code
         record.error = state.error
         if state.premium_requests is not None:
-            record.premium_requests = state.premium_requests
+            record.premium_requests = (record.premium_requests or 0) + state.premium_requests
 
         self.paths.write_record(record)

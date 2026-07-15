@@ -45,6 +45,7 @@ from cpmux.events import (
     SUCCESS,
     TERMINAL,
     TERMINAL_FAILURE,
+    Status,
     event_data,
     parse_line,
 )
@@ -346,6 +347,7 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
 def _print_completion_summary(run_id: str, records: list[SessionRecord]) -> None:
     done = sum(record.status in SUCCESS for record in records)
     failed = sum(record.status in TERMINAL_FAILURE for record in records)
+    premium = sum(record.premium_requests or 0 for record in records)
 
     table = theme.table(title=f"cpmux · run {run_id}")
     table.add_column("item", style="bold")
@@ -374,6 +376,9 @@ def _print_completion_summary(run_id: str, records: list[SessionRecord]) -> None
         )
     else:
         theme.print_success(f"run {run_id} finished: {done} item(s) completed.")
+
+    if premium:
+        theme.print_hint(f"{premium} premium request(s) consumed.")
 
 
 @app.command(rich_help_panel="Create & run")
@@ -530,7 +535,7 @@ def send(
     record.exit_code = state.exit_code
     record.error = state.error
     if state.premium_requests is not None:
-        record.premium_requests = state.premium_requests
+        record.premium_requests = (record.premium_requests or 0) + state.premium_requests
     paths.write_record(record)
 
     if state.last_text:
@@ -695,8 +700,20 @@ def rm(
         theme.print_hint("cancelled; nothing was removed.")
         raise typer.Exit()
 
-    failed = [record.key for record in records if not remove_worktree(manifest.repo_root, record.worktree, force=force)]
+    removed = 0
+    failed = []
+    for record in records:
+        existed = Path(record.worktree).exists()
+        if remove_worktree(manifest.repo_root, record.worktree, force=force):
+            if existed:
+                removed += 1
+        else:
+            failed.append(record.key)
     prune_worktrees(manifest.repo_root)
+
+    worktrees_dir = RunPaths(root, run_id).worktrees_dir
+    if worktrees_dir.exists() and not any(worktrees_dir.iterdir()):
+        worktrees_dir.rmdir()
 
     if failed:
         for key in failed:
@@ -708,9 +725,9 @@ def rm(
 
     if purge:
         delete_run(root, run_id)
-        theme.print_success(f"removed {len(records)} worktree(s) and purged run {run_id}.")
+        theme.print_success(f"removed {removed} worktree(s) and purged run {run_id}.")
     else:
-        theme.print_success(f"removed {len(records)} worktree(s) for run {run_id}.")
+        theme.print_success(f"removed {removed} worktree(s) for run {run_id}.")
 
 
 @app.command(rich_help_panel="Stop & clean up")
@@ -822,15 +839,21 @@ def _tail_last_assistant(transcript: Path) -> str:
 def _run_table(run_id: str, records: list[SessionRecord], paths: RunPaths) -> Table:
     done = sum(record.status in SUCCESS for record in records)
     active = sum(record.status in ACTIVE for record in records)
-    failed = sum(record.status in TERMINAL_FAILURE for record in records)
+    stopped = sum(record.status == Status.KILLED for record in records)
+    failed = sum(record.status in TERMINAL_FAILURE for record in records) - stopped
+    premium = sum(record.premium_requests or 0 for record in records)
     title = f"cpmux · run {run_id} · {done}/{len(records)} done · {active} active · {failed} failed"
+    if stopped:
+        title += f" · {stopped} stopped"
+    if premium:
+        title += f" · {premium} premium"
 
     table = theme.table(title=title)
-    table.add_column("item", style="bold", no_wrap=True)
+    table.add_column("item", style="bold", ratio=2, no_wrap=True, overflow="ellipsis")
     table.add_column("status", no_wrap=True)
     table.add_column("elapsed", justify="right", no_wrap=True)
-    table.add_column("activity", overflow="ellipsis")
-    table.add_column("branch / PR", no_wrap=True)
+    table.add_column("activity", ratio=3, overflow="ellipsis")
+    table.add_column("branch / PR", ratio=2, no_wrap=True, overflow="ellipsis")
 
     for record in records:
         activity = ""
