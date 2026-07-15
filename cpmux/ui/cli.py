@@ -7,6 +7,7 @@ import re
 import shlex
 import shutil
 import sys
+import termios
 import time
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -54,11 +55,6 @@ from cpmux.vcs.git import GitError, prune_worktrees, remove_worktree, run_git
 from cpmux.voice.recorder import record_and_transcribe
 from cpmux.voice.synthesizer import synthesize_plan
 from cpmux.voice.transcriber import DEFAULT_TRANSCRIBE_MODEL, VoiceError, transcribe
-
-try:
-    import termios
-except ImportError:  # non-POSIX platforms (e.g. Windows)
-    termios = None
 
 app = typer.Typer(
     add_completion=True,
@@ -262,7 +258,7 @@ def up(
 
 @contextmanager
 def _quiet_terminal() -> Iterator[None]:
-    if termios is None or not sys.stdin.isatty():
+    if not sys.stdin.isatty():
         yield
         return
 
