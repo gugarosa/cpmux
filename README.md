@@ -186,6 +186,7 @@ cpmux writes under a gitignored `.cpmux/`:
       prompt.md                 the exact prompt sent (system + item)
       transcript.jsonl          raw tee of copilot --output-format json
       session.json              per-session record (status, branch, PR url, …)
+      copilot-logs/             copilot's own --log-dir
   worktrees/<run_id>/<key>/     one git worktree per item
 ```
 
