@@ -293,6 +293,13 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
         theme.print_error(str(exc))
         raise typer.Exit(1)
 
+    if run_git(["rev-parse", "--verify", "--quiet", "HEAD"], supervisor.repo_root, check=False).returncode != 0:
+        theme.print_error(
+            "this repository has no commits yet.",
+            hint="make an initial commit (`git commit`) so cpmux has a base to branch from.",
+        )
+        raise typer.Exit(1)
+
     if options.open_pr:
         configured = set(run_git(["remote"], supervisor.repo_root, check=False).stdout.split())
         missing = sorted({item.remote for item in resolved} - configured)
@@ -475,7 +482,7 @@ def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: 
         with _quiet_terminal(), Live(console=console, refresh_per_second=4) as live:
             while True:
                 _, records = load_run(root, run_id)
-                records = daemon.reconcile(paths, records, persist=False)
+                records = daemon.reconcile(paths, records)
                 live.update(_run_table(run_id, records, paths))
                 if all(record.status in TERMINAL for record in records):
                     break
@@ -500,7 +507,7 @@ def dash(run: str | None = typer.Option(None, "--run", help="Run id (default: la
 
 @app.command(rich_help_panel="Interact")
 def enter(
-    key: str = typer.Argument(..., help="Item key to open."),
+    key: str = typer.Argument(..., help="Item key to open (from `cpmux ls`)."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
 ) -> None:
     """Open an item's Copilot session."""
@@ -516,7 +523,7 @@ def enter(
 
 @app.command(rich_help_panel="Interact")
 def send(
-    key: str = typer.Argument(..., help="Item key to message."),
+    key: str = typer.Argument(..., help="Item key to message (from `cpmux ls`)."),
     message: str = typer.Argument(..., help="Follow-up prompt."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
 ) -> None:
@@ -534,6 +541,8 @@ def send(
     record.status = state.status
     record.exit_code = state.exit_code
     record.error = state.error
+    record.files_modified = state.files_modified or record.files_modified
+    record.mark_ended()
     if state.premium_requests is not None:
         record.premium_requests = (record.premium_requests or 0) + state.premium_requests
     paths.write_record(record)
@@ -549,7 +558,7 @@ def send(
 
 @app.command(rich_help_panel="Monitor")
 def logs(
-    key: str = typer.Argument(..., help="Item key to show."),
+    key: str = typer.Argument(..., help="Item key to show (from `cpmux ls`)."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
     raw: bool = typer.Option(False, "--raw", help="Print raw JSONL."),
     follow: bool = typer.Option(False, "--follow", "-f", help="Stream new events."),
@@ -759,7 +768,7 @@ def down(
 
 @app.command(rich_help_panel="Stop & clean up")
 def kill(
-    key: str = typer.Argument(..., help="Item key to stop."),
+    key: str = typer.Argument(..., help="Item key to stop (from `cpmux ls`)."),
     run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip confirmation."),
 ) -> None:
@@ -878,7 +887,7 @@ def _print_run_summary(root: Path, run_id: str | None) -> None:
     paths = RunPaths(root, run_id)
 
     _, records = load_run(root, run_id)
-    records = daemon.reconcile(paths, records, persist=False)
+    records = daemon.reconcile(paths, records)
 
     console.print(_run_table(run_id, records, paths))
     if any(record.status in ACTIVE for record in records):

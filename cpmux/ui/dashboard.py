@@ -181,7 +181,7 @@ class CpmuxApp(App):
             return
 
         self.deps_by_key = {item.key: list(item.depends_on) for item in manifest.resolved}
-        self.records = daemon.reconcile(self.paths, records, persist=False)
+        self.records = daemon.reconcile(self.paths, records)
         active = sum(record.status in ACTIVE for record in self.records)
         premium = sum(record.premium_requests or 0 for record in self.records)
         premium_note = f" · {premium} premium" if premium else ""
@@ -370,6 +370,8 @@ class CpmuxApp(App):
         record.status = state.status
         record.exit_code = state.exit_code
         record.error = state.error
+        record.files_modified = state.files_modified or record.files_modified
+        record.mark_ended()
         if state.premium_requests is not None:
             record.premium_requests = (record.premium_requests or 0) + state.premium_requests
 

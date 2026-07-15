@@ -112,11 +112,28 @@ def test_resolve_feeds_item_paths_into_add_dir():
         ),
         pytest.param({"defaults": {"model": ""}, "items": ["t"]}, id="empty-default-model"),
         pytest.param({"defaults": {"base": "  "}, "items": ["t"]}, id="empty-default-base"),
+        pytest.param({"defaults": {"port_base": 65535}, "items": ["a", "b"]}, id="port-base-overflow"),
+        pytest.param({"items": ["   "]}, id="blank-prompt"),
+        pytest.param({"items": [{"prompt": "\n\n"}]}, id="whitespace-prompt"),
     ],
 )
 def test_plan_rejects_invalid_items(bad_plan_dict):
     with pytest.raises(ValidationError):
         Plan.model_validate(bad_plan_dict)
+
+
+def test_permissions_drop_blank_specs():
+    plan = Plan.model_validate(
+        {"items": [{"prompt": "t", "permissions": {"preset": "edit", "allow": ["", "shell(x)"]}}]}
+    )
+    assert plan.items[0].permissions.allow == ["shell(x)"]
+
+
+def test_resolve_drops_blank_labels():
+    plan = Plan.model_validate(
+        {"defaults": {"pr": {"labels": ["keep", ""]}}, "items": [{"prompt": "t", "labels": ["", "x"]}]}
+    )
+    assert plan.resolve()[0].labels == ["keep", "x"]
 
 
 def test_resolve_title_template_supports_prompt():
