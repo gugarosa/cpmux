@@ -3,6 +3,7 @@
 
 import os
 import re
+import string
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated, Any, Literal
@@ -118,6 +119,19 @@ def slugify(text: str) -> str:
     return (text or "task")[:50]
 
 
+def _validate_template(template: str, field: str, allowed: set[str]) -> str:
+    try:
+        names = {name for _, name, _, _ in string.Formatter().parse(template) if name}
+    except ValueError as exc:
+        raise ValueError(f"`{field}` is not a valid format template: {exc}.") from exc
+
+    unknown = sorted(names - allowed)
+    if unknown:
+        raise ValueError(f"`{field}` uses unknown placeholder(s) {unknown}; allowed: {sorted(allowed)}.")
+
+    return template
+
+
 class Permissions(BaseModel):
     """Permission preset with allow, deny, and network options.
 
@@ -191,6 +205,16 @@ class PRSettings(BaseModel):
     title_template: str = "{name}"
     body_template: str = "## Summary\n\n{prompt}\n"
 
+    @field_validator("title_template")
+    @classmethod
+    def _validate_title_template(cls, value: str) -> str:
+        return _validate_template(value, "title_template", {"name", "slug", "prompt"})
+
+    @field_validator("body_template")
+    @classmethod
+    def _validate_body_template(cls, value: str) -> str:
+        return _validate_template(value, "body_template", {"name", "slug", "prompt"})
+
 
 class Defaults(BaseModel):
     """Defaults inherited by all items.
@@ -231,6 +255,11 @@ class Defaults(BaseModel):
             raise ValueError(f"`port_env` must be a valid environment variable name, got `{value}`.")
 
         return value
+
+    @field_validator("branch_template")
+    @classmethod
+    def _validate_branch_template(cls, value: str) -> str:
+        return _validate_template(value, "branch_template", {"slug", "id"})
 
 
 class Item(BaseModel):
@@ -394,10 +423,7 @@ class Plan(BaseModel):
     version: Literal[1] = 1
     system: str = ""
     defaults: Defaults = Field(default_factory=Defaults)
-    items: Annotated[
-        list[Annotated[Item | str, Field(union_mode="left_to_right")]],
-        Field(min_length=1),
-    ]
+    items: Annotated[list[Item], Field(min_length=1)]
 
     @model_validator(mode="before")
     @classmethod
@@ -421,6 +447,15 @@ class Plan(BaseModel):
                 raise ValueError(
                     f"`depends_on` for `{item.key}` references unknown ids {missing}; known ids: {sorted(known)}."
                 )
+
+        pending = {item.key: set(item.depends_on) for item in items}
+        while ready := [key for key, deps in pending.items() if not deps]:
+            for key in ready:
+                del pending[key]
+            for deps in pending.values():
+                deps.difference_update(ready)
+        if pending:
+            raise ValueError(f"`depends_on` forms a cycle among {sorted(pending)}; remove the circular dependency.")
 
         return items
 
@@ -468,7 +503,9 @@ class Plan(BaseModel):
                     env=env,
                     deps=defaults.deps,
                     remote=defaults.remote,
-                    pr_title=pr_settings.title_template.format(name=display_name, slug=item.slug),
+                    pr_title=pr_settings.title_template.format(
+                        name=display_name, slug=item.slug, prompt=item.prompt.strip()
+                    ),
                     pr_body=pr_settings.body_template.format(
                         name=display_name, slug=item.slug, prompt=item.prompt.strip()
                     ),
@@ -511,13 +548,14 @@ def load_plan(path: str | Path) -> Plan:
     try:
         return Plan.model_validate(raw)
     except ValidationError as exc:
-        raise ConfigError(f"`{config_path}` is not a valid cpmux plan:\n{_format_validation(exc)}.") from exc
+        raise ConfigError(f"`{config_path}` is not a valid cpmux plan:\n{_format_validation(exc)}") from exc
 
 
 def _format_validation(exc: ValidationError) -> str:
     lines = []
     for error in exc.errors():
         location = ".".join(str(part) for part in error["loc"]) or "(root)"
-        lines.append(f"  {location}: {error['msg']}")
+        message = error["msg"].removeprefix("Value error, ")
+        lines.append(f"  {location}: {message}")
 
     return "\n".join(lines)

@@ -50,7 +50,7 @@ from cpmux.events import (
 )
 from cpmux.ui.render import event_text
 from cpmux.ui.search import search_transcripts
-from cpmux.vcs.git import GitError, prune_worktrees, remove_worktree
+from cpmux.vcs.git import GitError, prune_worktrees, remove_worktree, run_git
 from cpmux.voice.recorder import record_and_transcribe
 from cpmux.voice.synthesizer import synthesize_plan
 from cpmux.voice.transcriber import DEFAULT_TRANSCRIBE_MODEL, VoiceError, transcribe
@@ -102,6 +102,13 @@ def _run_id_or_exit(run: str | None, root: Path = Path(".")) -> str:
         theme.print_error(
             f"no cpmux runs found in `{root.resolve()}`.",
             hint="start one with `cpmux up <plan.yml>`, or preview it with `--dry-run`.",
+        )
+        raise typer.Exit(1)
+
+    if not RunPaths(root, run_id).manifest.exists():
+        theme.print_error(
+            f"no run `{run_id}` in `{root.resolve()}`.",
+            hint="list existing runs with `cpmux ls`.",
         )
         raise typer.Exit(1)
 
@@ -285,6 +292,16 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
         theme.print_error(str(exc))
         raise typer.Exit(1)
 
+    if options.open_pr:
+        configured = set(run_git(["remote"], supervisor.repo_root, check=False).stdout.split())
+        missing = sorted({item.remote for item in resolved} - configured)
+        if missing:
+            theme.print_error(
+                f"git remote `{missing[0]}` is not configured; pull requests cannot be pushed.",
+                hint="add it with `git remote add ...`, or rerun with `--no-pr`.",
+            )
+            raise typer.Exit(1)
+
     console.print(_plan_table(resolved))
     action = f"open {len(resolved)} draft PR(s)" if options.open_pr else "commit locally (no PR)"
     prompt = (
@@ -373,7 +390,7 @@ def plan(
     up: bool = typer.Option(False, "--up", help="Launch the generated plan."),
     pr: bool = typer.Option(True, "--pr/--no-pr", help="With --up, open one draft PR per item (default: on)."),
     detach: bool = typer.Option(
-        True, "--detach/--foreground", "-d/-f", help="With --up, run in the background (default)."
+        True, "--detach/--foreground", "-d", help="With --up, run in the background (default)."
     ),
     yes: bool = typer.Option(False, "--yes", "-y", help="Skip launch confirmation."),
 ) -> None:
@@ -409,6 +426,7 @@ def _resolve_transcript(text: str | None, audio: Path | None, voice: bool, trans
     if voice:
         return _record_and_transcribe(transcribe_model)
     if audio is not None:
+        theme.print_hint(f"transcribing with `{transcribe_model}` (the model downloads on first use)...")
         return transcribe(audio, transcribe_model)
     if text:
         return text
@@ -520,6 +538,9 @@ def send(
     else:
         console.print(f"[dim]session {record.status}[/dim]")
 
+    if state.status in TERMINAL_FAILURE:
+        raise typer.Exit(1)
+
 
 @app.command(rich_help_panel="Monitor")
 def logs(
@@ -578,15 +599,14 @@ def search(
     root = Path(".")
     if all_runs:
         run_ids = all_run_ids(root)
+        if not run_ids:
+            theme.print_error(
+                "no cpmux runs found here.",
+                hint="start one with `cpmux up <plan.yml>`.",
+            )
+            raise typer.Exit(1)
     else:
-        latest = run or latest_run_id(root)
-        run_ids = [latest] if latest else []
-    if not run_ids:
-        theme.print_error(
-            "no cpmux runs found here.",
-            hint="start one with `cpmux up <plan.yml>`.",
-        )
-        raise typer.Exit(1)
+        run_ids = [_run_id_or_exit(run, root)]
 
     items: list[tuple[str, Path]] = []
     label_by_session: dict[str, str] = {}

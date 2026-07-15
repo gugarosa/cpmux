@@ -23,7 +23,7 @@ These invariants keep cpmux composable; do not violate them.
   resume, and recovery.
 - **cpmux owns only `.cpmux/`.** copilot keeps its own transcripts and resumable
   session store under `~/.copilot`; reuse it read-only rather than duplicating it.
-- **A run has one owner.** Its pid is recorded in `daemon.json`: the foreground `up`
+- **A run has one owner.** Its pid is recorded in `owner.json`: the foreground `up`
   process, or the detached daemon. A live owner means the run is managed. A stale
   owner (present but dead) marks a crash, so non-terminal sessions reconcile to a terminal
   state instead of remaining "running" indefinitely.
@@ -119,8 +119,8 @@ Pydantic `BaseModel`s. Everything else follows phitrain.
 ## CLI conventions (`ui/cli.py`)
 
 - One `command()` function per verb, aggregated on the Typer `app`.
-- Every `Option(...)` whose parameter name contains an underscore exposes both the
-  `--snake_case` and `--kebab-case` aliases.
+- Multi-word options use `--kebab-case` (e.g. `--dry-run`, `--transcribe-model`,
+  `--no-pr`); single-letter shortcuts are unique within a command.
 - Validate inputs with `if/raise <SpecificError>`; surface operational failures with
   `logger.error(...)` followed by `raise typer.Exit(1)`, with no hand-rolled `"Error:"`
   prefix, no `typer.echo(..., err=True)`.

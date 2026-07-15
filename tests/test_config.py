@@ -88,11 +88,38 @@ def test_resolve_feeds_item_paths_into_add_dir():
             {"items": [{"prompt": "x", "depends_on": ["nope"]}]},
             id="unknown-dependency",
         ),
+        pytest.param({"items": [""]}, id="empty-string-item"),
+        pytest.param(
+            {"items": [{"id": "a", "prompt": "x", "depends_on": ["a"]}]},
+            id="self-dependency",
+        ),
+        pytest.param(
+            {
+                "items": [
+                    {"id": "a", "prompt": "x", "depends_on": ["b"]},
+                    {"id": "b", "prompt": "y", "depends_on": ["a"]},
+                ]
+            },
+            id="dependency-cycle",
+        ),
+        pytest.param(
+            {"defaults": {"branch_template": "x/{foo}"}, "items": ["t"]},
+            id="unknown-branch-placeholder",
+        ),
+        pytest.param(
+            {"defaults": {"pr": {"title_template": "{bogus}"}}, "items": ["t"]},
+            id="unknown-title-placeholder",
+        ),
     ],
 )
 def test_plan_rejects_invalid_items(bad_plan_dict):
     with pytest.raises(ValidationError):
         Plan.model_validate(bad_plan_dict)
+
+
+def test_resolve_title_template_supports_prompt():
+    plan = Plan.model_validate({"defaults": {"pr": {"title_template": "{prompt}"}}, "items": ["do the thing"]})
+    assert plan.resolve()[0].pr_title == "do the thing"
 
 
 def test_plan_interpolates_env(monkeypatch):
