@@ -37,7 +37,10 @@ def run_git(
 
     """
 
-    proc = subprocess.run(["git", *args], cwd=str(cwd), env=env, capture_output=True, text=True)
+    try:
+        proc = subprocess.run(["git", *args], cwd=str(cwd), env=env, capture_output=True, text=True)
+    except FileNotFoundError as exc:
+        raise GitError("`git` was not found on PATH; install git.") from exc
 
     if check and proc.returncode != 0:
         detail = proc.stderr.strip() or proc.stdout.strip()

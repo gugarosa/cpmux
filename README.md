@@ -8,7 +8,7 @@ Monitor and steer all sessions.
 
 ## Install
 
-Requires Python ≥ 3.12 and the [`copilot`](https://docs.github.com/copilot/how-tos/copilot-cli),
+Requires macOS or Linux, Python ≥ 3.12, and the [`copilot`](https://docs.github.com/copilot/how-tos/copilot-cli),
 `git`, and `gh` CLIs on your `PATH`.
 
 ```bash
@@ -95,12 +95,14 @@ items:
 Item mappings accept `prompt`, `name`, `id`, `model`, `effort`, `permissions`, `base`,
 `branch`, `labels`, `draft`, `paths`, `depends_on`, `env`, and `include_system`.
 
-The `pr` block also accepts `title_template` and `body_template`; both expand `{name}`,
-`{slug}`, and `{prompt}`, while `branch_template` expands `{slug}` and `{id}`. `permissions`
-may be a bare preset or a mapping that extends one —
+The `pr` block also accepts `title_template` and `body_template` — the fallback title and body
+used when a session writes no `.cpmux-pr.md`; both expand `{name}`, `{slug}`, and `{prompt}`,
+while `branch_template` expands `{slug}` and `{id}`. `permissions` may be a bare preset or a
+mapping that extends one —
 `{preset: edit, allow: [...], deny: [...], add_dir: [...], allow_url: [...]}` — adding
-`copilot` tool and network rules. An optional top-level `version` selects the schema
-(currently only `1`).
+`copilot` tool and network rules. Only `full`/`yolo` let the agent run `git push` itself; the
+other presets keep push denied so cpmux owns delivery. An optional top-level `version` selects
+the schema (currently only `1`).
 
 An item's **key** is its `id` when set, otherwise a slug of its `name` or `prompt`. Pass keys
 to `enter`, `send`, `logs`, and `kill`; `cpmux ls` and `--dry-run` print them. Any string field
@@ -118,8 +120,8 @@ Run-scoped commands accept `--run <id>` and default to the latest run.
 | Group | Command | What it does |
 |---|---|---|
 | **Create** | `cpmux init [FILE]` | Write a starter plan (defaults to `cpmux.yml`). Flag: `--force/-f`. |
-| | `cpmux plan [FILE]` | Compose a plan in your editor, or from text, speech, or audio. Flags: `--text`, `--voice`, `--audio` (mutually exclusive), `--transcribe-model`, `--model`, `--force/-f`, `--up`, `--pr/--no-pr`, `--detach/-d`, `--yes/-y`. |
-| **Launch** | `cpmux up [FILE]` | Spawn one session per item (defaults to `cpmux.yml`). Flags: `--dry-run`, `--detach/--foreground` (background by default), `--concurrency/-j`, `--pr/--no-pr`, `--deps`, `--strip-github-token/--no-strip-github-token`, `--yes/-y`. |
+| | `cpmux plan [FILE]` | Compose a plan in your editor, or from text, speech, or audio. Flags: `--text`, `--voice`, `--audio` (mutually exclusive), `--transcribe-model`, `--model`, `--force/-f`, `--up`, `--pr/--no-pr`, `--detach/--foreground/-d`, `--yes/-y`. |
+| **Launch** | `cpmux up [FILE]` | Spawn one session per item (defaults to `cpmux.yml`). Flags: `--dry-run`, `--detach/--foreground/-d/-f` (background by default), `--concurrency/-j`, `--pr/--no-pr`, `--deps`, `--strip-github-token/--no-strip-github-token`, `--yes/-y`. |
 | **Monitor** | `cpmux ls` | Snapshot each item's status, elapsed time, and activity. |
 | | `cpmux attach` | Live, read-only monitor; reconnects to a background run (Ctrl-C to detach). |
 | | `cpmux dash` | Interactive TUI: session list, live transcript, search. |

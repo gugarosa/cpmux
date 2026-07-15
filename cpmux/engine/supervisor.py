@@ -222,6 +222,7 @@ class Supervisor:
         except asyncio.CancelledError:
             for runner in self.runners.values():
                 runner.terminate()
+            await asyncio.gather(*tasks, return_exceptions=True)
             raise
 
     async def _run_item(

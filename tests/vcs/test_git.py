@@ -94,6 +94,15 @@ def test_run_git_raises_on_bad_subcommand(git_repo):
         run_git(["not-a-real-subcommand"], cwd=git_repo)
 
 
+def test_run_git_raises_when_git_missing(tmp_path, monkeypatch):
+    def _missing(*args, **kwargs):
+        raise FileNotFoundError("git")
+
+    monkeypatch.setattr("cpmux.vcs.git.subprocess.run", _missing)
+    with pytest.raises(GitError):
+        run_git(["status"], cwd=tmp_path)
+
+
 def test_require_paths_exist_passes_for_present_paths(git_repo):
     require_paths_exist(git_repo, ["README.md"])
 

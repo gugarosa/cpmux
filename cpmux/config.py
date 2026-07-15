@@ -162,6 +162,11 @@ class Permissions(BaseModel):
             return {"preset": data}
         return data
 
+    @field_validator("allow", "deny", "add_dir", "allow_url")
+    @classmethod
+    def _drop_blank(cls, value: list[str]) -> list[str]:
+        return [entry for entry in value if entry.strip()]
+
     def to_flags(self) -> list[str]:
         """Return `copilot` permission flags.
 
@@ -318,6 +323,14 @@ class Item(BaseModel):
             return {"prompt": data}
         return data
 
+    @field_validator("prompt")
+    @classmethod
+    def _reject_blank_prompt(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("`prompt` must not be blank.")
+
+        return value
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def slug(self) -> str:
@@ -470,6 +483,16 @@ class Plan(BaseModel):
 
         return items
 
+    @model_validator(mode="after")
+    def _validate_port_range(self) -> "Plan":
+        base = self.defaults.port_base
+        if base is not None and base + len(self.items) - 1 > 65535:
+            raise ValueError(
+                f"`port_base` {base} + {len(self.items)} items exceeds port 65535; lower it or split the plan."
+            )
+
+        return self
+
     def resolve(self) -> list[ResolvedItem]:
         """Resolve items in declaration order.
 
@@ -508,7 +531,7 @@ class Plan(BaseModel):
                     permissions=permissions,
                     branch=branch,
                     base=item.base or defaults.base,
-                    labels=list(dict.fromkeys([*pr_settings.labels, *item.labels])),
+                    labels=[label for label in dict.fromkeys([*pr_settings.labels, *item.labels]) if label.strip()],
                     draft=pr_settings.draft if item.draft is None else item.draft,
                     depends_on=list(item.depends_on),
                     env=env,
