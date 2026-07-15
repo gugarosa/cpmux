@@ -8,75 +8,39 @@ from cpmux.config import ConfigError, Plan, Preset, interpolate_env, load_plan
 from cpmux.vcs.pr import PR_DRAFT_FILENAME
 
 
-@pytest.mark.parametrize(
-    ("extract_value", "expected"),
-    [
-        pytest.param(lambda plan: plan.items[0].prompt, "fix the bug", id="prompt"),
-        pytest.param(lambda plan: plan.resolve()[0].model, "gpt-5.5", id="default-model"),
-        pytest.param(lambda plan: plan.resolve()[0].permissions.preset, Preset.edit, id="default-permissions"),
-    ],
-)
-def test_item_accepts_string_shorthand(extract_value, expected):
+def test_item_accepts_string_shorthand():
     plan = Plan.model_validate({"items": ["fix the bug"]})
-    assert extract_value(plan) == expected
+    resolved = plan.resolve()[0]
+
+    assert plan.items[0].prompt == "fix the bug"
+    assert resolved.model == "gpt-5.5"
+    assert resolved.permissions.preset == Preset.edit
 
 
-@pytest.mark.parametrize(
-    ("extract_value", "expected"),
-    [
-        pytest.param(lambda resolved: resolved[0].model, "gpt-5.5", id="default-model"),
-        pytest.param(lambda resolved: resolved[1].model, "claude-opus-4.8", id="item-model"),
-        pytest.param(lambda resolved: resolved[1].labels, ["batch", "refactor"], id="merged-labels"),
-    ],
-)
-def test_resolve_applies_precedence_and_labels(extract_value, expected):
+def test_resolve_applies_precedence_and_labels():
     plan = Plan.model_validate(
         {
             "system": "SYS",
             "defaults": {"pr": {"labels": ["batch"]}},
             "items": [
                 "a simple task",
-                {
-                    "name": "Big refactor",
-                    "prompt": "do it",
-                    "model": "claude-opus-4.8",
-                    "labels": ["refactor"],
-                },
+                {"name": "Big refactor", "prompt": "do it", "model": "claude-opus-4.8", "labels": ["refactor"]},
             ],
         }
     )
+    resolved = plan.resolve()
 
-    assert extract_value(plan.resolve()) == expected
+    assert resolved[0].model == "gpt-5.5"
+    assert resolved[1].model == "claude-opus-4.8"
+    assert resolved[1].labels == ["batch", "refactor"]
 
 
-@pytest.mark.parametrize(
-    ("matches_prompt", "expected"),
-    [
-        pytest.param(lambda prompt, expected: prompt.startswith(expected), "SYS", id="system-prefix"),
-        pytest.param(
-            lambda prompt, expected: prompt.rstrip().endswith(expected),
-            "a simple task",
-            id="item-prompt-suffix",
-        ),
-    ],
-)
-def test_resolve_applies_system_prompt_boundaries(matches_prompt, expected):
-    plan = Plan.model_validate(
-        {
-            "system": "SYS",
-            "defaults": {"pr": {"labels": ["batch"]}},
-            "items": [
-                "a simple task",
-                {
-                    "name": "Big refactor",
-                    "prompt": "do it",
-                    "model": "claude-opus-4.8",
-                    "labels": ["refactor"],
-                },
-            ],
-        }
-    )
-    assert matches_prompt(plan.resolve()[0].prompt, expected)
+def test_resolve_applies_system_prompt_boundaries():
+    plan = Plan.model_validate({"system": "SYS", "items": ["a simple task"]})
+    prompt = plan.resolve()[0].prompt
+
+    assert prompt.startswith("SYS")
+    assert prompt.rstrip().endswith("a simple task")
 
 
 def test_resolve_omits_system_when_include_system_false():
