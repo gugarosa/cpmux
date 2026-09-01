@@ -13,11 +13,12 @@ Monitor and steer all sessions.
 
 ## Install
 
-Requires macOS or Linux, Python ≥ 3.12, and the [`copilot`](https://docs.github.com/copilot/how-tos/copilot-cli),
-`git`, and `gh` CLIs on your `PATH`.
+Requires macOS or Linux, Python ≥ 3.12, [`uv`](https://docs.astral.sh/uv/), and the
+[`copilot`](https://docs.github.com/copilot/how-tos/copilot-cli), `git`, and `gh` CLIs on your
+`PATH`.
 
 ```bash
-pip install git+https://github.com/gugarosa/cpmux
+uv tool install cpmux
 ```
 
 Or from source, for development:
@@ -25,7 +26,7 @@ Or from source, for development:
 ```bash
 git clone https://github.com/gugarosa/cpmux
 cd cpmux
-pip install -e .
+uv tool install --editable .
 ```
 
 ## Quickstart
@@ -160,7 +161,7 @@ The `cpmux[voice]` extra installs `sounddevice` and `faster-whisper`. `--text` a
 need neither:
 
 ```bash
-pip install "cpmux[voice] @ git+https://github.com/gugarosa/cpmux"
+uv tool install "cpmux[voice]"
 brew install portaudio     # macOS only: sounddevice needs PortAudio
 ```
 
@@ -214,8 +215,8 @@ in [`examples/frontend.yaml`](examples/frontend.yaml).
 ## Development
 
 ```bash
-pip install -e .
-pytest
+uv sync --extra dev
+uv run pytest
 ```
 
 Conventions, architecture invariants, and roadmap live in [`CONVENTIONS.md`](CONVENTIONS.md).
