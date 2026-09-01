@@ -6,6 +6,14 @@ All notable changes to cpmux are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-01
+
+### Changed
+
+- Replaced pip installation instructions with isolated `uv tool` installs for cpmux,
+  its voice extra, and editable source checkouts.
+- Migrated development, CI, and release build tooling to uv and added a lockfile.
+
 ## [0.1.0] - 2026-07-15
 
 First release published to PyPI.
@@ -67,6 +75,7 @@ Initial release.
   composing a plan from an editor, text, speech (`--voice`), or an audio file.
 - On-device speech-to-text via faster-whisper behind the `voice` extra.
 
-[Unreleased]: https://github.com/gugarosa/cpmux/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/gugarosa/cpmux/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/gugarosa/cpmux/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/gugarosa/cpmux/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/gugarosa/cpmux/releases/tag/v0.0.1
