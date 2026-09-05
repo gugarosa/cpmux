@@ -38,3 +38,10 @@ jobs:
           python-version: "3.12"
       - run: uv build
       - run: uvx twine check dist/*
+      - name: Smoke-test the installed wheel outside the checkout
+        run: |
+          wheel="$(realpath dist/*.whl)"
+          cd "$(mktemp -d)"
+          uv run --no-project --with "$wheel" python -c \
+            "from importlib.metadata import version; import cpmux; assert cpmux.__version__ == version('cpmux')"
+          uv run --no-project --with "$wheel" cpmux --help

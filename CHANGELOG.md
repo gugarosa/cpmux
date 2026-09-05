@@ -6,6 +6,21 @@ All notable changes to cpmux are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Preserve large JSONL events and continue draining subprocess output instead of losing
+  transcripts or hanging when an event exceeds the stream buffer limit.
+- Reap session processes on cancellation and callback failures, isolate startup failures,
+  and retain failed outcomes even when a subprocess previously emitted a successful result.
+- Persist cancelled sessions as stopped, clear completed process IDs, and report interrupted
+  finalization as a failure requiring inspection of the worktree and remote.
+- Reject escaping or overlapping identifiers, unresolvable templates, and out-of-range CLI
+  concurrency before starting work, while preserving safe namespaced item keys.
+- Surface Git staging/index and pull-request lookup failures instead of treating them as
+  no changes or no existing pull request.
+- Count pull-request creation as active work and report the installed release version
+  consistently, using one version source for the package and build metadata.
+
 ## [0.1.1] - 2026-09-01
 
 ### Changed

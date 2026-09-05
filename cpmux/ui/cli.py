@@ -106,7 +106,13 @@ def _run_id_or_exit(run: str | None, root: Path = Path(".")) -> str:
         )
         raise typer.Exit(1)
 
-    if not RunPaths(root, run_id).manifest.exists():
+    try:
+        paths = RunPaths(root, run_id)
+    except ValueError as exc:
+        theme.print_error(str(exc))
+        raise typer.Exit(1)
+
+    if not paths.manifest.exists():
         theme.print_error(
             f"no run `{run_id}` in `{root.resolve()}`.",
             hint="list existing runs with `cpmux ls`.",
@@ -116,15 +122,27 @@ def _run_id_or_exit(run: str | None, root: Path = Path(".")) -> str:
     return run_id
 
 
-def _resolve_record(run: str | None, key: str) -> tuple[RunPaths, SessionRecord]:
+def _session_paths(run: str | None, key: str) -> RunPaths:
     run_id = _run_id_or_exit(run)
     paths = RunPaths(Path("."), run_id)
-    if not paths.record_file(key).exists():
+    try:
+        record_file = paths.record_file(key)
+    except ValueError as exc:
+        theme.print_error(str(exc))
+        raise typer.Exit(1)
+
+    if not record_file.exists():
         theme.print_error(
             f"no session `{key}` in run `{run_id}`.",
             hint=f"list the run's items with `cpmux ls --run {run_id}`.",
         )
         raise typer.Exit(1)
+
+    return paths
+
+
+def _resolve_record(run: str | None, key: str) -> tuple[RunPaths, SessionRecord]:
+    paths = _session_paths(run, key)
 
     return paths, paths.read_record(key)
 
@@ -220,7 +238,7 @@ def up(
         "-d/-f",
         help="Run in the background and return (default); --foreground stays attached.",
     ),
-    concurrency: int | None = typer.Option(None, "--concurrency", "-j", help="Max parallel sessions."),
+    concurrency: int | None = typer.Option(None, "--concurrency", "-j", min=1, max=64, help="Max parallel sessions."),
     pr: bool = typer.Option(True, "--pr/--no-pr", help="Open one draft PR per item (default: on)."),
     deps: Deps | None = typer.Option(None, "--deps", help="Override dependency strategy."),
     strip_github_token: bool = typer.Option(
@@ -553,6 +571,8 @@ def send(
         console.print(f"[dim]session {record.status}[/dim]")
 
     if state.status in TERMINAL_FAILURE:
+        if state.error:
+            theme.print_error(state.error)
         raise typer.Exit(1)
 
 
@@ -565,14 +585,7 @@ def logs(
 ) -> None:
     """Print a session transcript."""
 
-    run_id = _run_id_or_exit(run)
-    paths = RunPaths(Path("."), run_id)
-    if not paths.record_file(key).exists():
-        theme.print_error(
-            f"no session `{key}` in run `{run_id}`.",
-            hint=f"list the run's items with `cpmux ls --run {run_id}`.",
-        )
-        raise typer.Exit(1)
+    paths = _session_paths(run, key)
 
     transcript = paths.transcript(key)
     if not transcript.exists() and not follow:
@@ -580,7 +593,7 @@ def logs(
         return
 
     if follow and theme.err.is_terminal:
-        theme.err.print(f"[dim]following {run_id}/{key} — Ctrl-C to stop[/dim]")
+        theme.err.print(f"[dim]following {paths.run_id}/{key} — Ctrl-C to stop[/dim]")
 
     consumed = _emit_transcript(transcript.read_text(encoding="utf-8"), raw) if transcript.exists() else 0
     if follow:

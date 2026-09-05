@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cpmux"
-version = "0.1.1"
+dynamic = ["version"]
 description = "Multiplexer for GitHub Copilot CLI agents"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -40,6 +40,9 @@ cpmux = "cpmux.ui.cli:main"
 [project.urls]
 Homepage = "https://github.com/gugarosa/cpmux"
 Repository = "https://github.com/gugarosa/cpmux"
+
+[tool.hatch.version]
+path = "cpmux/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["cpmux"]

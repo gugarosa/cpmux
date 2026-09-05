@@ -30,7 +30,7 @@ from cpmux.engine import daemon
 from cpmux.engine.interact import followup_argv, resume_interactive_argv
 from cpmux.engine.session import SessionRunner
 from cpmux.engine.store import RunPaths, SessionRecord, load_run
-from cpmux.events import ACTIVE, parse_line
+from cpmux.events import ACTIVE, TERMINAL_FAILURE, parse_line
 from cpmux.ui.render import deps_cell, event_text
 from cpmux.ui.search import search_transcripts
 
@@ -376,3 +376,5 @@ class CpmuxApp(App):
             record.premium_requests = (record.premium_requests or 0) + state.premium_requests
 
         self.paths.write_record(record)
+        if state.status in TERMINAL_FAILURE and state.error:
+            self.call_from_thread(self.notify, f"{record.key}: {state.error}", severity="error")

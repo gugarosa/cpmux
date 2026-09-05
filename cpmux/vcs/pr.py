@@ -52,13 +52,19 @@ def commit_all(worktree: str | Path, message: str, env: dict[str, str]) -> bool:
         Whether a commit was created.
 
     Raises:
-        PRError: The commit failed.
+        PRError: Staging, inspecting the index, or committing failed.
 
     """
 
-    _run(["git", "add", "-A"], worktree, env)
-    if _run(["git", "diff", "--cached", "--quiet"], worktree, env).returncode == 0:
+    proc = _run(["git", "add", "-A"], worktree, env)
+    if proc.returncode != 0:
+        raise PRError(f"`git add` failed: {proc.stderr.strip()}.")
+
+    proc = _run(["git", "diff", "--cached", "--quiet"], worktree, env)
+    if proc.returncode == 0:
         return False
+    if proc.returncode != 1:
+        raise PRError(f"`git diff --cached` failed: {proc.stderr.strip()}.")
 
     proc = _run(["git", "commit", "-m", message], worktree, env)
     if proc.returncode != 0:
@@ -98,6 +104,9 @@ def existing_pr_url(worktree: str | Path, base: str, branch: str, env: dict[str,
     Returns:
         The pull request URL when one exists.
 
+    Raises:
+        PRError: The pull request lookup failed.
+
     """
 
     proc = _run(
@@ -120,7 +129,7 @@ def existing_pr_url(worktree: str | Path, base: str, branch: str, env: dict[str,
         env,
     )
     if proc.returncode != 0:
-        return None
+        raise PRError(f"`gh pr list` for `{branch}` failed: {proc.stderr.strip() or proc.stdout.strip()}.")
 
     return proc.stdout.strip() or None
 

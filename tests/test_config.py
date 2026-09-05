@@ -122,6 +122,72 @@ def test_plan_rejects_invalid_items(bad_plan_dict):
         Plan.model_validate(bad_plan_dict)
 
 
+@pytest.mark.parametrize(
+    "identifier", ["", " ", ".", "..", "../outside", "/outside", "nested/../item", "nested//item", "nul\0id"]
+)
+def test_plan_rejects_unsafe_or_aliased_ids(identifier):
+    with pytest.raises(ValidationError, match="id"):
+        Plan.model_validate({"items": [{"id": identifier, "prompt": "x"}]})
+
+
+def test_resolve_preserves_an_explicit_id_with_spaces():
+    plan = Plan.model_validate({"items": [{"id": "release candidate", "prompt": "x"}]})
+    assert plan.resolve()[0].key == "release candidate"
+
+
+def test_resolve_preserves_disjoint_namespaced_ids():
+    plan = Plan.model_validate(
+        {"items": [{"id": "frontend/login", "prompt": "x"}, {"id": "frontend/profile", "prompt": "y"}]}
+    )
+
+    assert [item.key for item in plan.resolve()] == ["frontend/login", "frontend/profile"]
+
+
+def test_plan_rejects_overlapping_worktree_ids():
+    with pytest.raises(ValidationError, match="overlapping identifiers"):
+        Plan.model_validate(
+            {
+                "items": [
+                    {"id": "a", "prompt": "x"},
+                    {"id": "a-b", "prompt": "y"},
+                    {"id": "a/nested", "prompt": "z"},
+                ]
+            }
+        )
+
+
+@pytest.mark.parametrize(
+    "defaults",
+    [
+        {"branch_template": "feature/{}"},
+        {"branch_template": "feature/{slug!z}"},
+        {"pr": {"title_template": "{name:invalid}"}},
+        {"pr": {"body_template": "{prompt:{unknown}}"}},
+        {"pr": {"title_template": "{name:{prompt}}"}},
+    ],
+)
+def test_plan_rejects_templates_that_cannot_resolve(defaults):
+    with pytest.raises(ValidationError):
+        Plan.model_validate({"defaults": defaults, "items": [{"name": "Release", "prompt": "do the work"}]})
+
+
+def test_resolve_preserves_valid_string_formatting():
+    plan = Plan.model_validate(
+        {
+            "defaults": {
+                "branch_template": "feature/{slug:.3}",
+                "pr": {"title_template": "{name:{prompt}}", "body_template": "{{literal}} {slug!r}"},
+            },
+            "items": [{"name": "Release", "prompt": ">12"}],
+        }
+    )
+    item = plan.resolve()[0]
+
+    assert item.branch == "feature/rel"
+    assert item.pr_title == "     Release"
+    assert item.pr_body == "{literal} 'release'"
+
+
 def test_permissions_drop_blank_specs():
     plan = Plan.model_validate(
         {"items": [{"prompt": "t", "permissions": {"preset": "edit", "allow": ["", "shell(x)"]}}]}

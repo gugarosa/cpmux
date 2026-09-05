@@ -14,7 +14,14 @@ from cpmux import theme
 from cpmux.config import Plan, ResolvedItem
 from cpmux.engine.session import SessionRunner
 from cpmux.engine.store import RunManifest, RunPaths, SessionRecord, new_run_id
-from cpmux.events import ACTIVE, SUCCESS, TERMINAL_FAILURE, SessionState, Status
+from cpmux.events import (
+    ACTIVE,
+    SUCCESS,
+    TERMINAL,
+    TERMINAL_FAILURE,
+    SessionState,
+    Status,
+)
 from cpmux.logging import get_logger
 from cpmux.vcs import git, pr
 
@@ -219,11 +226,11 @@ class Supervisor:
         tasks = [asyncio.create_task(self._run_item(item, semaphore, done_events)) for item in self.resolved]
         try:
             await asyncio.gather(*tasks)
-        except asyncio.CancelledError:
-            for runner in self.runners.values():
-                runner.terminate()
+        finally:
+            for task in tasks:
+                if not task.done() and not task.cancelling():
+                    task.cancel()
             await asyncio.gather(*tasks, return_exceptions=True)
-            raise
 
     async def _run_item(
         self,
@@ -232,6 +239,7 @@ class Supervisor:
         done_events: dict[str, asyncio.Event],
     ) -> None:
         record = self.records[item.key]
+        finalizing = False
         try:
             for dep in item.depends_on:
                 await done_events[dep].wait()
@@ -261,6 +269,7 @@ class Supervisor:
                 self.runners[item.key] = runner
                 state = await runner.run(self._on_update, on_spawn=lambda pid: self._on_spawn(record, pid))
 
+                record.pid = None
                 record.exit_code = state.exit_code
                 record.premium_requests = state.premium_requests
                 record.files_modified = state.files_modified
@@ -269,12 +278,22 @@ class Supervisor:
                     record.status = Status.FINALIZING
                     self.paths.write_record(record)
                     self._refresh()
+                    finalizing = True
                     await self._finalize(item, record)
                 else:
                     record.status = state.status
                 self.paths.write_record(record)
                 self._refresh()
+        except asyncio.CancelledError:
+            if record.status not in TERMINAL:
+                if finalizing:
+                    record.status = Status.FAILED
+                    record.error = "run cancelled during finalization; inspect the worktree and remote."
+                else:
+                    record.status = Status.KILLED
+            raise
         finally:
+            record.pid = None
             record.mark_ended()
             self.paths.write_record(record)
             done_events[item.key].set()
