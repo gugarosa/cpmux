@@ -4,7 +4,7 @@
 import asyncio
 import json
 
-from textual.widgets import DataTable, RichLog
+from textual.widgets import DataTable, Input, RichLog
 
 from cpmux.config import Plan
 from cpmux.engine.store import RunManifest, RunPaths, SessionRecord
@@ -181,3 +181,24 @@ def test_dashboard_open_pr_without_pr_does_not_open_browser(tmp_path, monkeypatc
 
     asyncio.run(scenario())
     assert opened == []
+
+
+def test_dashboard_followup_reports_startup_failure(tmp_path, monkeypatch):
+    paths = _build_run(tmp_path, ["alpha"])
+    (tmp_path / "alpha").mkdir()
+    monkeypatch.setattr("cpmux.ui.dashboard.followup_argv", lambda *args: [str(tmp_path / "missing-copilot")])
+    notifications = []
+
+    async def scenario():
+        app = CpmuxApp(str(tmp_path), "run1")
+        monkeypatch.setattr(app, "notify", lambda message, **kwargs: notifications.append((message, kwargs)))
+        async with app.run_test() as pilot:
+            await pilot.press("s")
+            app.screen.query_one(Input).value = "retry"
+            await pilot.press("enter")
+            await app.workers.wait_for_complete()
+
+    asyncio.run(scenario())
+
+    assert paths.read_record("alpha").status == Status.FAILED
+    assert any("missing-copilot" in message and kwargs.get("severity") == "error" for message, kwargs in notifications)

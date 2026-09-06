@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, Field
 
-from cpmux.config import ResolvedItem
+from cpmux.config import ResolvedItem, validate_identifier
 from cpmux.events import Status
 
 CPMUX_DIR = ".cpmux"
@@ -144,6 +144,7 @@ class RunPaths:
 
         """
 
+        run_id = validate_identifier(run_id, "run_id")
         self.repo_root = Path(repo_root)
         self.run_id = run_id
 
@@ -167,12 +168,12 @@ class RunPaths:
     def session_dir(self, key: str) -> Path:
         """Session artifact directory."""
 
-        return self.sessions_dir / key
+        return self.sessions_dir / validate_identifier(key, "key")
 
     def worktree(self, key: str) -> Path:
         """Git worktree path."""
 
-        return self.worktrees_dir / key
+        return self.worktrees_dir / validate_identifier(key, "key")
 
     def prompt_file(self, key: str) -> Path:
         """Resolved prompt path."""

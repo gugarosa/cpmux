@@ -24,7 +24,7 @@ class Status(StrEnum):
     KILLED = "killed"
 
 
-ACTIVE = frozenset({Status.STARTING, Status.RUNNING, Status.TOOL, Status.IDLE, Status.FINALIZING})
+ACTIVE = frozenset({Status.STARTING, Status.RUNNING, Status.TOOL, Status.IDLE, Status.FINALIZING, Status.OPENING_PR})
 TERMINAL = frozenset({Status.DONE, Status.NO_CHANGES, Status.FAILED, Status.TIMED_OUT, Status.KILLED})
 SUCCESS = frozenset({Status.DONE, Status.NO_CHANGES})
 TERMINAL_FAILURE = TERMINAL - SUCCESS

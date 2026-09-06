@@ -27,8 +27,9 @@ These invariants keep cpmux composable; do not violate them.
   process, or the detached daemon. A live owner means the run is managed. A stale
   owner (present but dead) marks a crash, so non-terminal sessions reconcile to a terminal
   state instead of remaining "running" indefinitely.
-- **Config precedence is `item > defaults > built-in`.** Resolution happens once in
-  `Plan.resolve()`; downstream code consumes `ResolvedItem`, never re-merges.
+- **Config precedence is `item > defaults > built-in`.** Resolution is centralized in
+  `Plan.resolve()`, which validation also exercises before accepting a plan; downstream code
+  consumes `ResolvedItem`, never re-merges.
 
 ## Package structure
 
@@ -145,6 +146,10 @@ Pydantic `BaseModel`s. Everything else follows phitrain.
 
 black + isort (`profile = black`) + flake8, all at line-length 120, wired through
 `.pre-commit-config.yaml`.
+
+The release version lives in `cpmux/__init__.py`. Hatch reads it for wheel and source
+distribution metadata, and uv watches that file to invalidate cached build metadata.
+Update that value and regenerate `uv.lock` when changing versions.
 
 ```bash
 isort cpmux tests && black cpmux tests && flake8 cpmux tests

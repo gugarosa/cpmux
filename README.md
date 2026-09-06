@@ -115,6 +115,11 @@ to `enter`, `send`, `logs`, and `kill`; `cpmux ls` and `--dry-run` print them. A
 expands `${VAR}` and `${VAR:-default}` from the environment. Set `include_system: false` to
 omit the shared prompt for an item.
 
+Identifiers must be normalized relative names, without absolute paths, `.`/`..` components,
+or aliases such as `team//task`. Safe namespaced item keys such as `frontend/login` remain
+valid, but an item's key cannot be a parent of another item's key: their worktrees must
+not overlap. Run IDs passed to `--run` follow the same relative-path rules.
+
 Set `port_base` when items run dev servers: each item gets `port_base + index` in its
 environment (as `$PORT`, or `port_env` to rename it), so parallel servers do not collide. An
 item's own `env` takes precedence, and `env` values reach the session's subprocess.

@@ -21,3 +21,10 @@ def test_synthesize_plan_retries_then_fails_on_invalid(monkeypatch):
     _reply("```yaml\nitems: []\n```", monkeypatch)
     with pytest.raises(VoiceError):
         synthesize_plan("nothing")
+
+
+def test_synthesize_plan_retries_a_template_that_cannot_resolve(monkeypatch):
+    replies = iter(["defaults:\n  branch_template: 'feature/{}'\nitems: [x]", "items: [x]"])
+    monkeypatch.setattr(synthesizer, "_run_copilot", lambda *args: next(replies))
+
+    assert synthesize_plan("x") == "items: [x]"

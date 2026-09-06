@@ -1,9 +1,14 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
+from importlib.metadata import version
+
 import pytest
+from click import unstyle
 from typer.testing import CliRunner
 
+from cpmux.engine.store import RunManifest, RunPaths, SessionRecord
+from cpmux.events import Status
 from cpmux.ui import cli
 from cpmux.ui.cli import app
 
@@ -22,6 +27,38 @@ def test_root_options_report_expected_output(argv, expected_exit_code, expected_
     assert result.exit_code == expected_exit_code
     for expected_substring in expected_substrings:
         assert expected_substring in result.output
+
+
+def test_version_matches_installed_distribution():
+    result = runner.invoke(app, ["--version"])
+
+    assert result.exit_code == 0
+    assert result.output.strip() == f"cpmux {version('cpmux')}"
+
+
+@pytest.mark.parametrize("concurrency", ["-1", "0", "65"])
+def test_up_rejects_invalid_concurrency_before_launch(tmp_path, concurrency):
+    path = tmp_path / "plan.yml"
+    path.write_text("items: [x]\n")
+
+    result = runner.invoke(app, ["up", str(path), "--dry-run", "--concurrency", concurrency])
+    output = unstyle(result.output)
+
+    assert result.exit_code == 2
+    assert "--concurrency" in output
+    assert "range" in output
+    assert not (tmp_path / ".cpmux").exists()
+
+
+@pytest.mark.parametrize("concurrency", ["1", "64"])
+def test_up_accepts_concurrency_bounds(tmp_path, concurrency):
+    path = tmp_path / "plan.yml"
+    path.write_text("items: [x]\n")
+
+    result = runner.invoke(app, ["up", str(path), "--dry-run", "--concurrency", concurrency])
+
+    assert result.exit_code == 0
+    assert f"max {concurrency} concurrent" in unstyle(result.output)
 
 
 @pytest.mark.parametrize(
@@ -327,3 +364,53 @@ def test_up_foreground_flag_stays_attached(monkeypatch, tmp_path):
     result = runner.invoke(app, ["up", "--foreground", "--yes"])
     assert result.exit_code == 0
     assert seen["detach"] is False
+
+
+def test_send_reports_startup_failure_and_persists_it(tmp_path, monkeypatch):
+    paths = RunPaths(tmp_path, "run1")
+    paths.write_manifest(RunManifest(run_id="run1", repo_root=str(tmp_path), config_path="", item_keys=["a"]))
+    paths.write_record(
+        SessionRecord(
+            key="a",
+            name="a",
+            slug="a",
+            branch="cpmux/a",
+            base="main",
+            model="m",
+            session_id="sid",
+            worktree=str(tmp_path),
+            status=Status.DONE,
+        )
+    )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "_require_tool", lambda *args: None)
+    monkeypatch.setattr(cli, "followup_argv", lambda *args: [str(tmp_path / "missing-copilot")])
+
+    result = runner.invoke(app, ["send", "a", "retry"])
+
+    assert result.exit_code == 1
+    assert "missing-copilot" in result.output
+    assert "could not start" in result.output
+    assert paths.read_record("a").status == Status.FAILED
+
+
+@pytest.mark.parametrize("command", ["ls", "attach", "rm"])
+def test_run_commands_reject_escaping_run_ids(tmp_path, monkeypatch, command):
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(app, [command, "--run", "../outside"])
+
+    assert result.exit_code == 1
+    assert "`run_id` must be a normalized relative identifier" in result.output
+
+
+@pytest.mark.parametrize("command", ["logs", "enter", "kill"])
+def test_session_commands_reject_escaping_keys(tmp_path, monkeypatch, command):
+    paths = RunPaths(tmp_path, "run1")
+    paths.write_manifest(RunManifest(run_id="run1", repo_root=str(tmp_path), config_path=""))
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(app, [command, "../outside"])
+
+    assert result.exit_code == 1
+    assert "`key` must be a normalized relative identifier" in result.output

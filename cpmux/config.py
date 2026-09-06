@@ -122,6 +122,28 @@ def slugify(text: str) -> str:
     return (text or "task")[:50]
 
 
+def validate_identifier(value: str, field: str) -> str:
+    """Require a normalized relative identifier within its storage directory.
+
+    Args:
+        value: Identifier to validate.
+        field: Field name used in errors.
+
+    Returns:
+        The unchanged identifier.
+
+    Raises:
+        ValueError: The identifier is blank, anchored, or contains path aliases.
+
+    """
+
+    path = Path(value)
+    if not value.strip() or "\0" in value or not path.parts or path.anchor or ".." in path.parts or str(path) != value:
+        raise ValueError(f"`{field}` must be a normalized relative identifier without `..`, but got {value!r}.")
+
+    return value
+
+
 def _validate_template(template: str, field: str, allowed: set[str]) -> str:
     try:
         names = {name for _, name, _, _ in string.Formatter().parse(template) if name}
@@ -331,6 +353,11 @@ class Item(BaseModel):
 
         return value
 
+    @field_validator("id")
+    @classmethod
+    def _validate_id(cls, value: str | None) -> str | None:
+        return validate_identifier(value, "id") if value is not None else None
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def slug(self) -> str:
@@ -464,6 +491,11 @@ class Plan(BaseModel):
                 f"`items` contains duplicate identifiers {sorted(dupes)}; assign distinct `name` or `id` values."
             )
 
+        paths = sorted((Path(key) for key in keys), key=lambda path: path.parts)
+        for parent, child in zip(paths, paths[1:]):
+            if parent in child.parents:
+                raise ValueError(f"`items` contains overlapping identifiers `{parent}` and `{child}`.")
+
         known = set(keys)
         for item in items:
             missing = [dep for dep in item.depends_on if dep not in known]
@@ -490,6 +522,15 @@ class Plan(BaseModel):
             raise ValueError(
                 f"`port_base` {base} + {len(self.items)} items exceeds port 65535; lower it or split the plan."
             )
+
+        return self
+
+    @model_validator(mode="after")
+    def _validate_resolution(self) -> "Plan":
+        try:
+            self.resolve()
+        except (IndexError, KeyError, ValueError) as exc:
+            raise ValueError(f"`templates` cannot be resolved: {exc}.") from exc
 
         return self
 

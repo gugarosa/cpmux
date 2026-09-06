@@ -56,6 +56,28 @@ def test_run_paths_resolve_under_run_dir(tmp_path):
     assert paths.worktree("k") == tmp_path / ".cpmux/worktrees/run1/k"
 
 
+@pytest.mark.parametrize("identifier", ["", ".", "..", "../outside", "/outside", "nested/../item", "nul\0id"])
+def test_run_paths_rejects_unsafe_run_ids(tmp_path, identifier):
+    with pytest.raises(ValueError, match="run_id"):
+        RunPaths(tmp_path, identifier)
+
+
+@pytest.mark.parametrize("identifier", ["", ".", "..", "../outside", "/outside", "nested/../item", "nul\0id"])
+def test_run_paths_rejects_unsafe_session_keys(tmp_path, identifier):
+    paths = RunPaths(tmp_path, "run1")
+    with pytest.raises(ValueError, match="key"):
+        paths.session_dir(identifier)
+    with pytest.raises(ValueError, match="key"):
+        paths.worktree(identifier)
+
+
+def test_run_paths_preserves_safe_namespaces(tmp_path):
+    paths = RunPaths(tmp_path, "group/run")
+
+    assert paths.session_dir("frontend/login") == tmp_path / ".cpmux/runs/group/run/sessions/frontend/login"
+    assert paths.worktree("frontend/login") == tmp_path / ".cpmux/worktrees/group/run/frontend/login"
+
+
 def test_write_record_read_record_round_trip(tmp_path):
     paths = RunPaths(tmp_path, "run1")
     record = _record()

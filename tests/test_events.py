@@ -3,7 +3,15 @@
 
 import pytest
 
-from cpmux.events import SessionState, Status, apply_event, event_data, parse_line
+from cpmux.events import (
+    ACTIVE,
+    TERMINAL,
+    SessionState,
+    Status,
+    apply_event,
+    event_data,
+    parse_line,
+)
 
 SAMPLE = [
     {"type": "session.tools_updated", "data": {"model": "gpt-5.5"}},
@@ -110,3 +118,8 @@ def test_event_data_selects_mapping_payload(event, expected):
 def test_event_data_returns_bare_event_identity():
     bare = {"type": "result", "exitCode": 0}
     assert event_data(bare) is bare
+
+
+def test_status_classifies_every_started_stage():
+    assert ACTIVE | TERMINAL == set(Status) - {Status.PENDING}
+    assert not ACTIVE & TERMINAL
