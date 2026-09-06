@@ -66,8 +66,8 @@ def followup_argv(
 async def run_followup(paths: RunPaths, record: SessionRecord, message: str) -> SessionState:
     """Run a follow-up turn, update its record in place, and persist the outcome.
 
-    Reported premium usage is accumulated; an absent modified-file list leaves the
-    previous list intact. No automatic Git finalization or ownership arbitration
+    Reported premium usage is accumulated. An absent modified-file list leaves
+    the previous list intact. No automatic Git finalization or ownership arbitration
     is performed. Cancellation leaves the record unchanged after child cleanup.
     The in-memory update precedes persistence, so a write failure does not undo it.
 

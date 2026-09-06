@@ -12,6 +12,7 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import Any
 
 import click
 import typer
@@ -49,7 +50,7 @@ from cpmux.events import (
     parse_line,
 )
 from cpmux.ui.render import event_text
-from cpmux.ui.search import search_transcripts
+from cpmux.ui.search import TranscriptHit, search_transcripts
 from cpmux.vcs.git import GitError, prune_worktrees, remove_worktree, run_git
 from cpmux.voice.recorder import record_and_transcribe
 from cpmux.voice.synthesizer import synthesize_plan
@@ -457,7 +458,7 @@ def plan(
 
 def _resolve_transcript(text: str | None, audio: Path | None, voice: bool, transcribe_model: str) -> str:
     if voice:
-        return _record_and_transcribe(transcribe_model)
+        return record_and_transcribe(transcribe_model)
     if audio is not None:
         theme.print_hint(f"transcribing with `{transcribe_model}` (the model downloads on first use)...")
         return transcribe(audio, transcribe_model)
@@ -469,12 +470,8 @@ def _resolve_transcript(text: str | None, audio: Path | None, voice: bool, trans
 def _compose_in_editor() -> str:
     composed = click.edit(extension=".md")
     if composed is None or not composed.strip():
-        raise VoiceError("no plan text provided.")
+        raise VoiceError("`plan` text is None or blank.")
     return composed.strip()
-
-
-def _record_and_transcribe(transcribe_model: str) -> str:
-    return record_and_transcribe(transcribe_model)
 
 
 @app.command(rich_help_panel="Monitor")
@@ -492,7 +489,7 @@ def ls(run: str | None = typer.Option(None, "--run", help="Run id (default: late
 
 @app.command(rich_help_panel="Monitor")
 def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
-    """Monitor a run read-only (Ctrl-C to exit)."""
+    """Monitor a run (Ctrl-C to stop watching)."""
 
     root = Path(".")
     run_id = _run_id_or_exit(run, root)
@@ -647,7 +644,7 @@ def search(
         theme.print_hint(f"no matches for `{query}`.")
         return
 
-    by_label: dict[str, list] = {}
+    by_label: dict[str, list[TranscriptHit]] = {}
     for hit in hits:
         by_label.setdefault(hit.label, []).append(hit)
 
@@ -803,7 +800,7 @@ def _daemon_command(run_id: str = typer.Argument(...)) -> None:
         raise typer.Exit(1)
 
 
-def _render_event(event: dict) -> None:
+def _render_event(event: dict[str, Any]) -> None:
     text = event_text(event)
     if text is not None:
         # Text inputs bypass the repr highlighter

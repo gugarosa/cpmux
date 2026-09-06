@@ -44,7 +44,7 @@ def run_git(
 
     if check and proc.returncode != 0:
         detail = proc.stderr.strip() or proc.stdout.strip()
-        raise GitError(f"`git {' '.join(args)}` failed: {detail}.")
+        raise GitError(f"`git {' '.join(args)}` failed: {detail.removesuffix('.')}.")
 
     return proc
 
@@ -103,7 +103,7 @@ def resolve_base(root: str | Path, remote: str, base: str) -> tuple[str, str]:
         if proc.returncode == 0 and proc.stdout.strip():
             return base, proc.stdout.strip()
 
-    logger.warning(f"base `{base}` not found; branching from `HEAD`.")
+    logger.warning(f"`base={base}` was not found; branching from `HEAD`.")
 
     return base, run_git(["rev-parse", "HEAD"], cwd=root).stdout.strip()
 
@@ -238,7 +238,7 @@ def provision_deps(root: str | Path, worktree: str | Path, strategy: str) -> Non
         elif strategy == "install":
             _install_deps(worktree)
     except OSError as exc:
-        logger.warning(f"`deps={strategy}` could not seed `node_modules`: {exc}.")
+        logger.warning(f"`deps={strategy}` could not seed `node_modules`: {str(exc).removesuffix('.')}.")
 
 
 def _install_deps(worktree: str | Path) -> None:
@@ -259,4 +259,4 @@ def _install_deps(worktree: str | Path) -> None:
 
     proc = subprocess.run(cmd, cwd=str(worktree_path), capture_output=True, text=True)
     if proc.returncode != 0:
-        logger.warning(f"`deps=install` failed in `{worktree_path.name}`: {proc.stderr.strip()}.")
+        logger.warning(f"`deps=install` failed in `{worktree_path.name}`: {proc.stderr.strip().removesuffix('.')}.")

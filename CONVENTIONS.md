@@ -89,15 +89,19 @@ Adopted from phitrain (rule ids in parentheses).
   `typing`. ABCs (`Callable`, `Iterable`, …) come from `collections.abc`. (R2)
 - Every `.py` file starts with the two-line copyright/license header.
 - Imports are top-level and absolute (`from cpmux.x import y`). Order: stdlib →
-  third-party → local, blank-separated.
+  third-party → local, blank-separated. The deliberate feature-local imports for
+  optional audio backends and the dashboard remain lazy to preserve the light CLI.
 - Public functions, classes, and their `__init__` carry Google-style docstrings
   (single-sentence summary; one-line `Args:`/`Returns:`/`Raises:` entries). A regular
   class keeps a one-line class summary and documents its constructor `Args:` on
   `__init__`. Private helpers (`_name`) and framework-dispatched overrides (Textual
-  `compose`/`on_<event>`/lifecycle hooks) carry none. No semicolons or
+  `compose`/`on_<event>`/`action_<name>`/lifecycle hooks) carry none. Methods of
+  private helper classes follow the private-helper rule. No semicolons or
   `defaults to <X>` tails in entries. (R3, R13)
-- A docstring keeps one blank line before its closing `"""`, and one blank line
-  after the closing `"""` before the first statement or field.
+- A multiline docstring keeps one blank line before its closing `"""`. Every
+  docstring keeps one blank line after its closing `"""` before the first statement
+  or field. Summary-only class, property, and CLI-command docstrings stay on one
+  line, following the existing Black formatting and single-summary convention.
 - Public I/O contracts explain mutation, persistence, resource ownership, cancellation,
   and whether failures are raised or returned. Do not merely repeat annotated signatures.
 - Data classes (Pydantic models and `@dataclass`, which have no explicit `__init__`)
@@ -133,7 +137,8 @@ Pydantic `BaseModel`s. Everything else follows phitrain.
   `theme.print_error(...)` followed by `raise typer.Exit(1)`, with no hand-rolled `"Error:"`
   prefix or `typer.echo(..., err=True)`. Library diagnostics continue to use logging.
 - Presentation (status tables, transcripts) uses Rich; raw machine output uses
-  `typer.echo`. Each `command()` carries a single-sentence docstring for `--help`.
+  `typer.echo`. Each `command()` carries a single-sentence docstring for `--help`;
+  Typer's argument and option declarations document its command-line parameters.
 - Short-lived subprocesses use `subprocess.run(..., capture_output=True, text=True,
   check=False)`; streaming/long-running children use `asyncio` subprocesses.
 

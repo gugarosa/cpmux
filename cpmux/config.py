@@ -148,7 +148,7 @@ def _validate_template(template: str, field: str, allowed: set[str]) -> str:
     try:
         names = {name for _, name, _, _ in string.Formatter().parse(template) if name}
     except ValueError as exc:
-        raise ValueError(f"`{field}` is not a valid format template: {exc}.") from exc
+        raise ValueError(f"`{field}` is not a valid format template: {str(exc).removesuffix('.')}.") from exc
 
     unknown = sorted(names - allowed)
     if unknown:
@@ -282,7 +282,7 @@ class Defaults(BaseModel):
     @classmethod
     def _validate_env_name(cls, value: str) -> str:
         if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", value):
-            raise ValueError(f"`port_env` must be a valid environment variable name, got `{value}`.")
+            raise ValueError(f"`port_env` must be a valid environment variable name, but got `{value}`.")
 
         return value
 
@@ -415,7 +415,12 @@ class ResolvedItem(BaseModel):
     pr_body: str
 
     def effective_prompt(self) -> str:
-        """Return the resolved prompt with the pull-request authoring instructions."""
+        """Return the resolved prompt with pull-request authoring instructions.
+
+        Returns:
+            Task prompt followed by the shared PR-draft protocol.
+
+        """
 
         return f"{self.prompt.rstrip()}\n\n---\n\n{_PR_INSTRUCTIONS}"
 
@@ -530,7 +535,7 @@ class Plan(BaseModel):
         try:
             self.resolve()
         except (IndexError, KeyError, ValueError) as exc:
-            raise ValueError(f"`templates` cannot be resolved: {exc}.") from exc
+            raise ValueError(f"`templates` cannot be resolved: {str(exc).removesuffix('.')}.") from exc
 
         return self
 
@@ -612,12 +617,12 @@ def parse_plan(contents: str | bytes, source: str = "plan") -> Plan:
     try:
         raw = yaml.safe_load(contents)
     except yaml.YAMLError as exc:
-        raise ConfigError(f"`{source}` is not valid YAML: {exc}.") from exc
+        raise ConfigError(f"`{source}` is not valid YAML: {str(exc).removesuffix('.')}.") from exc
 
     if raw is None:
         raw = {}
     if not isinstance(raw, dict):
-        raise ConfigError(f"`{source}` top-level YAML must be a mapping, got `{type(raw).__name__}`.")
+        raise ConfigError(f"`{source}` top-level YAML must be a mapping, but got `{type(raw).__name__}`.")
 
     try:
         return Plan.model_validate(raw)
@@ -645,7 +650,7 @@ def load_plan(path: str | Path) -> Plan:
     except FileNotFoundError as exc:
         raise ConfigError(f"`{config_path}` config file does not exist.") from exc
     except OSError as exc:
-        raise ConfigError(f"`{config_path}` config file could not be read: {exc}.") from exc
+        raise ConfigError(f"`{config_path}` config file could not be read: {str(exc).removesuffix('.')}.") from exc
 
     return parse_plan(contents, source=str(config_path))
 
@@ -654,7 +659,7 @@ def _format_validation(exc: ValidationError) -> str:
     lines = []
     for error in exc.errors():
         location = ".".join(str(part) for part in error["loc"]) or "(root)"
-        message = error["msg"].removeprefix("Value error, ")
-        lines.append(f"  {location}: {message}")
+        message = error["msg"].removeprefix("Value error, ").rstrip().removesuffix(".")
+        lines.append(f"  {location}: {message}.")
 
     return "\n".join(lines)

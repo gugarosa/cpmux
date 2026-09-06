@@ -37,7 +37,7 @@ class SessionRecord(BaseModel):
     Attributes:
         key: Configured item key.
         name: Human-readable session name.
-        slug: Filesystem-safe session name.
+        slug: Normalized slug used for naming.
         branch: Git branch name.
         base: Base branch name.
         model: Copilot model name.
@@ -46,7 +46,7 @@ class SessionRecord(BaseModel):
         permission_flags: Copilot permission flags.
         env: Session environment variables.
         status: Current session status.
-        pid: Session process identifier.
+        pid: Active session process identifier, or None after cleanup.
         started_at: ISO-formatted start time.
         ended_at: ISO-formatted end time.
         exit_code: Session process exit code.
@@ -114,8 +114,8 @@ class RunManifest(BaseModel):
         resolved: Resolved run items.
         open_pr: Whether to open pull requests.
         concurrency: Maximum concurrent sessions.
-        strip_github_token: Whether to remove the GitHub token.
-        deps_override: Dependency override command.
+        strip_github_token: Whether GitHub delivery removes ambient authentication tokens.
+        deps_override: Worktree dependency provisioning strategy override.
 
     """
 
@@ -142,6 +142,9 @@ class RunPaths:
             repo_root: Repository root for the run.
             run_id: Run identifier.
 
+        Raises:
+            ValueError: The run identifier is not a normalized relative name.
+
         """
 
         run_id = validate_identifier(run_id, "run_id")
@@ -155,54 +158,137 @@ class RunPaths:
 
     @property
     def manifest(self) -> Path:
-        """`manifest.json` path."""
+        """Path to the run's `manifest.json`."""
 
         return self.run_dir / "manifest.json"
 
     @property
     def owner_file(self) -> Path:
-        """Owner PID path."""
+        """Path to the run owner's PID record."""
 
         return self.run_dir / "owner.json"
 
     def session_dir(self, key: str) -> Path:
-        """Session artifact directory."""
+        """Build the session artifact directory path.
+
+        Args:
+            key: Normalized relative session identifier.
+
+        Returns:
+            Session directory path without creating it.
+
+        Raises:
+            ValueError: The session identifier is invalid.
+
+        """
 
         return self.sessions_dir / validate_identifier(key, "key")
 
     def worktree(self, key: str) -> Path:
-        """Git worktree path."""
+        """Build the session's Git worktree path.
+
+        Args:
+            key: Normalized relative session identifier.
+
+        Returns:
+            Worktree path without creating it.
+
+        Raises:
+            ValueError: The session identifier is invalid.
+
+        """
 
         return self.worktrees_dir / validate_identifier(key, "key")
 
     def prompt_file(self, key: str) -> Path:
-        """Resolved prompt path."""
+        """Build the stored prompt path.
+
+        Args:
+            key: Normalized relative session identifier.
+
+        Returns:
+            Path to the session's `prompt.md`.
+
+        Raises:
+            ValueError: The session identifier is invalid.
+
+        """
 
         return self.session_dir(key) / "prompt.md"
 
     def transcript(self, key: str) -> Path:
-        """Raw JSONL transcript path."""
+        """Build the raw JSONL transcript path.
+
+        Args:
+            key: Normalized relative session identifier.
+
+        Returns:
+            Path to the session's `transcript.jsonl`.
+
+        Raises:
+            ValueError: The session identifier is invalid.
+
+        """
 
         return self.session_dir(key) / "transcript.jsonl"
 
     def record_file(self, key: str) -> Path:
-        """Session record path."""
+        """Build the persisted session record path.
+
+        Args:
+            key: Normalized relative session identifier.
+
+        Returns:
+            Path to the session's `session.json`.
+
+        Raises:
+            ValueError: The session identifier is invalid.
+
+        """
 
         return self.session_dir(key) / "session.json"
 
     def copilot_log_dir(self, key: str) -> Path:
-        """Copilot log directory."""
+        """Build the Copilot diagnostic log directory path.
+
+        Args:
+            key: Normalized relative session identifier.
+
+        Returns:
+            Copilot log directory path without creating it.
+
+        Raises:
+            ValueError: The session identifier is invalid.
+
+        """
 
         return self.session_dir(key) / "copilot-logs"
 
     def ensure_session_dirs(self, key: str) -> None:
-        """Create session and Copilot log directories."""
+        """Create session and Copilot log directories.
+
+        Args:
+            key: Normalized relative session identifier.
+
+        Raises:
+            OSError: A required directory cannot be created.
+            ValueError: The session identifier is invalid.
+
+        """
 
         self.session_dir(key).mkdir(parents=True, exist_ok=True)
         self.copilot_log_dir(key).mkdir(parents=True, exist_ok=True)
 
     def write_manifest(self, manifest: RunManifest) -> None:
-        """Persist the manifest."""
+        """Write the manifest after creating the run directory.
+
+        Args:
+            manifest: Resolved run configuration to serialize.
+
+        Raises:
+            OSError: Directory creation or manifest writing fails.
+
+        """
 
         self.run_dir.mkdir(parents=True, exist_ok=True)
         self.manifest.write_text(manifest.model_dump_json(indent=2))
@@ -288,7 +374,7 @@ def load_run(repo_root: str | Path, run_id: str) -> tuple[RunManifest, list[Sess
         run_id: Run identifier.
 
     Returns:
-        Manifest and existing records in manifest order; missing records are omitted.
+        Manifest and existing records in manifest order, omitting missing records.
 
     Raises:
         OSError: The manifest or a present record cannot be read.

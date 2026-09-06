@@ -33,15 +33,6 @@ def _record(key, status):
     )
 
 
-def _reconcile_scenario(tmp_path, run_id, status, owner_pid, **reconcile_kwargs):
-    paths = RunPaths(tmp_path, run_id)
-    record = _record("a", status)
-    paths.write_record(record)
-    write_owner(paths, owner_pid)
-
-    return paths, record, reconcile_kwargs
-
-
 @pytest.mark.parametrize(
     ("pid", "expected"),
     [
@@ -54,54 +45,41 @@ def test_pid_alive_reports_process_state(pid, expected):
 
 
 @pytest.mark.parametrize(
-    ("scenario_setup", "expected_outcome"),
+    ("persist", "stored_status"),
     [
-        pytest.param(
-            lambda tmp_path: _reconcile_scenario(tmp_path, "run1", Status.RUNNING, _dead_pid()),
-            (Status.FAILED, Status.FAILED),
-            id="dead-owner-persists-failure",
-        ),
-        pytest.param(
-            lambda tmp_path: _reconcile_scenario(
-                tmp_path,
-                "run4",
-                Status.RUNNING,
-                _dead_pid(),
-                persist=False,
-            ),
-            (Status.FAILED, Status.RUNNING),
-            id="dead-owner-memory-only",
-        ),
+        pytest.param(True, Status.FAILED, id="dead-owner-persists-failure"),
+        pytest.param(False, Status.RUNNING, id="dead-owner-memory-only"),
     ],
 )
-def test_reconcile_orphaned_record_outcomes(tmp_path, scenario_setup, expected_outcome):
-    paths, record, reconcile_kwargs = scenario_setup(tmp_path)
-    reconcile(paths, [record], **reconcile_kwargs)
+def test_reconcile_orphaned_record_outcomes(tmp_path, persist, stored_status):
+    paths = RunPaths(tmp_path, "run1")
+    record = _record("a", Status.RUNNING)
+    paths.write_record(record)
+    write_owner(paths, _dead_pid())
 
-    assert record.status == expected_outcome[0]
-    assert paths.read_record("a").status == expected_outcome[1]
+    reconcile(paths, [record], persist=persist)
+
+    assert record.status == Status.FAILED
+    assert paths.read_record("a").status == stored_status
 
 
 @pytest.mark.parametrize(
-    ("scenario_setup", "expected_outcome"),
+    ("status", "owner_pid"),
     [
-        pytest.param(
-            lambda tmp_path: _reconcile_scenario(tmp_path, "run2", Status.RUNNING, os.getpid()),
-            Status.RUNNING,
-            id="live-owner",
-        ),
-        pytest.param(
-            lambda tmp_path: _reconcile_scenario(tmp_path, "run3", Status.DONE, _dead_pid()),
-            Status.DONE,
-            id="terminal-record",
-        ),
+        pytest.param(Status.RUNNING, os.getpid, id="live-owner"),
+        pytest.param(Status.DONE, _dead_pid, id="terminal-record"),
     ],
 )
-def test_reconcile_preserves_ignored_record_status(tmp_path, scenario_setup, expected_outcome):
-    paths, record, reconcile_kwargs = scenario_setup(tmp_path)
-    reconcile(paths, [record], **reconcile_kwargs)
+def test_reconcile_preserves_ignored_record_status(tmp_path, status, owner_pid):
+    paths = RunPaths(tmp_path, "run1")
+    record = _record("a", status)
+    paths.write_record(record)
+    write_owner(paths, owner_pid())
 
-    assert record.status == expected_outcome
+    reconcile(paths, [record])
+
+    assert record.status == status
+    assert paths.read_record("a").status == status
 
 
 def test_reconcile_reaps_orphaned_child(tmp_path):

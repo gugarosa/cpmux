@@ -1,6 +1,7 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
+import json
 from importlib.metadata import version
 from pathlib import Path
 
@@ -8,6 +9,8 @@ import pytest
 from click import unstyle
 from typer.testing import CliRunner
 
+from cpmux.config import load_plan
+from cpmux.engine.copilot_store import CopilotStoreUnavailable
 from cpmux.engine.store import RunManifest, RunPaths, SessionRecord
 from cpmux.events import Status
 from cpmux.ui import cli
@@ -183,6 +186,7 @@ def test_plan_empty_editor_exits_one(tmp_path, monkeypatch):
     monkeypatch.setattr(cli.click, "edit", lambda **kwargs: None)
     result = runner.invoke(app, ["plan", str(tmp_path / "out.yml")])
     assert result.exit_code == 1
+    assert "`plan` text is None or blank." in result.output
 
 
 def test_plan_voice_records_instead_of_editor(tmp_path, monkeypatch):
@@ -208,8 +212,6 @@ def test_commands_with_conflicting_options_exit_one(tmp_path, monkeypatch, argv,
 
 
 def test_search_fts_reports_store_unavailable(tmp_path, monkeypatch):
-    from cpmux.engine.store import RunManifest, RunPaths, SessionRecord
-
     paths = RunPaths(tmp_path, "run1")
     paths.write_manifest(RunManifest(run_id="run1", repo_root=str(tmp_path), config_path="", item_keys=["a"]))
     paths.write_record(
@@ -226,8 +228,6 @@ def test_search_fts_reports_store_unavailable(tmp_path, monkeypatch):
     )
 
     def _boom(session_ids, query):
-        from cpmux.engine.copilot_store import CopilotStoreUnavailable
-
         raise CopilotStoreUnavailable("store gone.")
 
     monkeypatch.setattr(cli, "search_sessions", _boom)
@@ -237,8 +237,6 @@ def test_search_fts_reports_store_unavailable(tmp_path, monkeypatch):
 
 
 def test_rm_exits_nonzero_when_a_worktree_cannot_be_removed(monkeypatch):
-    from cpmux.engine.store import RunManifest, SessionRecord
-
     record = SessionRecord(
         key="alpha",
         name="alpha",
@@ -269,8 +267,6 @@ def test_rm_refuses_active_run(monkeypatch):
 
 
 def test_init_writes_a_valid_starter_plan(tmp_path, monkeypatch):
-    from cpmux.config import load_plan
-
     monkeypatch.chdir(tmp_path)
     result = runner.invoke(app, ["init"])
     assert result.exit_code == 0
@@ -312,11 +308,6 @@ def test_up_without_copilot_exits_cleanly(tmp_path, monkeypatch):
 
 
 def test_search_groups_and_counts_matches(tmp_path, monkeypatch):
-    import json
-
-    from cpmux.engine.store import RunManifest, RunPaths, SessionRecord
-    from cpmux.events import Status
-
     monkeypatch.chdir(tmp_path)
     paths = RunPaths(tmp_path, "run1")
     paths.write_manifest(RunManifest(run_id="run1", repo_root=str(tmp_path), config_path="", item_keys=["auth"]))
@@ -343,8 +334,6 @@ def test_search_groups_and_counts_matches(tmp_path, monkeypatch):
 
 
 def test_rm_purge_deletes_run_history(monkeypatch):
-    from cpmux.engine.store import RunManifest, SessionRecord
-
     record = SessionRecord(
         key="alpha",
         name="alpha",

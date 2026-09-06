@@ -61,15 +61,19 @@ def search_sessions(session_ids: list[str], query: str, limit: int = 50, db_path
     try:
         connection = sqlite3.connect(f"file:{store}?mode=ro", uri=True, timeout=2.0)
     except sqlite3.OperationalError as exc:
-        raise CopilotStoreUnavailable(f"`{store}` Copilot session store open failed: {exc}.") from exc
+        raise CopilotStoreUnavailable(
+            f"`{store}` Copilot session store open failed: {str(exc).removesuffix('.')}."
+        ) from exc
 
     try:
         hits = _query(connection, sorted(set(session_ids)), query, limit)
     except sqlite3.OperationalError as exc:
         message = str(exc).lower()
         if "fts5" in message or "unterminated" in message or "syntax" in message:
-            raise InvalidFtsQuery(f"`{query}` is invalid: {exc}.") from exc
-        raise CopilotStoreUnavailable(f"copilot session store query failed: {exc}.") from exc
+            raise InvalidFtsQuery(f"`{query}` is invalid: {str(exc).removesuffix('.')}.") from exc
+        raise CopilotStoreUnavailable(
+            f"`{store}` Copilot session store query failed: {str(exc).removesuffix('.')}."
+        ) from exc
     finally:
         connection.close()
 

@@ -2,6 +2,7 @@
 # Licensed under the MIT license.
 
 import pytest
+from click import unstyle
 
 from cpmux import theme
 from cpmux.events import Status
@@ -43,6 +44,25 @@ def test_print_error_writes_to_stderr(capsys):
     captured = capsys.readouterr()
     assert "copilot" in captured.err
     assert captured.out == ""
+
+
+@pytest.mark.parametrize(
+    ("display", "stream", "glyph"),
+    [
+        (theme.print_error, "err", "x"),
+        (theme.print_warning, "err", "!"),
+        (theme.print_success, "out", "+"),
+        (theme.print_hint, "out", ">"),
+    ],
+)
+def test_icon_preserves_ascii_message_glyphs_and_streams(monkeypatch, capsys, display, stream, glyph):
+    monkeypatch.setenv("CPMUX_ASCII", "1")
+
+    display("message")
+
+    captured = capsys.readouterr()
+    assert unstyle(getattr(captured, stream)).strip() == f"{glyph} message"
+    assert getattr(captured, "out" if stream == "err" else "err") == ""
 
 
 @pytest.mark.parametrize(

@@ -4,7 +4,7 @@
 import asyncio
 import json
 
-from textual.widgets import DataTable, Input, RichLog
+from textual.widgets import DataTable, Input, RichLog, Static
 
 from cpmux.config import Plan
 from cpmux.engine.store import RunManifest, RunPaths, SessionRecord
@@ -161,8 +161,6 @@ def test_dashboard_header_shows_selected_session_context(tmp_path):
     async def scenario():
         app = CpmuxApp(str(tmp_path), "run1")
         async with app.run_test():
-            from textual.widgets import Static
-
             header = app.query_one("#transcript-header", Static)
             assert "alpha" in str(header.render())
 

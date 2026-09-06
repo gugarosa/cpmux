@@ -1,6 +1,8 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
+from typing import Any
+
 from rich.text import Text
 
 from cpmux import theme
@@ -40,7 +42,7 @@ def deps_cell(deps: list[str], status_by_key: dict[str, Status]) -> Text:
     return cell
 
 
-def event_text(event: dict) -> Text | None:
+def event_text(event: dict[str, Any]) -> Text | None:
     """Render a transcript event.
 
     Args:

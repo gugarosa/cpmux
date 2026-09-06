@@ -53,7 +53,7 @@ def synthesize_plan(transcript: str, model: str = "gpt-5.5") -> str:
         except ConfigError as exc:
             error = str(exc)
 
-    raise VoiceError(f"plan synthesis failed: {error}.")
+    raise VoiceError(f"`plan` synthesis failed: {error.removesuffix('.')}.")
 
 
 def _build_prompt(transcript: str) -> str:
@@ -86,7 +86,8 @@ def _run_copilot(prompt: str, model: str) -> str:
         raise VoiceError("`copilot` is not on `PATH`.") from exc
 
     if proc.returncode != 0:
-        raise VoiceError(f"`copilot` failed: {proc.stderr.strip() or proc.stdout.strip()}.")
+        detail = proc.stderr.strip() or proc.stdout.strip()
+        raise VoiceError(f"`copilot` failed: {detail.removesuffix('.')}.")
 
     return proc.stdout
 

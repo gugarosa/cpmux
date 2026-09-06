@@ -8,6 +8,13 @@ All notable changes to cpmux are documented here. The format follows
 
 ### Changed
 
+- Align public APIs with the Google-style docstring layout, complete constructor and
+  attribute documentation, and omit private/framework-handler docstrings.
+- Restore top-level test imports and meaningful phase separators, and normalize
+  diagnostic offenders and punctuation.
+- Reuse one terminal-glyph selection path, remove a redundant voice-forwarding wrapper,
+  and replace unnecessary test factories with explicit inputs and assertions.
+- Clarify the crash-reconciliation side effects of monitoring commands.
 - Share follow-up execution and outcome persistence between the CLI and dashboard,
   without changing worker scheduling or concurrency policy.
 - Centralize YAML plan parsing and shared PR protocol vocabulary in configuration,

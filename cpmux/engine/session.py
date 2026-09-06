@@ -6,10 +6,11 @@ import os
 import signal
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from cpmux.events import SessionState, Status, apply_event, parse_line
 
-OnUpdate = Callable[[str, SessionState, dict], None]
+OnUpdate = Callable[[str, SessionState, dict[str, Any]], None]
 OnSpawn = Callable[[int], None]
 
 _STREAM_LIMIT = 1 << 20
@@ -57,8 +58,8 @@ class SessionRunner:
         """Append subprocess output to the transcript and update the live state.
 
         Own the spawned process group until it exits or is reaped on cancellation
-        or failure. Startup and process failures are returned as failed states;
-        callback and filesystem errors propagate after cleanup.
+        or failure. Startup and process failures are returned as failed states.
+        Callback and filesystem errors propagate after cleanup.
 
         Args:
             on_update: Synchronous callback after each decoded event updates the state.
@@ -86,7 +87,7 @@ class SessionRunner:
             )
         except (OSError, ValueError) as exc:
             self.state.status = Status.FAILED
-            self.state.error = f"`{self.argv[0]}` could not start: {exc}."
+            self.state.error = f"`{self.argv[0]}` could not start: {str(exc).removesuffix('.')}."
             return self.state
 
         stdout, stderr = self.proc.stdout, self.proc.stderr
@@ -116,6 +117,7 @@ class SessionRunner:
                     if chunks:
                         raw = b"".join([*chunks, raw])
                         chunks.clear()
+
                     line = raw.decode("utf-8", "replace")
                     transcript_file.write(line)
                     transcript_file.flush()

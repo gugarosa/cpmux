@@ -235,38 +235,21 @@ def test_plan_uses_env_default_when_missing(monkeypatch):
     assert "v=def" in plan.items[0].prompt
 
 
-@pytest.mark.parametrize(
-    ("extract_value", "expected"),
-    [
-        pytest.param(lambda argv: argv[0], "copilot", id="copilot-command"),
-        pytest.param(
-            lambda argv: argv[argv.index("--session-id") + 1],
-            "sid-123",
-            id="session-id",
-        ),
-        pytest.param(lambda argv: argv[argv.index("-C") + 1], "/wt/fix-x", id="worktree"),
-    ],
-)
-def test_spawn_argv_targets_session_worktree_and_model(extract_value, expected):
-    resolved = Plan.model_validate({"items": [{"name": "Fix X", "prompt": "do"}]}).resolve()[0]
+def test_spawn_argv_targets_session_worktree_and_model():
+    resolved = Plan.model_validate(
+        {"items": [{"name": "Fix X", "prompt": "do", "model": "custom-model", "effort": "high"}]}
+    ).resolve()[0]
     argv = resolved.spawn_argv("/wt/fix-x", "sid-123", "/logs")
 
-    assert extract_value(argv) == expected
-
-
-@pytest.mark.parametrize(
-    "expected_argument",
-    [
-        pytest.param("--output-format", id="output-format-option"),
-        pytest.param("json", id="json-output-format"),
-        pytest.param("--no-ask-user", id="no-ask-user"),
-    ],
-)
-def test_spawn_argv_includes_required_arguments(expected_argument):
-    resolved = Plan.model_validate({"items": [{"name": "Fix X", "prompt": "do"}]}).resolve()[0]
-    argv = resolved.spawn_argv("/wt/fix-x", "sid-123", "/logs")
-
-    assert expected_argument in argv
+    assert argv[0] == "copilot"
+    assert argv[argv.index("--session-id") + 1] == "sid-123"
+    assert argv[argv.index("-C") + 1] == "/wt/fix-x"
+    assert argv[argv.index("--model") + 1] == "custom-model"
+    assert argv[argv.index("--effort") + 1] == "high"
+    assert argv[argv.index("--name") + 1] == "Fix X"
+    assert argv[argv.index("--log-dir") + 1] == "/logs"
+    assert argv[argv.index("--output-format") + 1] == "json"
+    assert "--no-ask-user" in argv
 
 
 def test_spawn_argv_appends_pr_authoring_instructions():
@@ -417,19 +400,13 @@ def test_load_plan_invalid_omits_verbose_field_errors(tmp_path, unexpected_conte
     assert unexpected_content not in str(excinfo.value)
 
 
-@pytest.mark.parametrize(
-    ("extract_value", "expected"),
-    [
-        pytest.param(lambda plan: len(plan.items), 1, id="one-item"),
-        pytest.param(lambda plan: plan.resolve()[0].prompt, "fix a thing", id="resolved-prompt"),
-    ],
-)
-def test_load_plan_reads_valid_file(tmp_path, extract_value, expected):
+def test_load_plan_reads_valid_file(tmp_path):
     path = tmp_path / "ok.yaml"
     path.write_text("version: 1\nitems:\n  - fix a thing\n")
     plan = load_plan(path)
 
-    assert extract_value(plan) == expected
+    assert len(plan.items) == 1
+    assert plan.resolve()[0].prompt == "fix a thing"
 
 
 def test_config_import_keeps_vcs_unloaded():
@@ -505,3 +482,17 @@ def test_load_plan_reads_supported_yaml_encodings(tmp_path, encoding, prefix):
 @pytest.mark.parametrize("contents", ["items: [x]", b"items: [x]"])
 def test_parse_plan_accepts_text_and_bytes(contents):
     assert parse_plan(contents).resolve()[0].prompt == "x"
+
+
+@pytest.mark.parametrize("contents", ["items: []", "defaults:\n  model: ''\nitems: [x]"])
+def test_load_plan_formats_failures_with_one_final_period(tmp_path, contents):
+    path = tmp_path / "plan.yaml"
+    path.write_text(contents)
+
+    with pytest.raises(ConfigError) as error:
+        load_plan(path)
+
+    message = str(error.value)
+    assert message.startswith(f"`{path}`")
+    assert message.endswith(".")
+    assert not message.endswith("..")
