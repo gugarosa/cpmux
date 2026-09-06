@@ -168,40 +168,45 @@ def process_owner_alive(path: Path) -> bool:
     return owner is not None and matching_process(owner.pid, owner.process_created_at) is not None
 
 
-def _group_identities(process: psutil.Process) -> list[tuple[int, float]]:
-    try:
-        candidates = [process, *process.children(recursive=True)]
-    except psutil.NoSuchProcess:
-        return []
-    except (psutil.AccessDenied, PermissionError) as exc:
-        raise OwnershipError(f"`pid={process.pid}` process group cannot be inspected.") from exc
+def group_processes(group_id: int) -> list[psutil.Process]:
+    """Inspect live group members without interpreting signal permission as liveness.
 
-    identities = []
-    for candidate in candidates:
+    Args:
+        group_id: Positive process-group identifier to inspect.
+
+    Returns:
+        Live non-zombie members with operating-system process identities.
+
+    Raises:
+        OwnershipError: A matching process cannot be inspected.
+
+    """
+
+    if group_id <= 0:
+        raise OwnershipError("`group_id` must be positive.")
+    members = []
+    for pid in psutil.pids():
+        if pid <= 0:
+            continue
         try:
-            if os.getpgid(candidate.pid) == process.pid:
-                identities.append((candidate.pid, candidate.create_time()))
+            if os.getpgid(pid) != group_id:
+                continue
+            process = psutil.Process(pid)
+            if process.is_running() and process.status() != psutil.STATUS_ZOMBIE:
+                members.append(process)
         except (ProcessLookupError, psutil.NoSuchProcess):
             continue
         except (PermissionError, psutil.AccessDenied) as exc:
-            raise OwnershipError(f"`pid={candidate.pid}` process group cannot be inspected.") from exc
-    return identities
+            raise OwnershipError(f"`pid={pid}` process group cannot be inspected.") from exc
+    return members
 
 
-def _live_identities(identities: list[tuple[int, float]], group_id: int | None) -> list[psutil.Process]:
+def _live_identities(identities: list[tuple[int, float]]) -> list[psutil.Process]:
     live = []
     for member_pid, member_created_at in identities:
         process = matching_process(member_pid, member_created_at)
         if process is None:
             continue
-        if group_id is not None:
-            try:
-                if os.getpgid(process.pid) != group_id:
-                    continue
-            except ProcessLookupError:
-                continue
-            except PermissionError as exc:
-                raise OwnershipError(f"`pid={process.pid}` process group cannot be inspected.") from exc
         live.append(process)
     return live
 
@@ -331,7 +336,6 @@ def terminate_process(pid: int | None, created_at: float | None, group: bool = T
     if process.pid == os.getpid():
         raise OwnershipError("`process` is the current controller. Cancel its task instead of signalling it.")
 
-    group_id = process.pid if group else None
     if group:
         try:
             if os.getpgid(process.pid) != process.pid:
@@ -340,14 +344,14 @@ def terminate_process(pid: int | None, created_at: float | None, group: bool = T
             return False
         except PermissionError as exc:
             raise OwnershipError(f"`pid={pid}` cannot be signalled.") from exc
-        identities = _group_identities(process)
+        identities = [(member.pid, member.create_time()) for member in group_processes(process.pid)]
     else:
         identities = [(process.pid, process.create_time())]
 
     try:
         current = matching_process(pid, created_at)
         if current is None:
-            _signal_processes(_live_identities(identities, group_id), signal.SIGTERM)
+            _signal_processes(_live_identities(identities), signal.SIGTERM)
         elif group:
             if os.getpgid(current.pid) != current.pid:
                 raise OwnershipError(f"`pid={pid}` no longer leads its recorded group.")
@@ -361,7 +365,7 @@ def terminate_process(pid: int | None, created_at: float | None, group: bool = T
 
     deadline = time.monotonic() + grace
     while time.monotonic() < deadline:
-        if not _live_identities(identities, group_id):
+        if not _live_identities(identities):
             return True
         time.sleep(0.05)
 
@@ -371,17 +375,17 @@ def terminate_process(pid: int | None, created_at: float | None, group: bool = T
             if os.getpgid(current.pid) == current.pid:
                 os.killpg(current.pid, signal.SIGKILL)
             else:
-                _signal_processes(_live_identities(identities, group_id), signal.SIGKILL)
+                _signal_processes(_live_identities(identities), signal.SIGKILL)
         except ProcessLookupError:
             pass
         except PermissionError as exc:
             raise OwnershipError(f"`pid={pid}` cannot be signalled.") from exc
     else:
-        _signal_processes(_live_identities(identities, group_id), signal.SIGKILL)
+        _signal_processes(_live_identities(identities), signal.SIGKILL)
 
     kill_deadline = time.monotonic() + min(max(grace, 0.1), 1.0)
-    while time.monotonic() < kill_deadline and _live_identities(identities, group_id):
+    while time.monotonic() < kill_deadline and _live_identities(identities):
         time.sleep(0.05)
-    if _live_identities(identities, group_id):
+    if _live_identities(identities):
         raise OwnershipError(f"`pid={pid}` still has live owned processes after escalation. Inspect before retrying.")
     return True

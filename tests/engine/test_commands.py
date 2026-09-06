@@ -8,11 +8,13 @@ import signal
 import sys
 import time
 from contextlib import suppress
+from types import SimpleNamespace
 
 import psutil
 import pytest
 
 from cpmux.config import CommandSpec
+from cpmux.engine import commands
 from cpmux.engine.commands import run_command
 
 
@@ -38,6 +40,30 @@ def _process_active(pid):
 def _kill_process_group(pid):
     with suppress(ProcessLookupError):
         os.killpg(pid, signal.SIGKILL)
+
+
+@pytest.mark.parametrize("live", [False, True])
+def test_terminate_process_group_distinguishes_dead_groups_from_permission_denial(tmp_path, monkeypatch, live):
+    reaped = []
+
+    async def wait():
+        reaped.append(True)
+        return 0
+
+    def denied(*args):
+        raise PermissionError("operation not permitted")
+
+    process = SimpleNamespace(pid=123, wait=wait)
+    monkeypatch.setattr(commands.os, "killpg", denied)
+    monkeypatch.setattr(commands, "group_processes", lambda group_id: [process] if live else [])
+
+    if live:
+        with pytest.raises(PermissionError):
+            asyncio.run(commands._terminate_process_group(process))
+        assert not reaped
+    else:
+        asyncio.run(commands._terminate_process_group(process))
+        assert reaped == [True]
 
 
 def test_run_command_repeated_cancellation_still_reaps_and_records_cleanup(tmp_path):

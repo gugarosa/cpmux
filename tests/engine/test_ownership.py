@@ -85,6 +85,7 @@ def test_terminate_process_kills_sigterm_ignoring_group_children(tmp_path):
         while not child_pid_file.exists() and time.monotonic() < deadline:
             time.sleep(0.05)
         child_pid = int(child_pid_file.read_text())
+        assert os.getpgid(child_pid) == leader.pid
 
         assert terminate_process(leader.pid, process_created_at(leader.pid), grace=0.2) is True
         assert leader.wait(timeout=3) is not None
@@ -113,6 +114,44 @@ def test_terminate_process_refuses_group_signal_for_foreground_child():
         if child.poll() is None:
             child.kill()
         child.wait()
+
+
+def test_terminate_process_tracks_identified_children_that_leave_the_original_group(tmp_path):
+    child_pid_file = tmp_path / "child.pid"
+    moved = tmp_path / "moved"
+    child_source = (
+        "import os, signal, time\n"
+        "from pathlib import Path\n"
+        "def on_term(*args):\n"
+        "    os.setsid()\n"
+        f"    Path({str(moved)!r}).touch()\n"
+        "signal.signal(signal.SIGTERM, on_term)\n"
+        "signal.signal(signal.SIGHUP, signal.SIG_IGN)\n"
+        f"Path({str(child_pid_file)!r}).write_text(str(os.getpid()))\n"
+        "time.sleep(60)\n"
+    )
+    leader_source = (
+        "import subprocess, time; " f"subprocess.Popen([{sys.executable!r}, '-c', {child_source!r}]); time.sleep(60)"
+    )
+    leader = subprocess.Popen([sys.executable, "-c", leader_source], start_new_session=True)
+    child = None
+    try:
+        deadline = time.monotonic() + 3
+        while not child_pid_file.exists() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        child = psutil.Process(int(child_pid_file.read_text()))
+        assert os.getpgid(child.pid) == leader.pid
+        assert terminate_process(leader.pid, process_created_at(leader.pid), grace=0.2)
+        leader.wait(timeout=3)
+        assert moved.exists()
+        assert not _process_active(child.pid)
+    finally:
+        if leader.poll() is None:
+            leader.kill()
+        leader.wait()
+        if child is not None:
+            with suppress(psutil.NoSuchProcess):
+                child.kill()
 
 
 def test_file_lease_excludes_other_handles_and_releases_after_failure(tmp_path):

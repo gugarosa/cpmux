@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Literal
 
 from cpmux.config import CommandSpec
+from cpmux.engine.ownership import OwnershipError, group_processes
 from cpmux.engine.store import CommandResult
 from cpmux.process import complete, inherited_fds
 
@@ -25,17 +26,18 @@ def _utc_now() -> str:
 
 
 def _process_group_exists(process_group_id: int) -> bool:
-    try:
-        os.killpg(process_group_id, 0)
-    except ProcessLookupError:
-        return False
-    return True
+    return bool(group_processes(process_group_id))
 
 
 async def _terminate_process_group(process: asyncio.subprocess.Process) -> None:
     try:
         os.killpg(process.pid, signal.SIGTERM)
     except ProcessLookupError:
+        await process.wait()
+        return
+    except PermissionError:
+        if _process_group_exists(process.pid):
+            raise
         await process.wait()
         return
 
@@ -48,11 +50,16 @@ async def _terminate_process_group(process: asyncio.subprocess.Process) -> None:
             os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
             pass
+        except PermissionError:
+            if _process_group_exists(process.pid):
+                raise
         kill_deadline = time.monotonic() + _TERMINATION_GRACE_SECONDS
         while _process_group_exists(process.pid) and time.monotonic() < kill_deadline:
             await asyncio.sleep(_POLL_SECONDS)
 
     await process.wait()
+    if _process_group_exists(process.pid):
+        raise OwnershipError(f"`pgid={process.pid}` still has live processes after cleanup.")
 
 
 async def _wait_for_process(

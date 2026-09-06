@@ -61,6 +61,8 @@ All notable changes to cpmux are documented here. The format follows
 - Resolve PRs against Git's effective push destination and verify the remote head
   after pushing; refresh only the generated evidence section of an existing PR.
 - Surface editor failures consistently even when Typer uses its vendored Click implementation.
+- Inspect live process-group members instead of inferring liveness from signal
+  permissions, and retain identified children across process-group changes during cleanup.
 
 ## [0.1.3] - 2026-09-06
 
