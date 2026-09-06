@@ -6,6 +6,62 @@ All notable changes to cpmux are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-06
+
+### Added
+
+- Explicit setup and acceptance commands, reusable execution profiles, per-command
+  logs/timeouts, agent timeouts, and source-bound verification receipts.
+- Persistent attempts and stage-aware `retry`, including explicit native `--resume`
+  and `--fresh` conversation modes without resetting worktrees or replaying successful items.
+- Queue `pause`/`unpause`, a soft reported-premium admission budget, and `wait` with
+  completion/failure/unowned/timeout exit codes and an optional terminal bell.
+- Read-only GitHub issue intake into editable plans, source provenance, template/profile
+  reuse, Enterprise host handling, and literal environment-reference escaping.
+- Explicit single-predecessor `base_from` inheritance and stacked PR targets, separate
+  from ordering-only `depends_on`.
+- Revision-bound `diff`/`feedback`, local `verify`, and explicit `finalize` operations
+  for the initial delivery or an existing matching open PR.
+- An attention-first dashboard with filters, transcript/diff/checks/details views,
+  explicit review actions, and narrow-screen queue-to-detail navigation.
+- Versioned read-only run reports with attempts, activity, verification/delivery
+  identity, reported versus missing usage, and identified child-process memory.
+- A macOS Python 3.12 CI job alongside the existing Linux interpreter and package checks.
+- Minimum-direct-dependency CI coverage, in addition to the locked development environment.
+
+### Changed
+
+- Run and session mutations use operating-system leases and PID creation-time identity.
+  Detached starts require an explicit acknowledgement; competing writers fail clearly.
+- Remove the superseded PID-only helper layer and reject incomplete owner metadata
+  rather than maintaining a compatibility path. Finish pre-0.2 runs before upgrading.
+- Required checks gate the exact candidate commit pushed by cpmux. No configured checks
+  remains an explicit unverified state, not an implicit acceptance pass.
+- Worktree setup records exist before execution, failed prerequisites block dependents,
+  and runtime bookkeeping uses Git's local exclude file rather than a tracked `.gitignore` edit.
+- Node `deps: install` runs through owned setup execution; failed installs prevent
+  agent launch. Setup/check commands must finish in the foreground.
+- Plan synthesis describes profiles, code inheritance, soft budgets, and literal
+  references without inventing executable setup or acceptance commands.
+- Correct the Typer and PyYAML minimum versions to support the actual language and
+  installation path; retain Click's supported editor instead of replacing it with custom code.
+- Native interactive entry is async and does not block independent session operations.
+
+### Fixed
+
+- Preserve cancelled operations and partial delivery outcomes in durable attempt history.
+- Refuse unknown/reused process identities, stale review feedback, changed checked
+  revisions, and unsafe updates to closed or mismatched PRs.
+- Accumulate repeated usage events without double counting and preserve fractional
+  premium requests, while exposing attempts whose usage was not reported.
+- Surface incomplete run history and cleanup failures instead of claiming success.
+- Wait through repeated cancellation until child cleanup finishes, and retain OS
+  leases in subprocesses across controller crashes, including in-flight Git operations.
+- Bind stored session keys to their requested paths before refreshing a caller.
+- Resolve PRs against Git's effective push destination and verify the remote head
+  after pushing; refresh only the generated evidence section of an existing PR.
+- Surface editor failures consistently even when Typer uses its vendored Click implementation.
+
 ## [0.1.3] - 2026-09-06
 
 ### Changed
@@ -117,7 +173,8 @@ Initial release.
   composing a plan from an editor, text, speech (`--voice`), or an audio file.
 - On-device speech-to-text via faster-whisper behind the `voice` extra.
 
-[Unreleased]: https://github.com/gugarosa/cpmux/compare/v0.1.3...HEAD
+[Unreleased]: https://github.com/gugarosa/cpmux/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/gugarosa/cpmux/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/gugarosa/cpmux/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/gugarosa/cpmux/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/gugarosa/cpmux/compare/v0.1.0...v0.1.1

@@ -41,16 +41,19 @@ class StatusVisual:
 STATUS_VISUAL: dict[Status, StatusVisual] = {
     Status.PENDING: StatusVisual("○", ".", STYLE_MUTED, "pending"),
     Status.STARTING: StatusVisual("◐", "*", STYLE_WARNING, "starting"),
+    Status.SETTING_UP: StatusVisual("◐", "*", STYLE_WARNING, "setting up"),
     Status.RUNNING: StatusVisual("●", ">", STYLE_INFO, "running"),
     Status.TOOL: StatusVisual("⚙", "#", STYLE_INFO, "using tool"),
     Status.IDLE: StatusVisual("◑", "~", "blue", "idle"),
     Status.FINALIZING: StatusVisual("◆", "+", STYLE_INFO, "finalizing"),
+    Status.VERIFYING: StatusVisual("◆", "+", STYLE_INFO, "verifying"),
     Status.OPENING_PR: StatusVisual("⇪", "^", STYLE_ACCENT, "opening PR"),
     Status.DONE: StatusVisual("✔", "v", STYLE_SUCCESS, "done"),
     Status.NO_CHANGES: StatusVisual("∅", "=", STYLE_MUTED, "no changes"),
     Status.FAILED: StatusVisual("✖", "x", STYLE_DANGER, "failed"),
     Status.TIMED_OUT: StatusVisual("⏱", "T", STYLE_DANGER, "timed out"),
     Status.KILLED: StatusVisual("■", "!", STYLE_DANGER, "stopped"),
+    Status.BLOCKED: StatusVisual("■", "!", STYLE_WARNING, "blocked"),
 }
 
 _ICON_SUCCESS = ("✓", "+")

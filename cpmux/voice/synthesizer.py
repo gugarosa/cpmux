@@ -13,10 +13,15 @@ cpmux YAML fields:
 - `defaults` (optional): `model`, `effort` (none|minimal|low|medium|high|xhigh|max),
   `permissions` (readonly|edit|full), `base` (branch to fork from, default `main`),
   `branch_template` (each item's branch name, default `cpmux/{slug}`; keep the `{slug}`
-  placeholder, e.g. `alice/feature/{slug}`), `concurrency`, `pr` (`draft`, `labels`).
+  placeholder, e.g. `alice/feature/{slug}`), `concurrency`, `pr` (`draft`, `labels`),
+  `profile`, `setup`, `checks`, `timeout_seconds`, `premium_budget` (soft reported-usage limit).
+- `profiles` (optional): named mappings with `setup` and/or `checks` lists. A command
+  is a string or a mapping with `command`, optional `name`, and positive `timeout_seconds`.
 - `items` (required, non-empty): task list. Each item is EITHER a plain string
-  (the task prompt) OR a mapping with `prompt` plus optional `name`, `model`, `effort`,
-  `permissions`, `branch`, `base`, `paths`, `depends_on`."""
+  (the task prompt) OR a mapping with `prompt` plus optional `id`, `name`, `model`, `effort`,
+  `permissions`, `branch`, `base`, `paths`, `depends_on`, `base_from`, `profile`,
+  `setup`, `checks`, `timeout_seconds`. `depends_on` only orders tasks. `base_from`
+  names one predecessor whose completed code is inherited and cannot be combined with `base`."""
 
 _FENCE = re.compile(r"```(?:ya?ml)?\s*\n(.*?)```", re.DOTALL)
 
@@ -71,6 +76,12 @@ def _build_prompt(transcript: str) -> str:
         "appear in the plan.\n"
         "- Put shared guidance (style, testing, language, model, effort, branch naming) in `system` or "
         "`defaults`; put per-task files in `paths` and stated ordering in `depends_on`.\n"
+        "- Use `base_from` only when a task explicitly builds on another task's code, never merely for ordering.\n"
+        "- Setup and check commands run directly with the user's account, outside agent permissions. "
+        "Only configure executable commands explicitly supplied by the speaker; do not invent them. "
+        "Commands must finish in the foreground, not start persistent services.\n"
+        "- Escape literal shell/environment references as `$${VAR}` so loading the plan preserves them. "
+        "Use `${VAR}` interpolation only when the speaker explicitly requests plan-time expansion.\n"
         "- Before answering, re-read the transcript and confirm every task and constraint is covered.\n\n"
         "Reply with ONLY a single ```yaml code block.\n\n"
         f"Spoken task list:\n{transcript}"

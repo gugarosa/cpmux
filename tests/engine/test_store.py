@@ -1,6 +1,8 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
+from concurrent.futures import ThreadPoolExecutor
+
 import pytest
 
 from cpmux.engine.store import (
@@ -155,3 +157,65 @@ def test_delete_run_removes_run_history(tmp_path):
     delete_run(tmp_path, "run-x")
 
     assert "run-x" not in all_run_ids(tmp_path)
+
+
+def test_write_record_uses_unique_temporary_files_for_concurrent_writers(tmp_path):
+    paths = RunPaths(tmp_path, "run1")
+    records = [_record().model_copy(update={"name": f"writer-{index}"}) for index in range(20)]
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        list(executor.map(paths.write_record, records))
+
+    assert paths.read_record("a").name in {record.name for record in records}
+    assert not list(paths.session_dir("a").glob(".session.json.*"))
+
+
+def test_all_run_ids_omits_incomplete_run_directories(tmp_path):
+    paths = RunPaths(tmp_path, "incomplete")
+    paths.run_dir.mkdir(parents=True)
+    assert all_run_ids(tmp_path) == []
+
+
+def test_record_usage_accumulates_attempts_without_double_counting_events():
+    record = _record()
+    record.premium_requests = 3
+    record.begin_attempt("followup")
+    record.record_usage(0.5)
+    record.record_usage(0.5)
+    record.record_usage(1.5)
+    assert record.premium_requests == 4.5
+    record.status = Status.DONE
+    record.finish_attempt()
+    record.begin_attempt("retry")
+    record.record_usage(1)
+    assert record.premium_requests == 5.5
+    assert [attempt.premium_requests for attempt in record.attempts] == [1.5, 1]
+
+
+def test_delete_run_does_not_hide_an_inner_missing_file_failure(tmp_path, monkeypatch):
+    paths = RunPaths(tmp_path, "run")
+    paths.worktrees_dir.mkdir(parents=True)
+
+    def interrupted_removal(path):
+        raise FileNotFoundError("a child disappeared before deletion")
+
+    monkeypatch.setattr("cpmux.engine.store.rmtree", interrupted_removal)
+    with pytest.raises(FileNotFoundError, match="child disappeared"):
+        delete_run(tmp_path, "run")
+    assert paths.worktrees_dir.exists()
+
+
+def test_read_record_rejects_a_key_mismatch_before_refreshing_the_caller(tmp_path):
+    paths = RunPaths(tmp_path, "run")
+    record = _record("a")
+    other = _record("b")
+    paths.write_record(record)
+    paths.write_record(other)
+    before = record.model_copy(deep=True)
+    paths.record_file("a").write_text(other.model_dump_json())
+
+    with pytest.raises(ValueError, match="contains key `b`, expected `a`"):
+        paths.refresh_record(record)
+
+    assert record == before
+    assert paths.read_record("b") == other

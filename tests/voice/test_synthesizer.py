@@ -45,3 +45,24 @@ def test_synthesize_plan_retry_includes_actionable_validation_feedback(monkeypat
     assert "items:" in prompts[1]
     assert "at least 1 item" in prompts[1]
     assert "validation error for Plan" not in prompts[1]
+
+
+def test_synthesize_plan_preserves_literal_references_and_explicit_execution_contracts(monkeypatch):
+    prompts = []
+    response = (
+        "profiles:\n  python:\n    checks: ['uv run pytest']\n"
+        "defaults:\n  profile: python\n  premium_budget: 5\n"
+        "items:\n  - id: base\n    prompt: 'Document $${TOKEN}'\n"
+        "  - id: child\n    prompt: Extend it\n    base_from: base\n"
+    )
+
+    def reply(prompt, model):
+        prompts.append(prompt)
+        return response
+
+    monkeypatch.setattr(synthesizer, "_run_copilot", reply)
+
+    assert synthesize_plan("document ${TOKEN} then extend; run uv run pytest") == response.strip()
+    assert "do not invent them" in prompts[0]
+    assert "`depends_on` only orders tasks" in prompts[0]
+    assert "code is inherited" in prompts[0]

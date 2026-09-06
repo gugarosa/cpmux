@@ -2,6 +2,8 @@
 # Licensed under the MIT license.
 
 import asyncio
+import json
+import math
 import os
 import re
 import shlex
@@ -30,7 +32,21 @@ from cpmux.engine.copilot_store import (
     InvalidFtsQuery,
     search_sessions,
 )
-from cpmux.engine.interact import resume_interactive_argv, run_followup
+from cpmux.engine.intake import issues_plan
+from cpmux.engine.interact import run_followup, run_interactive
+from cpmux.engine.ownership import (
+    OwnershipError,
+    file_lease,
+    matching_process,
+    process_owner_alive,
+)
+from cpmux.engine.reporting import run_report
+from cpmux.engine.review import (
+    diff_snapshot,
+    run_feedback,
+    run_finalization,
+    run_verification,
+)
 from cpmux.engine.store import (
     RunPaths,
     SessionRecord,
@@ -52,6 +68,8 @@ from cpmux.events import (
 from cpmux.ui.render import event_text
 from cpmux.ui.search import TranscriptHit, search_transcripts
 from cpmux.vcs.git import GitError, prune_worktrees, remove_worktree, run_git
+from cpmux.vcs.issues import IssueError, fetch_issues
+from cpmux.vcs.pr import PRError
 from cpmux.voice.recorder import record_and_transcribe
 from cpmux.voice.synthesizer import synthesize_plan
 from cpmux.voice.transcriber import DEFAULT_TRANSCRIBE_MODEL, VoiceError, transcribe
@@ -60,6 +78,7 @@ app = typer.Typer(
     add_completion=True,
     no_args_is_help=True,
     rich_markup_mode="rich",
+    pretty_exceptions_show_locals=False,
     help=(
         "Run parallel GitHub Copilot CLI agents from a YAML plan. Each item uses an isolated "
         "git worktree and branch and opens a draft PR by default."
@@ -157,6 +176,15 @@ def _require_tool(name: str, hint: str) -> None:
         raise typer.Exit(1)
 
 
+@contextmanager
+def _operation_errors() -> Iterator[None]:
+    try:
+        yield
+    except (OwnershipError, GitError, PRError, IssueError, ConfigError, OSError, ValueError) as exc:
+        theme.print_error(str(exc))
+        raise typer.Exit(1) from exc
+
+
 _COPILOT_HINT = "install the GitHub Copilot CLI and run `copilot` once to authenticate."
 _GH_HINT = "install the GitHub CLI and run `gh auth login`, or rerun with `--no-pr`."
 
@@ -178,6 +206,8 @@ def _display_argv(argv: list[str]) -> str:
 
 def _plan_table(resolved: list[ResolvedItem]) -> Table:
     show_env = any(item.env for item in resolved)
+    show_commands = any(item.setup or item.checks for item in resolved)
+    show_base_from = any(item.base_from is not None for item in resolved)
     table = theme.table(title="resolved plan")
     table.add_column("item", style="bold")
     table.add_column("model")
@@ -185,6 +215,10 @@ def _plan_table(resolved: list[ResolvedItem]) -> Table:
     table.add_column("branch")
     table.add_column("perms")
     table.add_column("deps on")
+    if show_base_from:
+        table.add_column("base from")
+    if show_commands:
+        table.add_column("setup / checks")
     if show_env:
         table.add_column("env")
 
@@ -197,6 +231,10 @@ def _plan_table(resolved: list[ResolvedItem]) -> Table:
             item.permissions.preset,
             ", ".join(item.depends_on) or "-",
         ]
+        if show_base_from:
+            row.append(item.base_from or "-")
+        if show_commands:
+            row.append(f"{len(item.setup)} / {len(item.checks)}")
         if show_env:
             row.append(", ".join(f"{name}={value}" for name, value in item.env.items()) or "-")
         table.add_row(*row)
@@ -255,10 +293,15 @@ def up(
     """Spawn one Copilot session per item."""
 
     if dry_run:
-        resolved = _load_plan_or_exit(file).resolve()
+        plan = _load_plan_or_exit(file)
+        resolved = plan.resolve()
         publish = "one draft PR per item" if pr else "local commits only"
         parallel = str(concurrency) if concurrency else "plan default"
         console.print(_plan_table(resolved))
+        if plan.defaults.premium_budget is not None:
+            theme.print_hint(
+                f"soft admission budget: {plan.defaults.premium_budget} premium request(s), not a hard cap."
+            )
         theme.print_hint(
             f"dry run — nothing is created · {len(resolved)} session(s) · max {parallel} concurrent "
             f"· publish: {publish} · deps: {str(deps) if deps else 'per item'}"
@@ -267,6 +310,15 @@ def up(
         for item in resolved:
             argv = item.spawn_argv(f"<worktree>/{item.key}", "<session-id>", "<log-dir>")
             console.print(f"  [cyan]{item.key}[/cyan]: {_display_argv(argv)}")
+        for item in resolved:
+            for phase, commands in (("setup", item.setup), ("check", item.checks)):
+                for command in commands:
+                    console.print(
+                        Text(
+                            f"  {item.key} · {phase} · {command.name or phase} · "
+                            f"{command.timeout_seconds:g}s: {command.command}"
+                        )
+                    )
         return
 
     options = Options(
@@ -342,9 +394,10 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
         theme.print_hint("cancelled; nothing was started.")
         return
 
-    supervisor.prepare()
     if detach:
-        daemon.launch_detached(supervisor.run_id, str(supervisor.repo_root))
+        with _operation_errors():
+            supervisor.prepare()
+            daemon.launch_detached(supervisor.run_id, str(supervisor.repo_root))
         run_id = supervisor.run_id
         theme.print_success(f"started run {run_id} in the background ({len(resolved)} item(s)).")
         theme.print_hint(f"watch:     cpmux dash --run {run_id}")
@@ -352,17 +405,13 @@ def _launch_run(file: Path, options: Options, detach: bool, yes: bool) -> None:
         theme.print_hint(f"stop:      cpmux down --run {run_id}")
         return
 
-    daemon.write_owner(supervisor.paths, os.getpid())
     interrupted = False
     try:
-        with _quiet_terminal():
+        with _operation_errors(), _quiet_terminal():
             records = asyncio.run(supervisor.run())
     except KeyboardInterrupt:
         interrupted = True
         records = list(supervisor.records.values())
-    finally:
-        daemon.clear_owner(supervisor.paths)
-
     if interrupted:
         theme.print_warning(f"run {supervisor.run_id} interrupted; sessions were stopped.")
         raise typer.Exit(130)
@@ -408,6 +457,65 @@ def _print_completion_summary(run_id: str, records: list[SessionRecord]) -> None
 
     if premium:
         theme.print_hint(f"{premium} premium request(s) consumed.")
+
+
+@app.command(rich_help_panel="Create & run")
+def retry(
+    keys: list[str] | None = typer.Argument(
+        None, help="Items to retry (default: failed, blocked, stopped or unstarted)."
+    ),
+    run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
+    resume: bool = typer.Option(
+        False, "--resume", help="Resume the existing native conversation instead of a new one."
+    ),
+    fresh: bool = typer.Option(
+        False, "--fresh", help="Rerun setup and the task in a new conversation, keeping Git edits."
+    ),
+    budget: int | None = typer.Option(None, "--budget", min=1, help="Replace the soft run premium-request budget."),
+    detach: bool = typer.Option(
+        False, "--detach", "-d", help="Continue in the background after startup is acknowledged."
+    ),
+    yes: bool = typer.Option(False, "--yes", "-y", help="Skip recovery confirmation."),
+) -> None:
+    """Retry selected work without replaying successful items or losing history."""
+
+    if resume and fresh:
+        theme.print_error("`--resume` and `--fresh` are mutually exclusive.")
+        raise typer.Exit(1)
+    run_id = _run_id_or_exit(run)
+    mode = "resume" if resume else "fresh" if fresh else "retry"
+    with _operation_errors():
+        supervisor = Supervisor.from_run(".", run_id)
+        daemon.reconcile(supervisor.paths, list(supervisor.records.values()))
+        selected = [
+            record
+            for key, record in supervisor.records.items()
+            if (key in keys if keys else record.status in TERMINAL_FAILURE or record.status == Status.PENDING)
+        ]
+        if any(resume or fresh or not record.agent_complete for record in selected):
+            _require_tool("copilot", _COPILOT_HINT)
+        if supervisor.options.open_pr:
+            _require_tool("gh", _GH_HINT)
+        if not yes and not typer.confirm(
+            f"Recover {len(selected)} item(s) in run {run_id} using {mode}? Worktrees are kept; usage may increase."
+        ):
+            theme.print_hint("cancelled; no recovery was queued.")
+            return
+        queued = supervisor.prepare_retry(keys, mode, budget)
+        if detach:
+            daemon.launch_detached(run_id, str(supervisor.repo_root))
+            theme.print_success(f"queued {len(queued)} item(s) in run {run_id}.")
+            theme.print_hint(f"watch: cpmux dash --run {run_id}")
+            return
+        try:
+            with _quiet_terminal():
+                records = asyncio.run(supervisor.run())
+        except KeyboardInterrupt:
+            theme.print_warning(f"recovery for run {run_id} interrupted; worktrees are kept.")
+            raise typer.Exit(130)
+    _print_completion_summary(run_id, records)
+    if any(record.status in TERMINAL_FAILURE for record in records):
+        raise typer.Exit(1)
 
 
 @app.command(rich_help_panel="Create & run")
@@ -467,8 +575,44 @@ def _resolve_transcript(text: str | None, audio: Path | None, voice: bool, trans
     return _compose_in_editor()
 
 
+@app.command(rich_help_panel="Create & run")
+def issues(
+    references: list[str] | None = typer.Argument(None, help="Issue numbers or same-repository issue URLs."),
+    repository: str | None = typer.Option(
+        None, "--repo", help="GitHub [host/]owner/repository (default: current repository)."
+    ),
+    query: str | None = typer.Option(
+        None, "--query", help="GitHub issue search expression instead of explicit references."
+    ),
+    limit: int = typer.Option(20, "--limit", min=1, max=100, help="Maximum number of issues to import."),
+    template: Path | None = typer.Option(
+        None, "--template", dir_okay=False, help="Plan supplying defaults and profiles, not items."
+    ),
+    profile: str | None = typer.Option(None, "--profile", help="Execution profile selected from the template."),
+    output: Path = typer.Option(Path("cpmux.yml"), "--output", "-o", dir_okay=False, help="Editable output plan."),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite an existing output file."),
+) -> None:
+    """Import GitHub issues into an editable plan without running an agent."""
+
+    if output.exists() and not force:
+        theme.print_error(f"`{output}` already exists.", hint="pass `--force` to overwrite it.")
+        raise typer.Exit(1)
+    _require_tool("gh", "install the GitHub CLI and run `gh auth login` for the target host.")
+    with _operation_errors():
+        base = load_plan(template) if template is not None else None
+        imported = fetch_issues(".", references or [], repository=repository, query=query, limit=limit)
+        contents = issues_plan(imported, template=base, profile=profile)
+        with output.open("w" if force else "x", encoding="utf-8") as handle:
+            handle.write(contents)
+    theme.print_success(f"wrote {len(imported)} issue(s) to {output}; no agents were started.")
+    theme.print_hint(f"review it, then preview with `cpmux up {output} --dry-run`.")
+
+
 def _compose_in_editor() -> str:
-    composed = click.edit(extension=".md")
+    try:
+        composed = click.edit(extension=".md")
+    except click.ClickException as exc:
+        raise VoiceError(f"`editor` failed: {str(exc).removesuffix('.')}.") from exc
     if composed is None or not composed.strip():
         raise VoiceError("`plan` text is None or blank.")
     return composed.strip()
@@ -488,6 +632,47 @@ def ls(run: str | None = typer.Option(None, "--run", help="Run id (default: late
 
 
 @app.command(rich_help_panel="Monitor")
+def report(
+    run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
+    as_json: bool = typer.Option(
+        False, "--json", help="Emit a versioned summary without prompts or environment values."
+    ),
+) -> None:
+    """Report attempts, verification, and delivery without changing run state."""
+
+    run_id = _run_id_or_exit(run)
+    with _operation_errors():
+        summary = run_report(".", run_id)
+    if as_json:
+        typer.echo(json.dumps(summary, indent=2))
+        return
+
+    table = theme.table(title=f"cpmux · {run_id} · {'paused' if summary['paused'] else 'run report'}")
+    table.add_column("item", style="bold")
+    table.add_column("status")
+    table.add_column("phase")
+    table.add_column("attempts", justify="right")
+    table.add_column("checks")
+    table.add_column("candidate / PR", overflow="fold")
+    for item in summary["items"]:
+        table.add_row(
+            item["key"],
+            item["status"],
+            item["phase"],
+            str(len(item["attempts"])),
+            item["verification"]["status"],
+            item["pr_url"] or (item["candidate_sha"] or "-")[:12],
+        )
+    console.print(table)
+    if summary["owner_error"]:
+        theme.print_warning(summary["owner_error"])
+    theme.print_hint(
+        f"reported usage: {summary['reported_premium_requests']} premium request(s); "
+        f"{summary['items_with_unknown_usage']} item(s) have unknown usage."
+    )
+
+
+@app.command(rich_help_panel="Monitor")
 def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
     """Monitor a run (Ctrl-C to stop watching)."""
 
@@ -497,19 +682,97 @@ def attach(run: str | None = typer.Option(None, "--run", help="Run id (default: 
 
     records: list[SessionRecord] = []
     try:
-        with _quiet_terminal(), Live(console=console, refresh_per_second=4) as live:
+        with _operation_errors(), _quiet_terminal(), Live(console=console, refresh_per_second=4) as live:
             while True:
-                _, records = load_run(root, run_id)
+                manifest, records = load_run(root, run_id)
                 records = daemon.reconcile(paths, records)
                 live.update(_run_table(run_id, records, paths))
-                if all(record.status in TERMINAL for record in records):
+                if len(records) == len(manifest.item_keys) and all(record.status in TERMINAL for record in records):
                     break
+                if len(records) < len(manifest.item_keys) and not daemon.owner_alive(paths):
+                    raise ValueError(f"`run={run_id}` has missing session records and no live owner.")
+                if not daemon.owner_alive(paths) and not any(
+                    process_owner_alive(paths.session_owner(record.key)) for record in records
+                ):
+                    raise ValueError(
+                        f"`run={run_id}` has unresolved work without a live owner. Inspect `cpmux report`."
+                    )
                 time.sleep(0.5)
     except KeyboardInterrupt:
         return
 
     if any(record.status in TERMINAL_FAILURE for record in records):
         raise typer.Exit(1)
+
+
+@app.command(rich_help_panel="Monitor")
+def wait(
+    run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
+    timeout: float | None = typer.Option(None, "--timeout", min=0, help="Maximum wait in seconds; timeout exits 124."),
+    as_json: bool = typer.Option(False, "--json", help="Print the final versioned run report."),
+    notify: bool = typer.Option(False, "--notify", help="Ring the terminal bell once when all items are terminal."),
+) -> None:
+    """Wait for terminal outcomes (0 success, 1 failure, 2 unowned work, 124 timeout)."""
+
+    if timeout is not None and not math.isfinite(timeout):
+        theme.print_error("`--timeout` must be finite.")
+        raise typer.Exit(1)
+    run_id = _run_id_or_exit(run)
+    paths = RunPaths(".", run_id)
+    deadline = time.monotonic() + timeout if timeout is not None else None
+    code = 0
+    with _operation_errors():
+        while True:
+            manifest, records = load_run(".", run_id)
+            daemon.reconcile(paths, records)
+            terminal = len(records) == len(manifest.item_keys) and all(record.status in TERMINAL for record in records)
+            if terminal:
+                code = int(any(record.status in TERMINAL_FAILURE for record in records))
+                if notify and theme.err.is_terminal:
+                    theme.err.bell()
+                break
+            if not daemon.owner_alive(paths) and not any(
+                process_owner_alive(paths.session_owner(record.key)) for record in records
+            ):
+                code = 2
+                break
+            if deadline is not None and time.monotonic() >= deadline:
+                code = 124
+                break
+            time.sleep(0.2)
+
+        if as_json:
+            typer.echo(json.dumps(run_report(".", run_id), indent=2))
+        elif code in {0, 1}:
+            _print_completion_summary(run_id, records)
+        elif code == 2:
+            theme.print_error(
+                f"`run={run_id}` has unfinished work but no live owner.", hint="use `cpmux retry` to recover."
+            )
+        else:
+            theme.print_warning(f"waiting for run {run_id} timed out; its work continues.")
+    if code:
+        raise typer.Exit(code)
+
+
+@app.command(rich_help_panel="Interact")
+def pause(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
+    """Pause admission of queued items without stopping active work."""
+
+    run_id = _run_id_or_exit(run)
+    with _operation_errors():
+        daemon.set_paused(RunPaths(".", run_id), True)
+    theme.print_success(f"paused queue {run_id}; active work continues.")
+
+
+@app.command(rich_help_panel="Interact")
+def unpause(run: str | None = typer.Option(None, "--run", help="Run id (default: latest).")) -> None:
+    """Allow queued work in an active run without overriding its soft budget."""
+
+    run_id = _run_id_or_exit(run)
+    with _operation_errors():
+        daemon.set_paused(RunPaths(".", run_id), False)
+    theme.print_success(f"unpaused queue {run_id}; an idle run still requires `cpmux retry`.")
 
 
 @app.command(rich_help_panel="Monitor")
@@ -530,13 +793,105 @@ def enter(
 ) -> None:
     """Open an item's Copilot session."""
 
-    _, record = _resolve_record(run, key)
+    paths, record = _resolve_record(run, key)
     _require_tool("copilot", _COPILOT_HINT)
     if not Path(record.worktree).exists():
         theme.print_error(f"worktree `{record.worktree}` is missing; the run may have been cleaned.")
         raise typer.Exit(1)
 
-    os.execvp("copilot", resume_interactive_argv(record.session_id, record.worktree))
+    with _operation_errors():
+        code = asyncio.run(run_interactive(paths, record))
+    if code != 0:
+        raise typer.Exit(1)
+
+
+@app.command(rich_help_panel="Interact")
+def diff(
+    key: str = typer.Argument(..., help="Item whose changes should be reviewed."),
+    run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
+    as_json: bool = typer.Option(False, "--json", help="Emit the source revision and diff as JSON."),
+) -> None:
+    """Show a read-only diff and its revision token for targeted feedback."""
+
+    with _operation_errors():
+        paths, record = _resolve_record(run, key)
+        snapshot = diff_snapshot(paths, record)
+    if as_json:
+        typer.echo(
+            json.dumps(
+                {
+                    "revision": snapshot.revision,
+                    "base_sha": snapshot.base_sha,
+                    "head_sha": snapshot.head_sha,
+                    "text": snapshot.text,
+                },
+                indent=2,
+            )
+        )
+        return
+    theme.print_hint(f"revision: {snapshot.revision}")
+    console.print(Syntax(snapshot.text or "(no changes)", "diff", theme="ansi_dark", background_color="default"))
+
+
+@app.command(rich_help_panel="Interact")
+def feedback(
+    key: str = typer.Argument(..., help="Reviewed item to repair."),
+    message: str = typer.Argument(..., help="Review feedback for the shown revision."),
+    revision: str = typer.Option(..., "--revision", help="Revision token from `cpmux diff`."),
+    run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
+    file_path: str | None = typer.Option(
+        None, "--file", help="Optional relative source path providing review context."
+    ),
+    line: int | None = typer.Option(None, "--line", min=1, help="Optional one-based line; requires --file."),
+) -> None:
+    """Send review feedback only if the source still matches the reviewed diff."""
+
+    _require_tool("copilot", _COPILOT_HINT)
+    with _operation_errors():
+        paths, record = _resolve_record(run, key)
+        state = asyncio.run(run_feedback(paths, record, message, revision, file_path=file_path, line=line))
+    if state.last_text:
+        console.print(Text(state.last_text))
+    _print_session_outcome(record)
+
+
+def _print_session_outcome(record: SessionRecord) -> None:
+    console.print(Text.assemble((record.key, "bold"), " ", theme.status_text(record.status)))
+    if record.pr_url:
+        console.print(Text(record.pr_url))
+    if record.status in TERMINAL_FAILURE:
+        theme.print_error(record.error or f"`session={record.key}` did not succeed.")
+        raise typer.Exit(1)
+
+
+@app.command(rich_help_panel="Interact")
+def verify(
+    key: str = typer.Argument(..., help="Item whose local candidate should be checked."),
+    run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
+) -> None:
+    """Commit and verify a local candidate without pushing or opening a PR."""
+
+    with _operation_errors():
+        paths, record = _resolve_record(run, key)
+        asyncio.run(run_verification(paths, record))
+    _print_session_outcome(record)
+    if record.verification is None:
+        theme.print_warning("no successful acceptance receipt was recorded; this candidate is not verified.")
+    else:
+        theme.print_success(f"verified candidate {record.verification.commit_sha[:12]}; nothing was pushed.")
+
+
+@app.command(rich_help_panel="Interact")
+def finalize(
+    key: str = typer.Argument(..., help="Item to finalize or update on its matching open PR."),
+    run: str | None = typer.Option(None, "--run", help="Run id (default: latest)."),
+) -> None:
+    """Explicitly verify and deliver an item using its persisted PR settings."""
+
+    with _operation_errors():
+        paths, record = _resolve_record(run, key)
+        asyncio.run(run_finalization(paths, record))
+    _print_session_outcome(record)
 
 
 @app.command(rich_help_panel="Interact")
@@ -553,7 +908,8 @@ def send(
         theme.print_error(f"worktree `{record.worktree}` is missing; the run may have been cleaned.")
         raise typer.Exit(1)
 
-    state = asyncio.run(run_followup(paths, record, message))
+    with _operation_errors():
+        state = asyncio.run(run_followup(paths, record, message))
 
     if state.last_text:
         console.print(f"[bold green]🤖 assistant[/bold green] {escape(state.last_text)}")
@@ -697,49 +1053,53 @@ def rm(
 
     root = Path(".")
     run_id = _run_id_or_exit(run, root)
-
-    if daemon.owner_alive(RunPaths(root, run_id)):
-        theme.print_error(
-            f"run {run_id} is still active.",
-            hint=f"stop it first with `cpmux down --run {run_id}`.",
-        )
-        raise typer.Exit(1)
-
-    manifest, records = load_run(root, run_id)
-    scope = "worktree(s) and run history" if purge else "worktree(s)"
-    kept = "" if purge else " Branches, PRs, and run history are kept."
-    if not yes and not typer.confirm(f"Remove {len(records)} {scope} for run {run_id}?{kept}"):
-        theme.print_hint("cancelled; nothing was removed.")
-        raise typer.Exit()
-
-    removed = 0
-    failed = []
-    for record in records:
-        existed = Path(record.worktree).exists()
-        if remove_worktree(manifest.repo_root, record.worktree, force=force):
-            if existed:
-                removed += 1
-        else:
-            failed.append(record.key)
-    prune_worktrees(manifest.repo_root)
-
-    worktrees_dir = RunPaths(root, run_id).worktrees_dir
-    if worktrees_dir.exists() and not any(worktrees_dir.iterdir()):
-        worktrees_dir.rmdir()
-
-    if failed:
-        for key in failed:
+    paths = RunPaths(root, run_id)
+    with _operation_errors(), file_lease(paths.owner_lock):
+        if daemon.owner_alive(paths):
             theme.print_error(
-                f"could not remove worktree for `{key}`; it may have uncommitted changes.",
-                hint="commit or discard them, or pass `--force` to delete anyway.",
+                f"run {run_id} is still active.",
+                hint=f"stop it first with `cpmux down --run {run_id}`.",
             )
-        raise typer.Exit(1)
+            raise typer.Exit(1)
 
-    if purge:
-        delete_run(root, run_id)
-        theme.print_success(f"removed {removed} worktree(s) and purged run {run_id}.")
-    else:
-        theme.print_success(f"removed {removed} worktree(s) for run {run_id}.")
+        manifest, records = load_run(root, run_id)
+        for record in records:
+            if record.pid is not None and matching_process(record.pid, record.pid_created_at) is not None:
+                raise OwnershipError(f"`session={record.key}` still has a live child. Stop the run before removal.")
+        scope = "worktree(s) and run history" if purge else "worktree(s)"
+        kept = "" if purge else " Branches, PRs, and run history are kept."
+        if not yes and not typer.confirm(f"Remove {len(records)} {scope} for run {run_id}?{kept}"):
+            theme.print_hint("cancelled; nothing was removed.")
+            raise typer.Exit()
+
+        removed = 0
+        failed = []
+        for record in records:
+            existed = Path(record.worktree).exists()
+            if remove_worktree(manifest.repo_root, record.worktree, force=force):
+                if existed:
+                    removed += 1
+            else:
+                failed.append(record.key)
+        prune_worktrees(manifest.repo_root)
+
+        worktrees_dir = paths.worktrees_dir
+        if worktrees_dir.exists() and not any(worktrees_dir.iterdir()):
+            worktrees_dir.rmdir()
+
+        if failed:
+            for key in failed:
+                theme.print_error(
+                    f"could not remove worktree for `{key}`; it may have uncommitted changes.",
+                    hint="commit or discard them, or pass `--force` to delete anyway.",
+                )
+            raise typer.Exit(1)
+
+        if purge:
+            delete_run(root, run_id)
+            theme.print_success(f"removed {removed} worktree(s) and purged run {run_id}.")
+        else:
+            theme.print_success(f"removed {removed} worktree(s) for run {run_id}.")
 
 
 @app.command(rich_help_panel="Stop & clean up")
@@ -753,9 +1113,12 @@ def down(
     run_id = _run_id_or_exit(run, root)
     paths = RunPaths(root, run_id)
 
-    _, records = load_run(root, run_id)
-    live = [record.key for record in records if daemon.pid_alive(record.pid)]
-    scope = (["daemon"] if daemon.owner_alive(paths) else []) + ([f"{len(live)} live session(s)"] if live else [])
+    with _operation_errors():
+        _, records = load_run(root, run_id)
+        unfinished = [record.key for record in records if record.status not in TERMINAL]
+        scope = (["run owner"] if daemon.owner_alive(paths) else []) + (
+            [f"{len(unfinished)} unfinished item(s)"] if unfinished else []
+        )
     if not scope:
         theme.print_hint(f"run {run_id} is already stopped.")
         return
@@ -764,7 +1127,8 @@ def down(
         theme.print_hint("cancelled; nothing was stopped.")
         raise typer.Exit()
 
-    signalled = daemon.stop(paths, records)
+    with _operation_errors():
+        signalled = daemon.stop(paths, records)
     theme.print_success(f"stopped {signalled} process(es) for run {run_id}.")
     theme.print_hint(f"remove the worktrees later with `cpmux rm --run {run_id}`.")
 
@@ -782,19 +1146,19 @@ def kill(
         theme.print_hint("cancelled; nothing was stopped.")
         raise typer.Exit()
 
-    if daemon.kill_session(paths, record):
-        theme.print_success(f"stopped session {key}.")
+    with _operation_errors():
+        stopped = daemon.kill_session(paths, record)
+    if stopped:
+        theme.print_success(f"requested stop for session {key}.")
     else:
         theme.print_hint(f"session {key} was not running.")
 
 
 @app.command(name="_daemon", hidden=True)
 def _daemon_command(run_id: str = typer.Argument(...)) -> None:
-    supervisor = Supervisor.from_run(".", run_id)
-    try:
-        records = asyncio.run(supervisor.run(headless=True))
-    finally:
-        daemon.clear_owner(supervisor.paths)
+    with _operation_errors():
+        supervisor = Supervisor.from_run(".", run_id)
+        records = asyncio.run(supervisor.run(headless=True, startup_wait_seconds=5.0))
 
     if any(record.status in TERMINAL_FAILURE for record in records):
         raise typer.Exit(1)
@@ -859,6 +1223,8 @@ def _run_table(run_id: str, records: list[SessionRecord], paths: RunPaths) -> Ta
         title += f" · {stopped} stopped"
     if premium:
         title += f" · {premium} premium"
+    if paths.pause_file.exists():
+        title += " · queue paused"
 
     table = theme.table(title=title)
     table.add_column("item", style="bold", ratio=2, no_wrap=True, overflow="ellipsis")
@@ -869,7 +1235,10 @@ def _run_table(run_id: str, records: list[SessionRecord], paths: RunPaths) -> Ta
 
     for record in records:
         activity = ""
-        if record.status in ACTIVE:
+        commands = record.attempts[-1].commands if record.attempts else []
+        if commands and commands[-1].status == "running":
+            activity = f"{record.phase}: {commands[-1].name}"
+        elif record.status in ACTIVE:
             activity = _tail_last_assistant(paths.transcript(record.key))
         elif record.status in TERMINAL_FAILURE and record.error:
             activity = record.error.splitlines()[0][:80]
@@ -889,8 +1258,9 @@ def _print_run_summary(root: Path, run_id: str | None) -> None:
     run_id = _run_id_or_exit(run_id, root)
     paths = RunPaths(root, run_id)
 
-    _, records = load_run(root, run_id)
-    records = daemon.reconcile(paths, records)
+    with _operation_errors():
+        _, records = load_run(root, run_id)
+        records = daemon.reconcile(paths, records)
 
     console.print(_run_table(run_id, records, paths))
     if any(record.status in ACTIVE for record in records):

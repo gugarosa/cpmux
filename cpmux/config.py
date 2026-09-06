@@ -23,7 +23,7 @@ from pydantic import (
 
 PR_DRAFT_FILENAME = ".cpmux-pr.md"
 
-_ENV_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
+_ENV_RE = re.compile(r"(\$)?\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 
 _PR_INSTRUCTIONS = (
     "When the task is complete, write the pull-request title and description cpmux will use to a file "
@@ -69,7 +69,7 @@ class Deps(StrEnum):
 
 
 def interpolate_env(value: str) -> str:
-    """Expand `${VAR}` and `${VAR:-default}` references in a string.
+    """Expand environment references once, preserving `$${VAR}` as literal text.
 
     Args:
         value: String containing environment references.
@@ -83,7 +83,9 @@ def interpolate_env(value: str) -> str:
     """
 
     def repl(match: re.Match[str]) -> str:
-        name, default = match.group(1), match.group(2)
+        escaped, name, default = match.groups()
+        if escaped:
+            return match.group(0)[1:]
         if name in os.environ:
             return os.environ[name]
         if default is not None:
@@ -102,6 +104,20 @@ def _walk_interpolate(obj: Any) -> Any:
         return {key: _walk_interpolate(value) for key, value in obj.items()}
 
     return obj
+
+
+def escape_env(value: str) -> str:
+    """Escape supported environment references for one literal plan round trip.
+
+    Args:
+        value: Already resolved or externally supplied text.
+
+    Returns:
+        Text that `interpolate_env` restores without consulting the environment.
+
+    """
+
+    return _ENV_RE.sub(lambda match: f"${match.group(0)}", value)
 
 
 def slugify(text: str) -> str:
@@ -246,6 +262,50 @@ class PRSettings(BaseModel):
         return _validate_template(value, "body_template", {"name", "slug", "prompt"})
 
 
+class CommandSpec(BaseModel):
+    """An explicitly configured POSIX shell command.
+
+    Attributes:
+        command: Shell command approved as part of the plan.
+        name: Optional display label that does not expose command arguments.
+        timeout_seconds: Maximum execution time before terminating the command.
+
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    command: str = Field(min_length=1)
+    name: str | None = None
+    timeout_seconds: float = Field(default=300.0, gt=0, allow_inf_nan=False)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _accept_command(cls, data: Any) -> Any:
+        return {"command": data} if isinstance(data, str) else data
+
+    @field_validator("command")
+    @classmethod
+    def _validate_command(cls, value: str) -> str:
+        if not value.strip() or "\0" in value:
+            raise ValueError("`command` must be nonblank and contain no NUL bytes.")
+        return value
+
+
+class ExecutionProfile(BaseModel):
+    """Reusable setup and acceptance-check configuration.
+
+    Attributes:
+        setup: Setup commands, inheriting run defaults when omitted.
+        checks: Required acceptance commands, inheriting run defaults when omitted.
+
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    setup: list[CommandSpec] | None = None
+    checks: list[CommandSpec] | None = None
+
+
 class Defaults(BaseModel):
     """Defaults inherited by all items.
 
@@ -261,6 +321,11 @@ class Defaults(BaseModel):
         remote: Git remote name.
         port_base: Starting port for item allocation.
         port_env: Environment variable receiving the allocated port.
+        profile: Named execution profile selected by default.
+        setup: Commands required before launching an agent.
+        checks: Commands required before delivering changes.
+        timeout_seconds: Optional limit for one agent execution.
+        premium_budget: Soft run-wide admission limit based on reported premium usage.
 
     """
 
@@ -277,6 +342,11 @@ class Defaults(BaseModel):
     remote: str = "origin"
     port_base: int | None = Field(default=None, ge=1, le=65535)
     port_env: str = "PORT"
+    profile: str | None = None
+    setup: list[CommandSpec] = Field(default_factory=list)
+    checks: list[CommandSpec] = Field(default_factory=list)
+    timeout_seconds: float | None = Field(default=None, gt=0, allow_inf_nan=False)
+    premium_budget: int | None = Field(default=None, ge=1)
 
     @field_validator("port_env")
     @classmethod
@@ -300,6 +370,29 @@ class Defaults(BaseModel):
         return _validate_template(value, "branch_template", {"slug", "id"})
 
 
+class IssueSource(BaseModel):
+    """Read-only GitHub issue provenance captured when a plan is generated.
+
+    Attributes:
+        repository: Source owner and repository.
+        number: Source issue number.
+        url: Canonical issue URL.
+        updated_at: Source update timestamp at import time.
+        title: Source title at import time.
+        labels: Source label names at import time.
+
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    repository: str
+    number: int = Field(gt=0)
+    url: str
+    updated_at: str
+    title: str
+    labels: list[str] = Field(default_factory=list)
+
+
 class Item(BaseModel):
     """Task prompt with optional per-item overrides.
 
@@ -316,8 +409,14 @@ class Item(BaseModel):
         draft: Pull-request draft override.
         paths: Additional accessible paths.
         depends_on: Required item identifiers.
+        base_from: Single predecessor whose completed commit becomes this item's base.
+        source: Optional imported issue provenance.
         env: Session environment variables.
         include_system: Whether to prepend the plan system prompt.
+        profile: Named execution profile override.
+        setup: Setup command override, including an explicit empty list.
+        checks: Acceptance-check override, including an explicit empty list.
+        timeout_seconds: Agent execution time limit override.
 
     """
 
@@ -335,8 +434,14 @@ class Item(BaseModel):
     draft: bool | None = None
     paths: list[str] = Field(default_factory=list)
     depends_on: list[str] = Field(default_factory=list)
+    base_from: str | None = None
+    source: IssueSource | None = None
     env: dict[str, str] = Field(default_factory=dict)
     include_system: bool = True
+    profile: str | None = None
+    setup: list[CommandSpec] | None = None
+    checks: list[CommandSpec] | None = None
+    timeout_seconds: float | None = Field(default=None, gt=0, allow_inf_nan=False)
 
     @model_validator(mode="before")
     @classmethod
@@ -388,11 +493,17 @@ class ResolvedItem(BaseModel):
         labels: Pull-request labels.
         draft: Whether the pull request is a draft.
         depends_on: Required item identifiers.
+        base_from: Explicit code predecessor, separate from ordering-only dependencies.
+        source: Optional imported issue provenance.
         env: Session environment variables.
         deps: Dependency setup mode.
         remote: Git remote name.
         pr_title: Pull-request title.
         pr_body: Pull-request body.
+        profile: Selected execution profile name.
+        setup: Resolved setup commands.
+        checks: Resolved acceptance commands.
+        timeout_seconds: Optional agent execution time limit.
 
     """
 
@@ -413,6 +524,12 @@ class ResolvedItem(BaseModel):
     remote: str
     pr_title: str
     pr_body: str
+    base_from: str | None = None
+    source: IssueSource | None = None
+    profile: str | None = None
+    setup: list[CommandSpec] = Field(default_factory=list)
+    checks: list[CommandSpec] = Field(default_factory=list)
+    timeout_seconds: float | None = Field(default=None, gt=0, allow_inf_nan=False)
 
     def effective_prompt(self) -> str:
         """Return the resolved prompt with pull-request authoring instructions.
@@ -471,6 +588,7 @@ class Plan(BaseModel):
         system: System prompt prepended to eligible items.
         defaults: Defaults inherited by items.
         items: Declared task items.
+        profiles: Named reusable execution profiles.
 
     """
 
@@ -480,6 +598,7 @@ class Plan(BaseModel):
     system: str = ""
     defaults: Defaults = Field(default_factory=Defaults)
     items: Annotated[list[Item], Field(min_length=1)]
+    profiles: dict[str, ExecutionProfile] = Field(default_factory=dict)
 
     @model_validator(mode="before")
     @classmethod
@@ -503,20 +622,26 @@ class Plan(BaseModel):
 
         known = set(keys)
         for item in items:
-            missing = [dep for dep in item.depends_on if dep not in known]
+            dependencies = [*item.depends_on, *([item.base_from] if item.base_from is not None else [])]
+            missing = [dep for dep in dependencies if dep not in known]
             if missing:
                 raise ValueError(
-                    f"`depends_on` for `{item.key}` references unknown ids {missing}; known ids: {sorted(known)}."
+                    f"`dependencies` for `{item.key}` reference unknown ids {missing}; known ids: {sorted(known)}."
                 )
+            if item.base_from is not None and item.base is not None:
+                raise ValueError(f"`base` and `base_from` for `{item.key}` are mutually exclusive.")
 
-        pending = {item.key: set(item.depends_on) for item in items}
+        pending = {
+            item.key: set(item.depends_on) | ({item.base_from} if item.base_from is not None else set())
+            for item in items
+        }
         while ready := [key for key, deps in pending.items() if not deps]:
             for key in ready:
                 del pending[key]
             for deps in pending.values():
                 deps.difference_update(ready)
         if pending:
-            raise ValueError(f"`depends_on` forms a cycle among {sorted(pending)}; remove the circular dependency.")
+            raise ValueError(f"`dependencies` form a cycle among {sorted(pending)}; remove the circular dependency.")
 
         return items
 
@@ -549,13 +674,27 @@ class Plan(BaseModel):
 
         defaults = self.defaults
         resolved: list[ResolvedItem] = []
+        branch_keys: dict[str, str] = {}
 
         for index, item in enumerate(self.items):
+            profile_name = item.profile if item.profile is not None else defaults.profile
+            if profile_name is not None and profile_name not in self.profiles:
+                raise ValueError(f"`profile` references unknown profile `{profile_name}`.")
+            profile = self.profiles.get(profile_name) if profile_name is not None else None
+            setup = defaults.setup if profile is None or profile.setup is None else profile.setup
+            checks = defaults.checks if profile is None or profile.checks is None else profile.checks
+
             permissions = item.permissions or defaults.permissions
             if item.paths:
                 permissions = permissions.model_copy(update={"add_dir": [*permissions.add_dir, *item.paths]})
 
             branch = item.branch or defaults.branch_template.format(slug=item.slug, id=item.key)
+            if branch in branch_keys:
+                raise ValueError(
+                    f"`branch={branch}` is shared by `{branch_keys[branch]}` and `{item.key}`. "
+                    "Use distinct branches or a branch_template containing {id}."
+                )
+            branch_keys[branch] = item.key
             prompt = item.prompt
             if item.include_system and self.system.strip():
                 prompt = f"{self.system.strip()}\n\n---\n\n{item.prompt.strip()}"
@@ -580,6 +719,8 @@ class Plan(BaseModel):
                     labels=[label for label in dict.fromkeys([*pr_settings.labels, *item.labels]) if label.strip()],
                     draft=pr_settings.draft if item.draft is None else item.draft,
                     depends_on=list(item.depends_on),
+                    base_from=item.base_from,
+                    source=item.source,
                     env=env,
                     deps=defaults.deps,
                     remote=defaults.remote,
@@ -588,6 +729,12 @@ class Plan(BaseModel):
                     ),
                     pr_body=pr_settings.body_template.format(
                         name=display_name, slug=item.slug, prompt=item.prompt.strip()
+                    ),
+                    profile=profile_name,
+                    setup=list(setup if item.setup is None else item.setup),
+                    checks=list(checks if item.checks is None else item.checks),
+                    timeout_seconds=(
+                        defaults.timeout_seconds if item.timeout_seconds is None else item.timeout_seconds
                     ),
                 )
             )

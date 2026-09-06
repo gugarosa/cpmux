@@ -1,12 +1,14 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
+import fcntl
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 from cpmux.logging import get_logger
+from cpmux.process import inherited_fds
 
 logger = get_logger(__name__)
 
@@ -38,7 +40,16 @@ def run_git(
     """
 
     try:
-        proc = subprocess.run(["git", *args], cwd=str(cwd), env=env, capture_output=True, text=True)
+        proc = subprocess.run(
+            ["git", *args],
+            cwd=str(cwd),
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="surrogateescape",
+            pass_fds=inherited_fds(),
+        )
     except FileNotFoundError as exc:
         raise GitError("`git` was not found on PATH; install git.") from exc
 
@@ -121,6 +132,38 @@ def add_worktree(root: str | Path, worktree: str | Path, branch: str, base_sha: 
 
     Path(worktree).parent.mkdir(parents=True, exist_ok=True)
     run_git(["worktree", "add", "-b", branch, str(worktree), base_sha], cwd=root)
+
+
+def ignore_runtime_state(root: str | Path) -> None:
+    """Keep local orchestration records out of Git without editing tracked files.
+
+    Args:
+        root: Repository whose local exclude file should protect runtime state.
+
+    Raises:
+        GitError: Git metadata cannot be located.
+        OSError: The local exclude file cannot be updated.
+
+    """
+
+    ignored = run_git(["check-ignore", "--quiet", ".cpmux/"], cwd=root, check=False)
+    if ignored.returncode == 0:
+        return
+    if ignored.returncode != 1:
+        raise GitError(f"`git check-ignore` failed: {ignored.stderr.strip().removesuffix('.')}.")
+    exclude = Path(run_git(["rev-parse", "--git-path", "info/exclude"], cwd=root).stdout.strip())
+    if not exclude.is_absolute():
+        exclude = Path(root) / exclude
+    exclude.parent.mkdir(parents=True, exist_ok=True)
+    with exclude.open("a+", encoding="utf-8") as handle:
+        fcntl.flock(handle, fcntl.LOCK_EX)
+        try:
+            handle.seek(0)
+            text = handle.read()
+            if "/.cpmux/" not in text.splitlines():
+                handle.write(("" if not text or text.endswith("\n") else "\n") + "/.cpmux/\n")
+        finally:
+            fcntl.flock(handle, fcntl.LOCK_UN)
 
 
 def require_paths_exist(worktree: str | Path, paths: list[str]) -> None:
@@ -212,6 +255,59 @@ def has_changes(worktree: str | Path, base_sha: str) -> bool:
     return ahead not in ("", "0")
 
 
+def head_commit(worktree: str | Path) -> str:
+    """Read the worktree's exact current commit.
+
+    Args:
+        worktree: Git worktree to inspect.
+
+    Returns:
+        Full commit object identifier.
+
+    Raises:
+        GitError: The worktree has no readable HEAD.
+
+    """
+
+    return run_git(["rev-parse", "--verify", "HEAD"], cwd=worktree).stdout.strip()
+
+
+def commit_tree(worktree: str | Path, commit: str) -> str:
+    """Read the tree belonging to a recorded commit.
+
+    Args:
+        worktree: Repository containing the commit.
+        commit: Commit object identifier.
+
+    Returns:
+        Full tree object identifier.
+
+    Raises:
+        GitError: The commit cannot be resolved.
+
+    """
+
+    return run_git(["rev-parse", "--verify", f"{commit}^{{tree}}"], cwd=worktree).stdout.strip()
+
+
+def require_clean_revision(worktree: str | Path, commit: str) -> None:
+    """Require HEAD and all non-ignored files to match a recorded candidate.
+
+    Args:
+        worktree: Worktree to inspect.
+        commit: Expected candidate commit.
+
+    Raises:
+        GitError: HEAD moved or tracked/untracked source changed.
+
+    """
+
+    if head_commit(worktree) != commit:
+        raise GitError(f"`{worktree}` HEAD changed after the candidate was recorded. Verify the new revision.")
+    if run_git(["status", "--porcelain", "--untracked-files=all"], cwd=worktree).stdout.strip():
+        raise GitError(f"`{worktree}` has changes after verification began. Commit and verify the new revision.")
+
+
 def provision_deps(root: str | Path, worktree: str | Path, strategy: str) -> None:
     """Provision worktree dependencies.
 
@@ -241,16 +337,32 @@ def provision_deps(root: str | Path, worktree: str | Path, strategy: str) -> Non
         logger.warning(f"`deps={strategy}` could not seed `node_modules`: {str(exc).removesuffix('.')}.")
 
 
-def _install_deps(worktree: str | Path) -> None:
+def dependency_install_command(worktree: str | Path) -> list[str] | None:
+    """Select the existing Node lockfile's reproducible install command.
+
+    Args:
+        worktree: Directory containing a supported package-manager lockfile.
+
+    Returns:
+        Install arguments, or None when no supported lockfile exists.
+
+    """
+
     worktree_path = Path(worktree)
 
     if (worktree_path / "pnpm-lock.yaml").exists():
-        cmd = ["pnpm", "install", "--frozen-lockfile"]
-    elif (worktree_path / "package-lock.json").exists():
-        cmd = ["npm", "ci"]
-    elif (worktree_path / "yarn.lock").exists():
-        cmd = ["yarn", "install", "--frozen-lockfile"]
-    else:
+        return ["pnpm", "install", "--frozen-lockfile"]
+    if (worktree_path / "package-lock.json").exists():
+        return ["npm", "ci"]
+    if (worktree_path / "yarn.lock").exists():
+        return ["yarn", "install", "--frozen-lockfile"]
+    return None
+
+
+def _install_deps(worktree: str | Path) -> None:
+    worktree_path = Path(worktree)
+    cmd = dependency_install_command(worktree)
+    if cmd is None:
         return
 
     if shutil.which(cmd[0]) is None:

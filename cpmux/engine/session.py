@@ -2,13 +2,16 @@
 # Licensed under the MIT license.
 
 import asyncio
+import math
 import os
 import signal
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
 from cpmux.events import SessionState, Status, apply_event, parse_line
+from cpmux.process import cancel, complete, inherited_fds
 
 OnUpdate = Callable[[str, SessionState, dict[str, Any]], None]
 OnSpawn = Callable[[int], None]
@@ -54,7 +57,14 @@ class SessionRunner:
         self.proc: asyncio.subprocess.Process | None = None
         self._stderr = ""
 
-    async def run(self, on_update: OnUpdate | None = None, on_spawn: OnSpawn | None = None) -> SessionState:
+    async def run(
+        self,
+        on_update: OnUpdate | None = None,
+        on_spawn: OnSpawn | None = None,
+        *,
+        timeout_seconds: float | None = None,
+        stop_requested: Callable[[], bool] | None = None,
+    ) -> SessionState:
         """Append subprocess output to the transcript and update the live state.
 
         Own the spawned process group until it exits or is reaped on cancellation
@@ -64,6 +74,8 @@ class SessionRunner:
         Args:
             on_update: Synchronous callback after each decoded event updates the state.
             on_spawn: Synchronous callback receiving the child PID before output is read.
+            timeout_seconds: Optional wall-time limit for this child execution.
+            stop_requested: Optional owner-controlled cancellation predicate.
 
         Returns:
             The mutated state after subprocess exit, including its diagnostic error.
@@ -74,6 +86,41 @@ class SessionRunner:
 
         """
 
+        if timeout_seconds is None and stop_requested is None:
+            return await self._stream(on_update, on_spawn)
+        if timeout_seconds is not None and (not math.isfinite(timeout_seconds) or timeout_seconds <= 0):
+            raise ValueError("`timeout_seconds` must be positive.")
+        if stop_requested is not None and stop_requested():
+            self.state.status = Status.KILLED
+            self.state.error = f"`session={self.key}` was stopped before execution."
+            return self.state
+
+        deadline = time.monotonic() + timeout_seconds if timeout_seconds is not None else None
+        task = asyncio.create_task(self._stream(on_update, on_spawn))
+        stopped: Status | None = None
+        try:
+            while not task.done():
+                if stop_requested is not None and stop_requested():
+                    stopped = Status.KILLED
+                    break
+                if deadline is not None and time.monotonic() >= deadline:
+                    stopped = Status.TIMED_OUT
+                    break
+                await asyncio.wait({task}, timeout=0.1)
+            if stopped is None:
+                return await task
+        finally:
+            await cancel(task)
+
+        self.state.status = stopped
+        self.state.error = (
+            f"`session={self.key}` exceeded its execution timeout."
+            if stopped == Status.TIMED_OUT
+            else f"`session={self.key}` was stopped by its owner."
+        )
+        return self.state
+
+    async def _stream(self, on_update: OnUpdate | None, on_spawn: OnSpawn | None) -> SessionState:
         self.transcript_path.parent.mkdir(parents=True, exist_ok=True)
 
         try:
@@ -84,6 +131,7 @@ class SessionRunner:
                 start_new_session=True,
                 env={**os.environ, **self.env} if self.env else None,
                 limit=_STREAM_LIMIT,
+                pass_fds=inherited_fds(),
             )
         except (OSError, ValueError) as exc:
             self.state.status = Status.FAILED
@@ -138,14 +186,10 @@ class SessionRunner:
             raise
         finally:
             if not completed:
-                self._signal(signal.SIGTERM)
-                cleanup = asyncio.gather(_drain(stdout), stderr_task, self.proc.wait())
                 try:
-                    await asyncio.wait_for(asyncio.shield(cleanup), 3.0)
-                except TimeoutError:
-                    self._signal(signal.SIGKILL)
-                    await cleanup
-                self.state.exit_code = self.proc.returncode
+                    await complete(asyncio.create_task(self._reap(stdout, stderr_task)))
+                finally:
+                    self.state.exit_code = self.proc.returncode
 
         if return_code != 0 or self.state.exit_code is None:
             self.state.exit_code = return_code
@@ -156,6 +200,18 @@ class SessionRunner:
             self.state.error = self._stderr.strip()[-500:] or f"exit code {self.state.exit_code}."
 
         return self.state
+
+    async def _reap(self, stdout: asyncio.StreamReader, stderr_task: asyncio.Task[str]) -> None:
+        process = self.proc
+        if process is None:
+            raise RuntimeError("`session` has no process to clean up.")
+        self._signal(signal.SIGTERM)
+        drained = asyncio.gather(_drain(stdout), stderr_task, process.wait())
+        try:
+            await asyncio.wait_for(asyncio.shield(drained), 3.0)
+        except TimeoutError:
+            self._signal(signal.SIGKILL)
+            await drained
 
     def _signal(self, signum: int) -> None:
         if self.proc is not None:

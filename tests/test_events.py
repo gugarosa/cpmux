@@ -3,6 +3,7 @@
 
 import pytest
 
+from cpmux import events
 from cpmux.events import (
     ACTIVE,
     TERMINAL,
@@ -123,3 +124,21 @@ def test_event_data_returns_bare_event_identity():
 def test_status_classifies_every_started_stage():
     assert ACTIVE | TERMINAL == set(Status) - {Status.PENDING}
     assert not ACTIVE & TERMINAL
+
+
+@pytest.mark.parametrize("premium", [0, 0.25, 2])
+def test_apply_event_preserves_valid_fractional_usage(premium):
+    state = apply_event(SessionState(), {"type": "result", "exitCode": 0, "usage": {"premiumRequests": premium}})
+    assert state.premium_requests == premium
+
+
+@pytest.mark.parametrize("premium", ["3", True, -1, float("nan"), float("inf"), {}])
+def test_apply_event_reports_invalid_usage_as_unknown(premium, caplog):
+    events.logger.addHandler(caplog.handler)
+    try:
+        state = apply_event(SessionState(), {"type": "result", "exitCode": 0, "usage": {"premiumRequests": premium}})
+    finally:
+        events.logger.removeHandler(caplog.handler)
+    assert state.premium_requests is None
+    assert "usage remains unknown" in caplog.text
+    assert all(record.levelname == "WARNING" for record in caplog.records)

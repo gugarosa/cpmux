@@ -45,3 +45,24 @@ jobs:
           uv run --no-project --with "$wheel" python -c \
             "from importlib.metadata import version; import cpmux; assert cpmux.__version__ == version('cpmux')"
           uv run --no-project --with "$wheel" cpmux --help
+
+  test-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked --extra dev
+      - run: uv run pytest -q
+
+  minimum-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v10.0.1
+        with:
+          python-version: "3.12"
+      - run: uv venv --python 3.12
+      - run: uv pip install --upgrade --resolution lowest-direct --requirements pyproject.toml --extra dev --editable .
+      - run: uv run --no-sync pytest -q

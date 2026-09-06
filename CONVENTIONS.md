@@ -11,7 +11,9 @@ For user-facing setup and usage see `README.md`.
 These invariants keep cpmux composable; do not violate them.
 
 - **One worktree per item.** Every item runs in its own `git worktree` on a unique
-  `cpmux/<slug>` branch off `origin/<base>`. Items never share a working tree.
+  `cpmux/<slug>` branch off `origin/<base>`, or an explicit `base_from` predecessor's
+  recorded successful commit. Items never share a working tree. `depends_on` alone
+  does not inherit code; a failed parent blocks its children.
 - **The orchestrator owns delivery by default.** The default edit preset denies
   `git push`; explicit `full`/`yolo` permissions retain their documented broader access.
   The orchestrator finalizes initial run items using their PR settings, or commits locally
@@ -24,13 +26,27 @@ These invariants keep cpmux composable; do not violate them.
   resume, and recovery.
 - **cpmux owns only `.cpmux/`.** copilot keeps its own transcripts and resumable
   session store under `~/.copilot`; reuse it read-only rather than duplicating it.
-- **A run has one owner.** Its pid is recorded in `owner.json`: the foreground `up`
-  process, or the detached daemon. A live owner means the run is managed. A stale
-  owner (present but dead) marks a crash, so non-terminal sessions reconcile to a terminal
-  state instead of remaining "running" indefinitely.
+- **A run has one writer.** A run-wide lease excludes competing mutations. Idle-run
+  session operations hold a shared run lease and an exclusive per-session lease.
+  `owner.json` records PID plus creation time so stale PIDs are never sufficient
+  authority to signal a process. Cancellation requests do not overwrite live owner state.
+  Owned subprocesses inherit lease descriptors, so a crashed controller cannot release
+  a still-running Git operation's lock. Close descriptors rather than explicitly unlocking
+  inherited file descriptions; preserve `pass_fds` in subprocess adapters.
+- **Delivery is source-bound.** Explicit setup commands precede agent execution.
+  Required checks run against a committed, clean candidate; changing HEAD or source
+  invalidates their receipt. Delivery pushes that exact candidate, never a later HEAD.
+- **Recovery is explicit.** Reconnect only monitors. Stage-aware retry preserves
+  successful agent work; native resume and a fresh conversation are deliberate modes.
+  Attempts and accumulated usage survive every mode, and no recovery resets Git edits.
+- **Feedback targets a revision.** Compare the reviewed diff token under the session
+  lease before starting repair. Follow-ups do not silently push changes.
+- **Budgets are soft admission controls.** Report missing usage instead of inventing
+  zero cost. In-flight work can exceed a ceiling; pausing affects only queued admission.
 - **Config precedence is `item > defaults > built-in`.** Resolution is centralized in
   `Plan.resolve()`, which validation also exercises before accepting a plan; downstream code
-  consumes `ResolvedItem`, never re-merges.
+  consumes `ResolvedItem`, never re-merges. Setup/check configuration resolves as
+  `item > selected profile > run defaults`, with explicit empty lists respected.
 
 ## Package structure
 
@@ -38,9 +54,10 @@ Modules are grouped by domain. Shared foundation modules stay at the package roo
 
 ```
 cpmux/
-  config.py  events.py  logging.py  theme.py   foundation and shared presentation primitives
-  engine/    supervisor session daemon store interact   run lifecycle + state
-  vcs/       git pr                       git worktrees + PR automation
+  config.py  events.py  logging.py  process.py  theme.py   foundation and presentation primitives
+  engine/    supervisor session daemon store ownership   run lifecycle + state
+             commands delivery interact review reporting intake   execution + operations
+  vcs/       git pr issues                Git worktrees + GitHub adapters
   voice/     recorder transcriber synthesizer   speech → transcript → cpmux plan
   ui/        cli dashboard search render  Typer commands, TUI, transcript rendering
 ```
@@ -72,11 +89,15 @@ Repo-local and gitignored. cpmux stores orchestration bookkeeping here; nothing 
 .cpmux/
   runs/<run_id>/
     manifest.json                 resolved run config
+    owner.json / owner.lock       identity metadata and stable-inode run lease
+    paused / stop / ready         owner-consumed control and startup markers
     sessions/<key>/
       prompt.md                   the exact prompt sent to copilot
       transcript.jsonl            raw tee of copilot --output-format json
       session.json                per-session record (status, branch, PR...)
       copilot-logs/               copilot's own --log-dir
+      owner.json / session.lock   idle-run operation ownership
+      attempts/<number>/          local setup/check outputs and verification artifacts
   worktrees/<run_id>/<key>/       one git worktree per item
 ```
 
@@ -162,18 +183,26 @@ black + isort (`profile = black`) + flake8, all at line-length 120, wired throug
 The release version lives in `cpmux/__init__.py`. Hatch reads it for wheel and source
 distribution metadata, and uv watches that file to invalidate cached build metadata.
 Update that value and regenerate `uv.lock` when changing versions.
+Typer owns command parsing. Click is retained for its editor and ANSI utilities,
+which current Typer does not export; translate editor failures at that adapter boundary.
+The Typer floor supports union annotations and current Click versions, and PyYAML
+starts at a version installable on Python 3.12. CI also exercises lowest direct
+dependency resolution rather than treating the development lock as a compatibility claim.
 
 ```bash
 isort cpmux tests && black cpmux tests && flake8 cpmux tests
 pytest
 ```
 
-## Status and roadmap
+## Current capabilities and boundaries
 
-- **Current:** foreground and detached (`--detach`) runs; `ls`/`attach` live monitor; an
-  interactive Textual `dash` (session list + live transcript + `/` search + `e` to drop into a
-  native `copilot --resume`); `enter`/`send` interaction; cross-session `search` (with `--fts`
-  over copilot's own index); `logs --follow`; `down`/`kill`/`rm`; per-item dev-server ports
-  (`port_base`); `depends_on` ordering; voice/text/audio plan composition; crash reconciliation
-  via the run owner.
-- **Remaining:** ACP transport for live permission prompts; optional remote `/delegate` mode.
+- **Current:** foreground and detached (`--detach`) runs; `ls`/`attach`/`wait` monitoring;
+  attention-first Textual `dash`; `enter`/`send` and revision-bound feedback;
+  explicit verification/finalization; selective retry, pause and soft usage admission;
+  cross-session `search` (with `--fts` over Copilot's own index); `logs --follow`;
+  `down`/`kill`/`rm`; per-item dev-server ports (`port_base`); `depends_on` ordering and
+  explicit single-parent `base_from` stacks; voice/text/audio composition and read-only
+  GitHub issue plan intake; identity-checked crash reconciliation.
+- **Not implemented:** ACP/live permission prompting, remote `/delegate` execution,
+  automatic multi-parent merges/rebases, hard monetary spending caps, or hermetic
+  execution. Native Copilot owns its conversation store; cpmux does not duplicate it.
