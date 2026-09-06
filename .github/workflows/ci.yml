@@ -38,9 +38,18 @@ jobs:
           python-version: "3.12"
       - run: uv build
       - run: uvx twine check dist/*
+      - uses: actions/upload-artifact@v7.0.1
+        with:
+          name: package-dist
+          path: dist/
+          retention-days: 1
+      - uses: actions/download-artifact@v8.0.1
+        with:
+          name: package-dist
+          path: dist-download/
       - name: Smoke-test the installed wheel outside the checkout
         run: |
-          wheel="$(realpath dist/*.whl)"
+          wheel="$(realpath dist-download/*.whl)"
           cd "$(mktemp -d)"
           uv run --no-project --with "$wheel" python -c \
             "from importlib.metadata import version; import cpmux; assert cpmux.__version__ == version('cpmux')"
