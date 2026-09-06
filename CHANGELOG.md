@@ -6,6 +6,11 @@ All notable changes to cpmux are documented here. The format follows
 
 ## [Unreleased]
 
+### Maintenance
+
+- Move artifact upload/download actions to maintained Node 24 runtimes, and
+  exercise the same transfer path before CI's clean-wheel installation smoke test.
+
 ## [0.2.0] - 2026-09-06
 
 ### Added
