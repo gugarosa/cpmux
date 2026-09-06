@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from cpmux.config import (
+    CommandSpec,
     ConfigError,
     Plan,
     Preset,
@@ -496,3 +497,93 @@ def test_load_plan_formats_failures_with_one_final_period(tmp_path, contents):
     assert message.startswith(f"`{path}`")
     assert message.endswith(".")
     assert not message.endswith("..")
+
+
+def test_resolve_applies_profile_and_item_command_precedence():
+    plan = Plan.model_validate(
+        {
+            "profiles": {"python": {"setup": ["uv sync"], "checks": ["uv run pytest"]}},
+            "defaults": {"profile": "python", "setup": ["default setup"], "timeout_seconds": 60},
+            "items": [
+                {"id": "a", "prompt": "x"},
+                {"id": "b", "prompt": "y", "checks": [], "timeout_seconds": 10},
+            ],
+        }
+    )
+    first, second = plan.resolve()
+
+    assert first.profile == "python"
+    assert first.setup[0].command == "uv sync"
+    assert first.checks[0].command == "uv run pytest"
+    assert first.timeout_seconds == 60
+    assert second.setup == first.setup
+    assert second.checks == []
+    assert second.timeout_seconds == 10
+
+
+def test_resolve_profile_omissions_inherit_run_defaults():
+    plan = Plan.model_validate(
+        {
+            "profiles": {"python": {"setup": ["uv sync"]}},
+            "defaults": {"profile": "python", "checks": ["uv run pytest"]},
+            "items": ["x"],
+        }
+    )
+    assert plan.resolve()[0].checks[0].command == "uv run pytest"
+
+
+def test_plan_rejects_unknown_execution_profiles():
+    with pytest.raises(ValidationError, match="unknown profile"):
+        Plan.model_validate({"defaults": {"profile": "missing"}, "items": ["x"]})
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"command": " "},
+        {"command": "x\0y"},
+        {"command": "pytest", "timeout_seconds": 0},
+        {"command": "pytest", "timeout_seconds": float("inf")},
+    ],
+)
+def test_command_spec_rejects_invalid_execution_contracts(data):
+    with pytest.raises(ValidationError):
+        CommandSpec.model_validate(data)
+
+
+def test_interpolate_env_preserves_escaped_references_without_recursive_expansion(monkeypatch):
+    monkeypatch.setenv("CPMUX_SECRET", "secret")
+    monkeypatch.setenv("CPMUX_INDIRECT", "${CPMUX_SECRET}")
+
+    assert interpolate_env("$${CPMUX_SECRET} $${MISSING:-fallback}") == "${CPMUX_SECRET} ${MISSING:-fallback}"
+    assert interpolate_env("${CPMUX_INDIRECT}") == "${CPMUX_SECRET}"
+
+
+def test_plan_base_from_is_an_explicit_ordering_edge_without_changing_depends_on():
+    resolved = Plan.model_validate(
+        {"items": [{"id": "a", "prompt": "foundation"}, {"id": "b", "prompt": "extension", "base_from": "a"}]}
+    ).resolve()
+
+    assert resolved[1].base_from == "a"
+    assert resolved[1].depends_on == []
+
+
+@pytest.mark.parametrize(
+    "items",
+    [
+        [{"id": "a", "prompt": "x", "base_from": "missing"}],
+        [{"id": "a", "prompt": "x", "base_from": "a"}],
+        [{"id": "a", "prompt": "x", "base_from": "b"}, {"id": "b", "prompt": "y", "depends_on": ["a"]}],
+        [{"id": "a", "prompt": "x"}, {"id": "b", "prompt": "y", "base_from": "a", "base": "main"}],
+    ],
+)
+def test_plan_rejects_ambiguous_or_cyclic_base_inheritance(items):
+    with pytest.raises(ValidationError):
+        Plan.model_validate({"items": items})
+
+
+def test_plan_rejects_branch_collisions_before_worktree_creation():
+    with pytest.raises(ValidationError, match="shared by"):
+        Plan.model_validate(
+            {"items": [{"id": "a", "name": "same", "prompt": "x"}, {"id": "b", "name": "same", "prompt": "y"}]}
+        )

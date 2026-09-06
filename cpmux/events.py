@@ -2,9 +2,14 @@
 # Licensed under the MIT license.
 
 import json
+import math
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
+
+from cpmux.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 class Status(StrEnum):
@@ -12,20 +17,34 @@ class Status(StrEnum):
 
     PENDING = "pending"
     STARTING = "starting"
+    SETTING_UP = "setting_up"
     RUNNING = "running"
     TOOL = "tool"
     IDLE = "idle"
     FINALIZING = "finalizing"
+    VERIFYING = "verifying"
     OPENING_PR = "opening_pr"
     DONE = "done"
     NO_CHANGES = "no_changes"
     FAILED = "failed"
     TIMED_OUT = "timed_out"
     KILLED = "killed"
+    BLOCKED = "blocked"
 
 
-ACTIVE = frozenset({Status.STARTING, Status.RUNNING, Status.TOOL, Status.IDLE, Status.FINALIZING, Status.OPENING_PR})
-TERMINAL = frozenset({Status.DONE, Status.NO_CHANGES, Status.FAILED, Status.TIMED_OUT, Status.KILLED})
+ACTIVE = frozenset(
+    {
+        Status.STARTING,
+        Status.SETTING_UP,
+        Status.RUNNING,
+        Status.TOOL,
+        Status.IDLE,
+        Status.FINALIZING,
+        Status.VERIFYING,
+        Status.OPENING_PR,
+    }
+)
+TERMINAL = frozenset({Status.DONE, Status.NO_CHANGES, Status.FAILED, Status.TIMED_OUT, Status.KILLED, Status.BLOCKED})
 SUCCESS = frozenset({Status.DONE, Status.NO_CHANGES})
 TERMINAL_FAILURE = TERMINAL - SUCCESS
 
@@ -80,7 +99,7 @@ class SessionState:
     tool_count: int = 0
     exit_code: int | None = None
     session_id: str | None = None
-    premium_requests: int | None = None
+    premium_requests: int | float | None = None
     files_modified: list[str] = field(default_factory=list)
     error: str | None = None
 
@@ -139,7 +158,17 @@ def apply_event(state: SessionState, event: dict[str, Any]) -> SessionState:
 
         usage = event.get("usage") if isinstance(event.get("usage"), dict) else {}
         if "premiumRequests" in usage:
-            state.premium_requests = usage.get("premiumRequests")
+            premium = usage["premiumRequests"]
+            if (
+                isinstance(premium, (int, float))
+                and not isinstance(premium, bool)
+                and (isinstance(premium, int) or math.isfinite(premium))
+                and premium >= 0
+            ):
+                state.premium_requests = premium
+            else:
+                state.premium_requests = None
+                logger.warning("`premiumRequests` is not a finite nonnegative number; usage remains unknown.")
 
         changes = usage.get("codeChanges") if isinstance(usage.get("codeChanges"), dict) else {}
         files = changes.get("filesModified")

@@ -4,15 +4,17 @@
 import json
 from importlib.metadata import version
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from click import unstyle
 from typer.testing import CliRunner
 
-from cpmux.config import load_plan
+from cpmux.config import Plan, ResolvedItem, load_plan
 from cpmux.engine.copilot_store import CopilotStoreUnavailable
 from cpmux.engine.store import RunManifest, RunPaths, SessionRecord
-from cpmux.events import Status
+from cpmux.engine.supervisor import Options, Supervisor
+from cpmux.events import SessionState, Status
 from cpmux.ui import cli
 from cpmux.ui.cli import app
 
@@ -189,6 +191,20 @@ def test_plan_empty_editor_exits_one(tmp_path, monkeypatch):
     assert "`plan` text is None or blank." in result.output
 
 
+def test_plan_editor_failure_is_reported_without_a_framework_traceback(tmp_path, monkeypatch):
+    def fail_editor(**kwargs):
+        raise cli.click.ClickException("editor could not start")
+
+    monkeypatch.setattr(cli.click, "edit", fail_editor)
+    output = tmp_path / "plan.yml"
+
+    result = runner.invoke(app, ["plan", str(output)])
+
+    assert result.exit_code == 1
+    assert "editor could not start" in unstyle(result.output)
+    assert not output.exists()
+
+
 def test_plan_voice_records_instead_of_editor(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "record_and_transcribe", lambda *args, **kwargs: "spoken plan")
     monkeypatch.setattr(cli, "synthesize_plan", lambda transcript, model: f"items:\n  - {transcript}\n")
@@ -236,7 +252,8 @@ def test_search_fts_reports_store_unavailable(tmp_path, monkeypatch):
     assert result.exit_code == 1
 
 
-def test_rm_exits_nonzero_when_a_worktree_cannot_be_removed(monkeypatch):
+def test_rm_exits_nonzero_when_a_worktree_cannot_be_removed(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
     record = SessionRecord(
         key="alpha",
         name="alpha",
@@ -258,7 +275,8 @@ def test_rm_exits_nonzero_when_a_worktree_cannot_be_removed(monkeypatch):
     assert result.exit_code == 1
 
 
-def test_rm_refuses_active_run(monkeypatch):
+def test_rm_refuses_active_run(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(cli, "_run_id_or_exit", lambda run, *a: "run1")
     monkeypatch.setattr(cli.daemon, "owner_alive", lambda paths: True)
 
@@ -333,7 +351,8 @@ def test_search_groups_and_counts_matches(tmp_path, monkeypatch):
     assert "match(es) in 1 session(s)" in result.output
 
 
-def test_rm_purge_deletes_run_history(monkeypatch):
+def test_rm_purge_deletes_run_history(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
     record = SessionRecord(
         key="alpha",
         name="alpha",
@@ -424,3 +443,191 @@ def test_session_commands_reject_escaping_keys(tmp_path, monkeypatch, command):
 
     assert result.exit_code == 1
     assert "`key` must be a normalized relative identifier" in result.output
+
+
+def _terminal_run(tmp_path, status=Status.DONE):
+    paths = RunPaths(tmp_path, "run1")
+    paths.write_manifest(RunManifest(run_id="run1", repo_root=str(tmp_path), config_path="", item_keys=["a"]))
+    paths.write_record(
+        SessionRecord(
+            key="a",
+            name="a",
+            slug="a",
+            branch="cpmux/a",
+            base="main",
+            model="m",
+            session_id="sid",
+            worktree=str(tmp_path),
+            status=status,
+        )
+    )
+    return paths
+
+
+@pytest.mark.parametrize(("status", "code"), [(Status.DONE, 0), (Status.FAILED, 1), (Status.PENDING, 2)])
+def test_wait_reports_terminal_or_unowned_outcomes(tmp_path, monkeypatch, status, code):
+    _terminal_run(tmp_path, status)
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(app, ["wait", "--json"])
+
+    assert result.exit_code == code
+    assert json.loads(result.stdout)["items"][0]["status"] == status.value
+
+
+def test_wait_times_out_without_stopping_active_work(tmp_path, monkeypatch):
+    paths = _terminal_run(tmp_path, Status.RUNNING)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli.daemon, "reconcile", lambda paths, records: records)
+    monkeypatch.setattr(cli.daemon, "owner_alive", lambda paths: True)
+
+    result = runner.invoke(app, ["wait", "--timeout", "0"])
+
+    assert result.exit_code == 124
+    assert "work continues" in unstyle(result.output)
+    assert not paths.stop_file().exists()
+    assert paths.read_record("a").status == Status.RUNNING
+
+
+def test_pause_and_unpause_only_change_queue_admission(tmp_path, monkeypatch):
+    paths = _terminal_run(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    before = paths.record_file("a").read_bytes()
+
+    assert runner.invoke(app, ["pause"]).exit_code == 0
+    assert paths.pause_file.exists()
+    assert runner.invoke(app, ["unpause"]).exit_code == 0
+    assert not paths.pause_file.exists()
+    assert paths.record_file("a").read_bytes() == before
+    assert not paths.stop_file().exists()
+
+
+def test_retry_recovers_prepared_work_with_no_paid_calls(git_repo, monkeypatch):
+    supervisor = Supervisor.create(
+        Plan.model_validate({"items": [{"id": "a", "prompt": "x"}]}), str(git_repo), Options(open_pr=False)
+    )
+    supervisor.prepare()
+    monkeypatch.chdir(git_repo)
+    monkeypatch.setattr(cli, "_require_tool", lambda *args: None)
+    monkeypatch.setattr(ResolvedItem, "spawn_argv", lambda *args: ["true"])
+
+    result = runner.invoke(app, ["retry", "--yes"])
+
+    assert result.exit_code == 0
+    assert supervisor.paths.read_record("a").status == Status.NO_CHANGES
+    assert supervisor.paths.read_record("a").attempts[-1].mode == "retry"
+
+
+def test_retry_rejects_conflicting_modes_without_writing_state(tmp_path, monkeypatch):
+    paths = _terminal_run(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    before = paths.record_file("a").read_bytes()
+
+    result = runner.invoke(app, ["retry", "a", "--resume", "--fresh", "--yes"])
+
+    assert result.exit_code == 1
+    assert "mutually exclusive" in unstyle(result.output)
+    assert paths.record_file("a").read_bytes() == before
+
+
+def test_issues_writes_an_editable_plan_without_starting_an_agent(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "_require_tool", lambda *args: None)
+    fetched = []
+    imported = [object()]
+
+    def fetch(root, references, **kwargs):
+        fetched.append((root, references, kwargs))
+        return imported
+
+    def render(issues, template, profile):
+        assert issues is imported
+        assert template is None
+        assert profile is None
+        return "items: [review imported issue]\n"
+
+    monkeypatch.setattr(cli, "fetch_issues", fetch)
+    monkeypatch.setattr(cli, "issues_plan", render)
+    monkeypatch.setattr(cli, "_launch_run", lambda *args: pytest.fail("issue intake launched an agent"))
+
+    result = runner.invoke(app, ["issues", "42", "--repo", "owner/repo", "--output", "issues.yml"])
+
+    assert result.exit_code == 0
+    assert fetched == [(".", ["42"], {"repository": "owner/repo", "query": None, "limit": 20})]
+    assert load_plan(tmp_path / "issues.yml").items[0].prompt == "review imported issue"
+    assert "no agents were started" in unstyle(result.output)
+
+
+def test_issues_does_not_overwrite_an_existing_plan_by_default(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    path = tmp_path / "cpmux.yml"
+    path.write_text("existing plan")
+    monkeypatch.setattr(cli, "fetch_issues", lambda *args, **kwargs: pytest.fail("unnecessary GitHub request"))
+
+    result = runner.invoke(app, ["issues", "42"])
+
+    assert result.exit_code == 1
+    assert path.read_text() == "existing plan"
+
+
+def test_diff_json_exposes_review_identity_without_mutation(tmp_path, monkeypatch):
+    paths = _terminal_run(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    before = paths.record_file("a").read_bytes()
+    snapshot = SimpleNamespace(revision="token", base_sha="base", head_sha="head", text="diff --git a/x b/x\n")
+    monkeypatch.setattr(cli, "diff_snapshot", lambda paths, record: snapshot)
+
+    result = runner.invoke(app, ["diff", "a", "--json"])
+
+    assert result.exit_code == 0
+    assert json.loads(result.stdout) == vars(snapshot)
+    assert paths.record_file("a").read_bytes() == before
+
+
+def test_feedback_forwards_the_required_review_revision(tmp_path, monkeypatch):
+    _terminal_run(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "_require_tool", lambda *args: None)
+    calls = []
+
+    async def repair(paths, record, message, revision, *, file_path=None, line=None):
+        calls.append((record.key, message, revision, file_path, line))
+        return SessionState(status=Status.DONE, exit_code=0, last_text="repaired")
+
+    monkeypatch.setattr(cli, "run_feedback", repair)
+    result = runner.invoke(
+        app,
+        [
+            "feedback",
+            "a",
+            "handle the boundary",
+            "--revision",
+            "review-token",
+            "--file",
+            "README.md",
+            "--line",
+            "1",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert calls == [("a", "handle the boundary", "review-token", "README.md", 1)]
+    assert "repaired" in result.output
+
+
+@pytest.mark.parametrize(("command", "operation"), [("verify", "run_verification"), ("finalize", "run_finalization")])
+def test_review_commands_surface_failed_outcomes_without_requiring_an_agent(tmp_path, monkeypatch, command, operation):
+    _terminal_run(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(cli, "_require_tool", lambda *args: pytest.fail("verification requested an agent"))
+
+    async def failed(paths, record):
+        record.status = Status.FAILED
+        record.error = "acceptance check failed."
+
+    monkeypatch.setattr(cli, operation, failed)
+
+    result = runner.invoke(app, [command, "a"])
+
+    assert result.exit_code == 1
+    assert "acceptance check failed" in unstyle(result.output)

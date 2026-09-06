@@ -1,0 +1,28 @@
+# Review and adapt these trusted commands to the target repository before running
+system: |
+  Follow the repository's conventions and preserve its public contracts.
+  Keep changes focused and make acceptance tests exercise observable behavior.
+
+profiles:
+  python:
+    setup:
+      - name: dependencies
+        command: uv sync --locked --extra dev
+        timeout_seconds: 180
+    checks:
+      - name: tests
+        command: uv run --locked pytest -q
+        timeout_seconds: 300
+
+defaults:
+  profile: python
+  concurrency: 2
+  timeout_seconds: 1800
+  premium_budget: 20
+
+items:
+  - id: pagination-api
+    prompt: Add cursor pagination to the API and cover its boundary cases.
+  - id: pagination-client
+    prompt: Update the client to use the cursor pagination API and cover iteration.
+    base_from: pagination-api

@@ -120,3 +120,31 @@ def test_resolve_base_warns_when_base_unresolved(git_repo, monkeypatch):
     assert base == "definitely-missing"
     assert len(sha) == 40
     assert warnings and "not found" in warnings[0]
+
+
+def test_ignore_runtime_state_preserves_tracked_files_and_is_idempotent(git_repo):
+    before = run_git(["status", "--porcelain"], git_repo).stdout
+    git.ignore_runtime_state(git_repo)
+    git.ignore_runtime_state(git_repo)
+    runtime = git_repo / ".cpmux"
+    runtime.mkdir()
+    (runtime / "local-secret.json").write_text("{}")
+
+    assert run_git(["status", "--porcelain"], git_repo).stdout == before
+    assert not (git_repo / ".gitignore").exists()
+    exclude = git_repo / ".git" / "info" / "exclude"
+    assert exclude.read_text().splitlines().count("/.cpmux/") == 1
+
+
+@pytest.mark.parametrize(
+    ("lockfile", "command"),
+    [
+        ("pnpm-lock.yaml", ["pnpm", "install", "--frozen-lockfile"]),
+        ("package-lock.json", ["npm", "ci"]),
+        ("yarn.lock", ["yarn", "install", "--frozen-lockfile"]),
+    ],
+)
+def test_dependency_install_command_preserves_lockfile_selection(tmp_path, lockfile, command):
+    assert git.dependency_install_command(tmp_path) is None
+    (tmp_path / lockfile).touch()
+    assert git.dependency_install_command(tmp_path) == command

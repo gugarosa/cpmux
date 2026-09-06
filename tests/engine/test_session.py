@@ -17,6 +17,43 @@ def _fake_argv(lines):
     return [sys.executable, "-c", script]
 
 
+def test_run_timeout_cleanup_survives_further_owner_cancellation(tmp_path, monkeypatch):
+    runner = SessionRunner(
+        "a",
+        [sys.executable, "-c", "import signal, time; signal.signal(signal.SIGTERM, signal.SIG_IGN); time.sleep(60)"],
+        tmp_path / "transcript.jsonl",
+    )
+
+    async def scenario():
+        cleaning = asyncio.Event()
+        original_signal = runner._signal
+
+        def signal_child(signum):
+            original_signal(signum)
+            if signum == signal.SIGTERM:
+                cleaning.set()
+
+        monkeypatch.setattr(runner, "_signal", signal_child)
+        task = asyncio.create_task(runner.run(timeout_seconds=0.2))
+        try:
+            await asyncio.wait_for(cleaning.wait(), 3)
+            task.cancel()
+            await asyncio.sleep(0.05)
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, 5)
+            assert runner.proc.returncode == -signal.SIGKILL
+            assert runner.state.exit_code == -signal.SIGKILL
+        finally:
+            if runner.proc is not None and runner.proc.returncode is None:
+                runner.proc.kill()
+                await runner.proc.wait()
+            task.cancel()
+            await asyncio.gather(task, return_exceptions=True)
+
+    asyncio.run(scenario())
+
+
 def test_run_success_reduces_state_and_writes_transcript(tmp_path):
     transcript = tmp_path / "transcript.jsonl"
     argv = _fake_argv(
@@ -248,3 +285,46 @@ def test_run_missing_executable_returns_an_actionable_failure(tmp_path):
 
     assert state.status == Status.FAILED
     assert executable in state.error
+
+
+def test_run_timeout_reaps_the_owned_child(tmp_path):
+    runner = SessionRunner("a", [sys.executable, "-c", "import time; time.sleep(60)"], tmp_path / "transcript.jsonl")
+
+    async def scenario():
+        try:
+            state = await runner.run(timeout_seconds=0.5)
+            assert state.status == Status.TIMED_OUT
+            assert runner.proc.returncode is not None
+            assert "timeout" in state.error
+        finally:
+            await _reap(runner)
+
+    asyncio.run(scenario())
+
+
+def test_run_explicit_stop_returns_killed_after_cleanup(tmp_path):
+    script = (
+        "import json, time\n"
+        "print(json.dumps({'type': 'assistant.message', 'data': {'content': 'ready'}}), flush=True)\n"
+        "time.sleep(60)"
+    )
+    runner = SessionRunner("a", [sys.executable, "-c", script], tmp_path / "transcript.jsonl")
+
+    async def scenario():
+        stop = asyncio.Event()
+        try:
+            state = await runner.run(on_update=lambda *args: stop.set(), stop_requested=stop.is_set)
+            assert state.status == Status.KILLED
+            assert runner.proc.returncode is not None
+        finally:
+            await _reap(runner)
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("timeout", [0, -1, float("inf"), float("nan")])
+def test_run_rejects_invalid_time_limits_before_spawn(tmp_path, timeout):
+    runner = SessionRunner("a", [sys.executable, "-c", "pass"], tmp_path / "transcript.jsonl")
+    with pytest.raises(ValueError, match="timeout_seconds"):
+        asyncio.run(runner.run(timeout_seconds=timeout))
+    assert runner.proc is None
