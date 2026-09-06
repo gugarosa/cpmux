@@ -6,6 +6,28 @@ All notable changes to cpmux are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Align public APIs with the Google-style docstring layout, complete constructor and
+  attribute documentation, and omit private/framework-handler docstrings.
+- Restore top-level test imports and meaningful phase separators, and normalize
+  diagnostic offenders and punctuation.
+- Reuse one terminal-glyph selection path, remove a redundant voice-forwarding wrapper,
+  and replace unnecessary test factories with explicit inputs and assertions.
+- Clarify the crash-reconciliation side effects of monitoring commands.
+- Share follow-up execution and outcome persistence between the CLI and dashboard,
+  without changing worker scheduling or concurrency policy.
+- Centralize YAML plan parsing and shared PR protocol vocabulary in configuration,
+  removing the reverse dependency from configuration into VCS.
+- Clarify public mutation, persistence, cancellation, and error contracts, and enforce
+  the existing prohibition on bare exception handlers.
+
+### Fixed
+
+- Report unreadable files and invalid YAML encodings as contextual `ConfigError` failures.
+- Reject falsey non-mapping YAML roots without misclassifying them as empty plans.
+- Include actionable field diagnostics when retrying generated plans.
+
 ## [0.1.2]
 
 ### Fixed

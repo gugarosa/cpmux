@@ -75,7 +75,7 @@ def record_and_transcribe(model: str, language: str | None = None) -> str:
     except VoiceError:
         raise
     except Exception as exc:
-        raise VoiceError(f"microphone capture failed: {exc}.") from exc
+        raise VoiceError(f"`microphone` capture failed: {str(exc).removesuffix('.')}.") from exc
     finally:
         stopped.set()
         if worker is not None:
@@ -83,16 +83,16 @@ def record_and_transcribe(model: str, language: str | None = None) -> str:
 
     data = b"".join(frames)
     if not data:
-        raise VoiceError("no audio was captured.")
+        raise VoiceError("`audio` capture returned no samples.")
 
     samples = numpy.frombuffer(data, dtype=numpy.int16).astype(numpy.float32) / 32768.0
     try:
         text = transcribe_audio(final_model, samples, language)
     except Exception as exc:
-        raise VoiceError(f"`{model}` transcription failed: {exc}.") from exc
+        raise VoiceError(f"`{model}` transcription failed: {str(exc).removesuffix('.')}.") from exc
 
     if not text:
-        raise VoiceError("transcription returned no text.")
+        raise VoiceError("`transcription` returned no text.")
 
     return text
 
@@ -131,10 +131,9 @@ class _Partial:
         self._tentative = ""
 
     def update(self, hypothesis: str) -> None:
-        """Fold in a hypothesis, committing the prefix agreed by the last two, never retracting."""
-
         words = hypothesis.split()
         with self._lock:
+            # Grow the committed portion only when consecutive hypotheses agree
             agreed = _common_word_count(self._previous, words)
             if agreed > len(self._committed):
                 self._committed = words[:agreed]
@@ -142,8 +141,6 @@ class _Partial:
             self._previous = words
 
     def snapshot(self) -> tuple[str, str]:
-        """Return the committed and tentative transcript parts."""
-
         with self._lock:
             return " ".join(self._committed), self._tentative
 
@@ -163,8 +160,6 @@ class _Level:
         self.value = 0.0
 
     def update(self, block: bytes) -> None:
-        """Update the peak level from an audio block."""
-
         samples = array("h")
         samples.frombytes(block[: len(block) - len(block) % _SAMPLE_WIDTH])
         if not samples:

@@ -12,9 +12,10 @@ These invariants keep cpmux composable; do not violate them.
 
 - **One worktree per item.** Every item runs in its own `git worktree` on a unique
   `cpmux/<slug>` branch off `origin/<base>`. Items never share a working tree.
-- **Agents are edit-only; the orchestrator ships.** Sessions run with `git push`
-  denied (`--deny-tool='shell(git push)'`). The orchestrator, never the agent,
-  commits the diff, pushes the branch, and opens exactly one draft PR per item.
+- **The orchestrator owns delivery by default.** The default edit preset denies
+  `git push`; explicit `full`/`yolo` permissions retain their documented broader access.
+  The orchestrator finalizes initial run items using their PR settings, or commits locally
+  under `--no-pr`. Follow-up turns do not automatically finalize Git changes.
 - **Monitor via JSONL, never PTY.** Session state is derived from
   `copilot --output-format json` (a JSONL event stream), tee'd to disk. Do not
   screen-scrape a terminal.
@@ -37,7 +38,7 @@ Modules are grouped by domain. Shared foundation modules stay at the package roo
 
 ```
 cpmux/
-  config.py  events.py  logging.py      foundation: config model, JSONL/status, logging
+  config.py  events.py  logging.py  theme.py   foundation and shared presentation primitives
   engine/    supervisor session daemon store interact   run lifecycle + state
   vcs/       git pr                       git worktrees + PR automation
   voice/     recorder transcriber synthesizer   speech → transcript → cpmux plan
@@ -47,15 +48,19 @@ cpmux/
 - **Layering is one-directional:** `ui` → {`engine`, `voice`} → `vcs` → foundation. A layer
   may import only the layers below it; foundation imports no subpackage. This keeps `engine`
   headless without the TUI. Shared code moves to the lowest layer that needs it
-  (status-to-colour lives in `ui/render.py`
-  because only the UI reads it; the JSONL `event_data` unwrap lives in `events.py`
-  because the engine needs it too).
+  (shared status presentation lives in `theme.py`; the JSONL `event_data` unwrap
+  lives in `events.py`; prompt/PR protocol vocabulary lives with configuration).
+- **Adapters stay thin.** CLI commands and Textual workers own input and presentation.
+  Shared follow-up execution and outcome persistence live in `engine/interact.py`;
+  YAML parsing and validation live in `config.py` for files and generated plans alike.
+  Extracting these operations does not change worker scheduling or ownership policy.
 - **A subpackage must be a cohesive domain** with a few focused modules,
   not a thin split of one concern. Heavy or optional third-party deps (`sounddevice`,
   `faster-whisper` behind the `voice` extra) are imported lazily in the function that
   needs them to keep the core install and `--help` light.
-- **Absolute imports only**, and `__init__.py` stays empty apart from the header —
-  import from the module, not the package.
+- **Absolute imports only.** Subpackage `__init__.py` files stay empty apart from the
+  header; the root initializer exposes the release version. Import behavior from its
+  defining module rather than adding package facades.
 - **Tests mirror source 1:1**, so `engine/store.py` is tested by
   `tests/engine/test_store.py`. Shared fixtures live in `tests/conftest.py`.
 
@@ -84,15 +89,21 @@ Adopted from phitrain (rule ids in parentheses).
   `typing`. ABCs (`Callable`, `Iterable`, …) come from `collections.abc`. (R2)
 - Every `.py` file starts with the two-line copyright/license header.
 - Imports are top-level and absolute (`from cpmux.x import y`). Order: stdlib →
-  third-party → local, blank-separated.
+  third-party → local, blank-separated. The deliberate feature-local imports for
+  optional audio backends and the dashboard remain lazy to preserve the light CLI.
 - Public functions, classes, and their `__init__` carry Google-style docstrings
   (single-sentence summary; one-line `Args:`/`Returns:`/`Raises:` entries). A regular
   class keeps a one-line class summary and documents its constructor `Args:` on
   `__init__`. Private helpers (`_name`) and framework-dispatched overrides (Textual
-  `compose`/`on_<event>`/lifecycle hooks) carry none. No semicolons or
+  `compose`/`on_<event>`/`action_<name>`/lifecycle hooks) carry none. Methods of
+  private helper classes follow the private-helper rule. No semicolons or
   `defaults to <X>` tails in entries. (R3, R13)
-- A docstring keeps one blank line before its closing `"""`, and one blank line
-  after the closing `"""` before the first statement or field.
+- A multiline docstring keeps one blank line before its closing `"""`. Every
+  docstring keeps one blank line after its closing `"""` before the first statement
+  or field. Summary-only class, property, and CLI-command docstrings stay on one
+  line, following the existing Black formatting and single-summary convention.
+- Public I/O contracts explain mutation, persistence, resource ownership, cancellation,
+  and whether failures are raised or returned. Do not merely repeat annotated signatures.
 - Data classes (Pydantic models and `@dataclass`, which have no explicit `__init__`)
   document every field in an `Attributes:` section, one line per field
   (`name: what it holds.`).
@@ -123,10 +134,11 @@ Pydantic `BaseModel`s. Everything else follows phitrain.
 - Multi-word options use `--kebab-case` (e.g. `--dry-run`, `--transcribe-model`,
   `--no-pr`); single-letter shortcuts are unique within a command.
 - Validate inputs with `if/raise <SpecificError>`; surface operational failures with
-  `logger.error(...)` followed by `raise typer.Exit(1)`, with no hand-rolled `"Error:"`
-  prefix, no `typer.echo(..., err=True)`.
+  `theme.print_error(...)` followed by `raise typer.Exit(1)`, with no hand-rolled `"Error:"`
+  prefix or `typer.echo(..., err=True)`. Library diagnostics continue to use logging.
 - Presentation (status tables, transcripts) uses Rich; raw machine output uses
-  `typer.echo`. Each `command()` carries a single-sentence docstring for `--help`.
+  `typer.echo`. Each `command()` carries a single-sentence docstring for `--help`;
+  Typer's argument and option declarations document its command-line parameters.
 - Short-lived subprocesses use `subprocess.run(..., capture_output=True, text=True,
   check=False)`; streaming/long-running children use `asyncio` subprocesses.
 

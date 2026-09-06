@@ -36,7 +36,7 @@ def load_model(model: str) -> "WhisperModel":
     try:
         return WhisperModel(model, device="cpu", compute_type="int8")
     except Exception as exc:
-        raise VoiceError(f"`{model}` model could not be loaded: {exc}.") from exc
+        raise VoiceError(f"`{model}` model could not be loaded: {str(exc).removesuffix('.')}.") from exc
 
 
 def transcribe_audio(whisper: "WhisperModel", audio: object, language: str | None = None) -> str:
@@ -86,9 +86,9 @@ def transcribe(audio_path: str | Path, model: str = DEFAULT_TRANSCRIBE_MODEL, la
     try:
         text = transcribe_audio(whisper, str(audio_path), language)
     except Exception as exc:
-        raise VoiceError(f"`{model}` transcription failed: {exc}.") from exc
+        raise VoiceError(f"`{model}` transcription failed: {str(exc).removesuffix('.')}.") from exc
 
     if not text:
-        raise VoiceError("transcription returned no text.")
+        raise VoiceError("`transcription` returned no text.")
 
     return text

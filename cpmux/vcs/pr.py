@@ -5,7 +5,7 @@ import os
 import subprocess
 from pathlib import Path
 
-PR_DRAFT_FILENAME = ".cpmux-pr.md"
+from cpmux.config import PR_DRAFT_FILENAME
 
 
 class PRError(Exception):
@@ -58,17 +58,17 @@ def commit_all(worktree: str | Path, message: str, env: dict[str, str]) -> bool:
 
     proc = _run(["git", "add", "-A"], worktree, env)
     if proc.returncode != 0:
-        raise PRError(f"`git add` failed: {proc.stderr.strip()}.")
+        raise PRError(f"`git add` failed: {proc.stderr.strip().removesuffix('.')}.")
 
     proc = _run(["git", "diff", "--cached", "--quiet"], worktree, env)
     if proc.returncode == 0:
         return False
     if proc.returncode != 1:
-        raise PRError(f"`git diff --cached` failed: {proc.stderr.strip()}.")
+        raise PRError(f"`git diff --cached` failed: {proc.stderr.strip().removesuffix('.')}.")
 
     proc = _run(["git", "commit", "-m", message], worktree, env)
     if proc.returncode != 0:
-        raise PRError(f"`git commit` failed: {proc.stderr.strip()}.")
+        raise PRError(f"`git commit` failed: {proc.stderr.strip().removesuffix('.')}.")
 
     return True
 
@@ -89,7 +89,7 @@ def push_branch(worktree: str | Path, remote: str, branch: str, env: dict[str, s
 
     proc = _run(["git", "push", "-u", remote, f"HEAD:refs/heads/{branch}"], worktree, env)
     if proc.returncode != 0:
-        raise PRError(f"`git push` of `{branch}` to `{remote}` failed: {proc.stderr.strip()}.")
+        raise PRError(f"`git push` of `{branch}` to `{remote}` failed: {proc.stderr.strip().removesuffix('.')}.")
 
 
 def existing_pr_url(worktree: str | Path, base: str, branch: str, env: dict[str, str]) -> str | None:
@@ -129,7 +129,8 @@ def existing_pr_url(worktree: str | Path, base: str, branch: str, env: dict[str,
         env,
     )
     if proc.returncode != 0:
-        raise PRError(f"`gh pr list` for `{branch}` failed: {proc.stderr.strip() or proc.stdout.strip()}.")
+        detail = proc.stderr.strip() or proc.stdout.strip()
+        raise PRError(f"`gh pr list` for `{branch}` failed: {detail.removesuffix('.')}.")
 
     return proc.stdout.strip() or None
 
@@ -201,7 +202,8 @@ def create_pr(
 
     proc = _run(cmd, worktree, env, stdin=body)
     if proc.returncode != 0:
-        raise PRError(f"`gh pr create` for `{branch}` failed: {proc.stderr.strip() or proc.stdout.strip()}.")
+        detail = proc.stderr.strip() or proc.stdout.strip()
+        raise PRError(f"`gh pr create` for `{branch}` failed: {detail.removesuffix('.')}.")
 
     return proc.stdout.strip().splitlines()[-1] if proc.stdout.strip() else ""
 

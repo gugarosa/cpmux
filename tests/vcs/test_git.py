@@ -3,6 +3,7 @@
 
 import pytest
 
+from cpmux.vcs import git
 from cpmux.vcs.git import (
     GitError,
     add_worktree,
@@ -113,8 +114,6 @@ def test_require_paths_exist_raises_for_missing_path(git_repo):
 
 
 def test_resolve_base_warns_when_base_unresolved(git_repo, monkeypatch):
-    from cpmux.vcs import git
-
     warnings = []
     monkeypatch.setattr(git.logger, "warning", lambda message, *args: warnings.append(message))
     base, sha = resolve_base(git_repo, "origin", "definitely-missing")

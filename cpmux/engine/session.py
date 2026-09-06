@@ -6,10 +6,11 @@ import os
 import signal
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from cpmux.events import SessionState, Status, apply_event, parse_line
 
-OnUpdate = Callable[[str, SessionState, dict], None]
+OnUpdate = Callable[[str, SessionState, dict[str, Any]], None]
 OnSpawn = Callable[[int], None]
 
 _STREAM_LIMIT = 1 << 20
@@ -54,14 +55,22 @@ class SessionRunner:
         self._stderr = ""
 
     async def run(self, on_update: OnUpdate | None = None, on_spawn: OnSpawn | None = None) -> SessionState:
-        """Stream session events to the transcript.
+        """Append subprocess output to the transcript and update the live state.
+
+        Own the spawned process group until it exits or is reaped on cancellation
+        or failure. Startup and process failures are returned as failed states.
+        Callback and filesystem errors propagate after cleanup.
 
         Args:
-            on_update: Applied-event callback.
-            on_spawn: Subprocess-start callback.
+            on_update: Synchronous callback after each decoded event updates the state.
+            on_spawn: Synchronous callback receiving the child PID before output is read.
 
         Returns:
-            Terminal session state.
+            The mutated state after subprocess exit, including its diagnostic error.
+
+        Raises:
+            OSError: Transcript creation or writing fails.
+            asyncio.CancelledError: Execution is cancelled after subprocess cleanup.
 
         """
 
@@ -78,7 +87,7 @@ class SessionRunner:
             )
         except (OSError, ValueError) as exc:
             self.state.status = Status.FAILED
-            self.state.error = f"`{self.argv[0]}` could not start: {exc}."
+            self.state.error = f"`{self.argv[0]}` could not start: {str(exc).removesuffix('.')}."
             return self.state
 
         stdout, stderr = self.proc.stdout, self.proc.stderr
@@ -108,6 +117,7 @@ class SessionRunner:
                     if chunks:
                         raw = b"".join([*chunks, raw])
                         chunks.clear()
+
                     line = raw.decode("utf-8", "replace")
                     transcript_file.write(line)
                     transcript_file.flush()
@@ -155,7 +165,15 @@ class SessionRunner:
                 pass
 
     def terminate(self) -> None:
-        """Send SIGTERM to a running session process group."""
+        """Request SIGTERM without waiting for a running session process group.
+
+        The active run call remains responsible for draining output and reaping
+        the child. Calling this before spawn or after exit has no effect.
+
+        Raises:
+            PermissionError: The process group cannot be signalled.
+
+        """
 
         if self.proc is not None and self.proc.returncode is None:
             self._signal(signal.SIGTERM)

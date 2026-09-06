@@ -59,21 +59,6 @@ _ICON_ERROR = ("✖", "x")
 _ICON_INFO = ("›", ">")
 
 
-def _ascii_only() -> bool:
-    if os.environ.get("CPMUX_ASCII"):
-        return True
-
-    try:
-        "✔".encode(getattr(sys.stdout, "encoding", None) or "utf-8")
-        return False
-    except (LookupError, UnicodeEncodeError):
-        return True
-
-
-def _icon(icon: tuple[str, str]) -> str:
-    return icon[1] if _ascii_only() else icon[0]
-
-
 def icon(unicode_glyph: str, ascii_glyph: str) -> str:
     """Return the terminal-compatible glyph.
 
@@ -86,7 +71,15 @@ def icon(unicode_glyph: str, ascii_glyph: str) -> str:
 
     """
 
-    return ascii_glyph if _ascii_only() else unicode_glyph
+    if os.environ.get("CPMUX_ASCII"):
+        return ascii_glyph
+
+    try:
+        "✔".encode(getattr(sys.stdout, "encoding", None) or "utf-8")
+    except (LookupError, UnicodeEncodeError):
+        return ascii_glyph
+
+    return unicode_glyph
 
 
 out = Console(highlight=False)
@@ -105,7 +98,7 @@ def status_text(status: Status) -> Text:
     """
 
     visual = STATUS_VISUAL[status]
-    glyph = visual.ascii_glyph if _ascii_only() else visual.glyph
+    glyph = icon(visual.glyph, visual.ascii_glyph)
 
     return Text(f"{glyph} {visual.label}", style=visual.style)
 
@@ -160,7 +153,7 @@ def print_error(message: str, hint: str | None = None) -> None:
 
     """
 
-    err.print(Text.assemble((f"{_icon(_ICON_ERROR)} ", STYLE_DANGER), message))
+    err.print(Text.assemble((f"{icon(*_ICON_ERROR)} ", STYLE_DANGER), message))
     if hint:
         err.print(Text(f"  {hint}", style=STYLE_MUTED))
 
@@ -173,7 +166,7 @@ def print_warning(message: str) -> None:
 
     """
 
-    err.print(Text.assemble((f"{_icon(_ICON_WARNING)} ", STYLE_WARNING), message))
+    err.print(Text.assemble((f"{icon(*_ICON_WARNING)} ", STYLE_WARNING), message))
 
 
 def print_success(message: str) -> None:
@@ -184,7 +177,7 @@ def print_success(message: str) -> None:
 
     """
 
-    out.print(Text.assemble((f"{_icon(_ICON_SUCCESS)} ", STYLE_SUCCESS), message))
+    out.print(Text.assemble((f"{icon(*_ICON_SUCCESS)} ", STYLE_SUCCESS), message))
 
 
 def print_hint(message: str) -> None:
@@ -195,4 +188,4 @@ def print_hint(message: str) -> None:
 
     """
 
-    out.print(Text(f"{_icon(_ICON_INFO)} {message}", style=STYLE_MUTED))
+    out.print(Text(f"{icon(*_ICON_INFO)} {message}", style=STYLE_MUTED))

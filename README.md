@@ -134,7 +134,7 @@ Run-scoped commands accept `--run <id>` and default to the latest run.
 | | `cpmux plan [FILE]` | Compose a plan in your editor, or from text, speech, or audio. Flags: `--text`, `--voice`, `--audio` (mutually exclusive), `--transcribe-model`, `--model`, `--force/-f`, `--up`, `--pr/--no-pr`, `--detach/--foreground/-d`, `--yes/-y`. |
 | **Launch** | `cpmux up [FILE]` | Spawn one session per item (defaults to `cpmux.yml`). Flags: `--dry-run`, `--detach/--foreground/-d/-f` (background by default), `--concurrency/-j`, `--pr/--no-pr`, `--deps`, `--strip-github-token/--no-strip-github-token`, `--yes/-y`. |
 | **Monitor** | `cpmux ls` | Snapshot each item's status, elapsed time, and activity. |
-| | `cpmux attach` | Live, read-only monitor; reconnects to a background run (Ctrl-C to detach). |
+| | `cpmux attach` | Live status monitor; reconnects to a background run (Ctrl-C to detach). |
 | | `cpmux dash` | Interactive TUI: session list, live transcript, search. |
 | | `cpmux logs KEY` | Print a transcript; `--follow/-f` to stream, `--raw` for the JSONL. |
 | | `cpmux search QUERY` | Search across transcripts; `--all` for every run, `--regex`, `--fts` to rank via Copilot's index. |
@@ -143,6 +143,10 @@ Run-scoped commands accept `--run <id>` and default to the latest run.
 | | `cpmux kill KEY` | Stop one running session. Flag: `--yes/-y`. |
 | **Teardown** | `cpmux down` | Stop a run's background daemon and any live sessions. Flag: `--yes/-y`. |
 | | `cpmux rm` | Remove the run's git worktrees. Flags: `--yes/-y`, `--force/-f` (delete uncommitted work), `--purge` (also delete run history). |
+
+`ls`, `attach`, and `dash` reconcile crashed runs: they may stop orphaned session
+processes and persist failed records. Detaching a monitor does not stop a healthy
+managed run.
 
 ## Composing a plan
 

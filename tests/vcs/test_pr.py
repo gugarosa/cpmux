@@ -71,13 +71,14 @@ def test_commit_all_does_not_commit_after_diff_failure(tmp_path, monkeypatch):
     assert [cmd[1] for cmd in commands] == ["add", "diff"]
 
 
-def test_existing_pr_url_reports_lookup_failure(tmp_path, monkeypatch):
-    monkeypatch.setattr(
-        pr.subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 1, "", "API unavailable")
-    )
+@pytest.mark.parametrize("diagnostic", ["API unavailable", "API unavailable."])
+def test_existing_pr_url_reports_lookup_failure(tmp_path, monkeypatch, diagnostic):
+    monkeypatch.setattr(pr.subprocess, "run", lambda cmd, **kwargs: subprocess.CompletedProcess(cmd, 1, "", diagnostic))
 
-    with pytest.raises(PRError, match="API unavailable"):
+    with pytest.raises(PRError, match="API unavailable") as error:
         existing_pr_url(tmp_path, "main", "feature", {})
+
+    assert str(error.value) == "`gh pr list` for `feature` failed: API unavailable."
 
 
 def test_open_pull_request_does_not_create_after_lookup_failure(tmp_path, monkeypatch):

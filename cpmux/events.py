@@ -62,6 +62,7 @@ class SessionState:
     Attributes:
         status: Current lifecycle stage.
         last_text: Latest complete assistant message.
+        _delta_buf: Buffered fragments of the current assistant message.
         current_tool: Name of the active tool.
         tool_count: Number of tools started.
         exit_code: Process exit code.
@@ -135,9 +136,11 @@ def apply_event(state: SessionState, event: dict[str, Any]) -> SessionState:
     elif event_type == "result":
         state.session_id = event.get("sessionId") or state.session_id
         state.exit_code = event.get("exitCode", state.exit_code)
+
         usage = event.get("usage") if isinstance(event.get("usage"), dict) else {}
         if "premiumRequests" in usage:
             state.premium_requests = usage.get("premiumRequests")
+
         changes = usage.get("codeChanges") if isinstance(usage.get("codeChanges"), dict) else {}
         files = changes.get("filesModified")
         if isinstance(files, list):

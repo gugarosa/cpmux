@@ -1,10 +1,22 @@
 # Copyright (c) 2026 Gustavo de Rosa.
 # Licensed under the MIT license.
 
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
-from cpmux.config import ConfigError, Plan, Preset, interpolate_env, load_plan, slugify
+from cpmux.config import (
+    ConfigError,
+    Plan,
+    Preset,
+    interpolate_env,
+    load_plan,
+    parse_plan,
+    slugify,
+)
 from cpmux.vcs.pr import PR_DRAFT_FILENAME
 
 
@@ -223,38 +235,21 @@ def test_plan_uses_env_default_when_missing(monkeypatch):
     assert "v=def" in plan.items[0].prompt
 
 
-@pytest.mark.parametrize(
-    ("extract_value", "expected"),
-    [
-        pytest.param(lambda argv: argv[0], "copilot", id="copilot-command"),
-        pytest.param(
-            lambda argv: argv[argv.index("--session-id") + 1],
-            "sid-123",
-            id="session-id",
-        ),
-        pytest.param(lambda argv: argv[argv.index("-C") + 1], "/wt/fix-x", id="worktree"),
-    ],
-)
-def test_spawn_argv_targets_session_worktree_and_model(extract_value, expected):
-    resolved = Plan.model_validate({"items": [{"name": "Fix X", "prompt": "do"}]}).resolve()[0]
+def test_spawn_argv_targets_session_worktree_and_model():
+    resolved = Plan.model_validate(
+        {"items": [{"name": "Fix X", "prompt": "do", "model": "custom-model", "effort": "high"}]}
+    ).resolve()[0]
     argv = resolved.spawn_argv("/wt/fix-x", "sid-123", "/logs")
 
-    assert extract_value(argv) == expected
-
-
-@pytest.mark.parametrize(
-    "expected_argument",
-    [
-        pytest.param("--output-format", id="output-format-option"),
-        pytest.param("json", id="json-output-format"),
-        pytest.param("--no-ask-user", id="no-ask-user"),
-    ],
-)
-def test_spawn_argv_includes_required_arguments(expected_argument):
-    resolved = Plan.model_validate({"items": [{"name": "Fix X", "prompt": "do"}]}).resolve()[0]
-    argv = resolved.spawn_argv("/wt/fix-x", "sid-123", "/logs")
-
-    assert expected_argument in argv
+    assert argv[0] == "copilot"
+    assert argv[argv.index("--session-id") + 1] == "sid-123"
+    assert argv[argv.index("-C") + 1] == "/wt/fix-x"
+    assert argv[argv.index("--model") + 1] == "custom-model"
+    assert argv[argv.index("--effort") + 1] == "high"
+    assert argv[argv.index("--name") + 1] == "Fix X"
+    assert argv[argv.index("--log-dir") + 1] == "/logs"
+    assert argv[argv.index("--output-format") + 1] == "json"
+    assert "--no-ask-user" in argv
 
 
 def test_spawn_argv_appends_pr_authoring_instructions():
@@ -405,16 +400,99 @@ def test_load_plan_invalid_omits_verbose_field_errors(tmp_path, unexpected_conte
     assert unexpected_content not in str(excinfo.value)
 
 
-@pytest.mark.parametrize(
-    ("extract_value", "expected"),
-    [
-        pytest.param(lambda plan: len(plan.items), 1, id="one-item"),
-        pytest.param(lambda plan: plan.resolve()[0].prompt, "fix a thing", id="resolved-prompt"),
-    ],
-)
-def test_load_plan_reads_valid_file(tmp_path, extract_value, expected):
+def test_load_plan_reads_valid_file(tmp_path):
     path = tmp_path / "ok.yaml"
     path.write_text("version: 1\nitems:\n  - fix a thing\n")
     plan = load_plan(path)
 
-    assert extract_value(plan) == expected
+    assert len(plan.items) == 1
+    assert plan.resolve()[0].prompt == "fix a thing"
+
+
+def test_config_import_keeps_vcs_unloaded():
+    script = (
+        "import sys\n"
+        "from cpmux.config import Plan\n"
+        "Plan.model_validate({'items': ['x']})\n"
+        "print(any(name.startswith('cpmux.vcs') for name in sys.modules))"
+    )
+    result = subprocess.run([sys.executable, "-c", script], capture_output=True, text=True, check=False)
+
+    assert result.returncode == 0
+    assert result.stdout.strip() == "False"
+
+
+def test_load_plan_reports_directory_as_config_error(tmp_path):
+    with pytest.raises(ConfigError) as error:
+        load_plan(tmp_path)
+
+    assert str(tmp_path) in str(error.value)
+    assert isinstance(error.value.__cause__, IsADirectoryError)
+
+
+def test_load_plan_preserves_unreadable_file_diagnostics(tmp_path, monkeypatch):
+    path = tmp_path / "plan.yaml"
+    path.write_text("items: [x]\n")
+    original_open = Path.open
+
+    def open_path(self, *args, **kwargs):
+        if self == path:
+            raise PermissionError("permission denied")
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", open_path)
+    with pytest.raises(ConfigError, match="permission denied") as error:
+        load_plan(path)
+
+    assert isinstance(error.value.__cause__, PermissionError)
+    assert str(path) in str(error.value)
+
+
+def test_load_plan_reports_invalid_encoding_as_config_error(tmp_path):
+    path = tmp_path / "plan.yaml"
+    path.write_bytes(b"\xff")
+
+    with pytest.raises(ConfigError, match="not valid YAML") as error:
+        load_plan(path)
+
+    assert error.value.__cause__ is not None
+    assert str(path) in str(error.value)
+
+
+@pytest.mark.parametrize("contents", ["[]", "false", "0", '""'])
+def test_load_plan_rejects_falsey_non_mapping_roots(tmp_path, contents):
+    path = tmp_path / "plan.yaml"
+    path.write_text(contents)
+
+    with pytest.raises(ConfigError, match="top-level YAML must be a mapping"):
+        load_plan(path)
+
+
+@pytest.mark.parametrize(
+    ("encoding", "prefix"),
+    [("utf-8", b""), ("utf-16-le", b"\xff\xfe"), ("utf-16-be", b"\xfe\xff")],
+)
+def test_load_plan_reads_supported_yaml_encodings(tmp_path, encoding, prefix):
+    path = tmp_path / "plan.yaml"
+    path.write_bytes(prefix + "items: [fix the caf\u00e9]\n".encode(encoding))
+
+    assert load_plan(path).items[0].prompt == "fix the caf\u00e9"
+
+
+@pytest.mark.parametrize("contents", ["items: [x]", b"items: [x]"])
+def test_parse_plan_accepts_text_and_bytes(contents):
+    assert parse_plan(contents).resolve()[0].prompt == "x"
+
+
+@pytest.mark.parametrize("contents", ["items: []", "defaults:\n  model: ''\nitems: [x]"])
+def test_load_plan_formats_failures_with_one_final_period(tmp_path, contents):
+    path = tmp_path / "plan.yaml"
+    path.write_text(contents)
+
+    with pytest.raises(ConfigError) as error:
+        load_plan(path)
+
+    message = str(error.value)
+    assert message.startswith(f"`{path}`")
+    assert message.endswith(".")
+    assert not message.endswith("..")

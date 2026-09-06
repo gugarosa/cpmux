@@ -28,3 +28,20 @@ def test_synthesize_plan_retries_a_template_that_cannot_resolve(monkeypatch):
     monkeypatch.setattr(synthesizer, "_run_copilot", lambda *args: next(replies))
 
     assert synthesize_plan("x") == "items: [x]"
+
+
+def test_synthesize_plan_retry_includes_actionable_validation_feedback(monkeypatch):
+    prompts = []
+    replies = iter(["items: []", "items: [x]"])
+
+    def reply(prompt, model):
+        prompts.append(prompt)
+        return next(replies)
+
+    monkeypatch.setattr(synthesizer, "_run_copilot", reply)
+
+    assert synthesize_plan("x") == "items: [x]"
+    assert len(prompts) == 2
+    assert "items:" in prompts[1]
+    assert "at least 1 item" in prompts[1]
+    assert "validation error for Plan" not in prompts[1]

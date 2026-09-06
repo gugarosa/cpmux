@@ -4,10 +4,7 @@
 import re
 import subprocess
 
-import yaml
-from pydantic import ValidationError
-
-from cpmux.config import Plan
+from cpmux.config import ConfigError, parse_plan
 from cpmux.voice.transcriber import VoiceError
 
 _SCHEMA = """\
@@ -51,12 +48,12 @@ def synthesize_plan(transcript: str, model: str = "gpt-5.5") -> str:
         yaml_text = _extract_yaml(_run_copilot(instruction, model))
 
         try:
-            Plan.model_validate(yaml.safe_load(yaml_text) or {})
+            parse_plan(yaml_text, source="generated plan")
             return yaml_text
-        except (yaml.YAMLError, ValidationError) as exc:
-            error = str(exc).splitlines()[0]
+        except ConfigError as exc:
+            error = str(exc)
 
-    raise VoiceError(f"plan synthesis failed: {error}.")
+    raise VoiceError(f"`plan` synthesis failed: {error.removesuffix('.')}.")
 
 
 def _build_prompt(transcript: str) -> str:
@@ -89,7 +86,8 @@ def _run_copilot(prompt: str, model: str) -> str:
         raise VoiceError("`copilot` is not on `PATH`.") from exc
 
     if proc.returncode != 0:
-        raise VoiceError(f"`copilot` failed: {proc.stderr.strip() or proc.stdout.strip()}.")
+        detail = proc.stderr.strip() or proc.stdout.strip()
+        raise VoiceError(f"`copilot` failed: {detail.removesuffix('.')}.")
 
     return proc.stdout
 

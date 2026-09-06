@@ -31,7 +31,7 @@ def pid_alive(pid: int | None) -> bool:
 
     try:
         os.kill(pid, 0)
-    except (OSError, ProcessLookupError):
+    except OSError:
         return False
 
     return True
@@ -44,7 +44,7 @@ def _terminate(pid: int | None, grace: float = 3.0) -> None:
     try:
         pgid = os.getpgid(pid)
         os.killpg(pgid, signal.SIGTERM)
-    except (OSError, ProcessLookupError):
+    except OSError:
         return
 
     deadline = time.monotonic() + grace
@@ -55,7 +55,7 @@ def _terminate(pid: int | None, grace: float = 3.0) -> None:
 
     try:
         os.killpg(pgid, signal.SIGKILL)
-    except (OSError, ProcessLookupError):
+    except OSError:
         pass
 
 
@@ -148,13 +148,17 @@ def launch_detached(run_id: str, repo_root: str) -> int:
 def reconcile(paths: RunPaths, records: list[SessionRecord], persist: bool = True) -> list[SessionRecord]:
     """Mark orphaned non-terminal sessions failed.
 
+    When no live owner is detected, attempt to terminate orphaned children,
+    update records in place, and clear the owner file. Disabling persistence
+    skips record writes, not those other effects.
+
     Args:
         paths: Run paths.
         records: Session records.
-        persist: Whether to persist changes.
+        persist: Whether to write reconciled session records.
 
     Returns:
-        Reconciled session records.
+        The supplied list with reconciled records.
 
     """
 
@@ -183,7 +187,7 @@ def stop(paths: RunPaths, records: list[SessionRecord]) -> int:
         records: Session records.
 
     Returns:
-        Number of signalled processes.
+        Number of processes detected and targeted for termination.
 
     """
 
@@ -217,7 +221,7 @@ def kill_session(paths: RunPaths, record: SessionRecord) -> bool:
         record: Session record.
 
     Returns:
-        Whether the session process existed.
+        Whether the session process was detected before the stop attempt.
 
     """
 

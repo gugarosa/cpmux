@@ -27,8 +27,7 @@ from textual.widgets import (
 
 from cpmux import theme
 from cpmux.engine import daemon
-from cpmux.engine.interact import followup_argv, resume_interactive_argv
-from cpmux.engine.session import SessionRunner
+from cpmux.engine.interact import resume_interactive_argv, run_followup
 from cpmux.engine.store import RunPaths, SessionRecord, load_run
 from cpmux.events import ACTIVE, TERMINAL_FAILURE, parse_line
 from cpmux.ui.render import deps_cell, event_text
@@ -41,20 +40,21 @@ class SearchScreen(ModalScreen[str | None]):
     BINDINGS = [Binding("escape", "close", "Close")]
 
     def __init__(self, items: list[tuple[str, Path]]) -> None:
-        """Initialize transcript search."""
+        """Initialize transcript search.
+
+        Args:
+            items: Session labels paired with their transcript paths.
+
+        """
 
         super().__init__()
         self.items = items
 
     def compose(self) -> ComposeResult:
-        """Build the search overlay's widgets."""
-
         yield Input(placeholder="search transcripts…", id="query")
         yield ListView(id="results")
 
     def on_input_changed(self, event: Input.Changed) -> None:
-        """Filter results as the query changes."""
-
         results = self.query_one("#results", ListView)
         results.clear()
 
@@ -66,13 +66,9 @@ class SearchScreen(ModalScreen[str | None]):
             results.append(ListItem(Label(f"{hit.label}  ·  {hit.role}  ·  {hit.snippet}"), name=hit.label))
 
     def on_list_view_selected(self, event: ListView.Selected) -> None:
-        """Return the selected session key."""
-
         self.dismiss(event.item.name)
 
     def action_close(self) -> None:
-        """Close the search overlay."""
-
         self.dismiss(None)
 
 
@@ -82,18 +78,12 @@ class SendScreen(ModalScreen[str | None]):
     BINDINGS = [Binding("escape", "close", "Close")]
 
     def compose(self) -> ComposeResult:
-        """Build the message overlay's widgets."""
-
         yield Input(placeholder="follow-up message…", id="message")
 
     def on_input_submitted(self, event: Input.Submitted) -> None:
-        """Return the submitted message."""
-
         self.dismiss(event.value.strip() or None)
 
     def action_close(self) -> None:
-        """Close the message overlay."""
-
         self.dismiss(None)
 
 
@@ -138,7 +128,16 @@ class CpmuxApp(App):
     ]
 
     def __init__(self, start_path: str, run_id: str) -> None:
-        """Create the dashboard."""
+        """Create the dashboard.
+
+        Args:
+            start_path: Repository root containing the run history.
+            run_id: Run identifier to display.
+
+        Raises:
+            ValueError: The run identifier is invalid.
+
+        """
 
         super().__init__()
 
@@ -151,8 +150,6 @@ class CpmuxApp(App):
         self._transcript_len = 0
 
     def compose(self) -> ComposeResult:
-        """Build the dashboard's widgets."""
-
         yield Header()
 
         with Horizontal():
@@ -173,7 +170,16 @@ class CpmuxApp(App):
         self.set_interval(1.0, self.reload)
 
     def reload(self) -> None:
-        """Reload records, reconcile crashes, and refresh panes."""
+        """Reload records, reconcile crashes, and refresh panes.
+
+        A missing manifest leaves the current view unchanged. Crash reconciliation
+        can terminate orphaned children and persist their failed records.
+
+        Raises:
+            OSError: Existing run artifacts cannot be read or updated.
+            ValueError: Stored run data is invalid.
+
+        """
 
         try:
             manifest, records = load_run(self.start_path, self.run_id)
@@ -182,10 +188,12 @@ class CpmuxApp(App):
 
         self.deps_by_key = {item.key: list(item.depends_on) for item in manifest.resolved}
         self.records = daemon.reconcile(self.paths, records)
+
         active = sum(record.status in ACTIVE for record in self.records)
         premium = sum(record.premium_requests or 0 for record in self.records)
         premium_note = f" · {premium} premium" if premium else ""
         self.sub_title = f"{active}/{len(self.records)} active{premium_note} · updated {time.strftime('%H:%M:%S')}"
+
         self._refresh_table()
         self._refresh_transcript()
 
@@ -259,32 +267,22 @@ class CpmuxApp(App):
                 log.write(renderable)
 
     def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
-        """Show the highlighted session transcript."""
-
         record = self._selected_record()
         if record is not None and record.key != self._shown_key:
             self._refresh_transcript(force=True)
 
     def action_cursor_down(self) -> None:
-        """Move down one row."""
-
         table = self.query_one("#sessions", DataTable)
         table.move_cursor(row=min(table.cursor_row + 1, table.row_count - 1))
 
     def action_cursor_up(self) -> None:
-        """Move up one row."""
-
         table = self.query_one("#sessions", DataTable)
         table.move_cursor(row=max(table.cursor_row - 1, 0))
 
     def action_refresh(self) -> None:
-        """Reload the run immediately."""
-
         self.reload()
 
     def action_open_pr(self) -> None:
-        """Open the selected pull request."""
-
         record = self._selected_record()
         if record is None:
             return
@@ -296,8 +294,6 @@ class CpmuxApp(App):
         self.notify(f"opening PR for `{record.key}`.")
 
     def action_stop(self) -> None:
-        """Stop the selected running session."""
-
         record = self._selected_record()
         if record is None:
             return
@@ -310,8 +306,6 @@ class CpmuxApp(App):
         self.reload()
 
     def action_search(self) -> None:
-        """Open the search overlay."""
-
         items = [(record.key, self.paths.transcript(record.key)) for record in self.records]
 
         self.push_screen(SearchScreen(items), self._jump_to_key)
@@ -326,8 +320,6 @@ class CpmuxApp(App):
                 return
 
     def action_enter(self) -> None:
-        """Open an interactive Copilot session."""
-
         record = self._selected_record()
         if record is None:
             return
@@ -344,8 +336,6 @@ class CpmuxApp(App):
         self.reload()
 
     def action_send(self) -> None:
-        """Prompt and send a follow-up."""
-
         record = self._selected_record()
         if record is None:
             return
@@ -364,17 +354,6 @@ class CpmuxApp(App):
 
     @work(thread=True)
     def _send_worker(self, record: SessionRecord, message: str) -> None:
-        argv = followup_argv(record.session_id, record.worktree, record.model, record.permission_flags, message)
-        state = asyncio.run(SessionRunner(record.key, argv, self.paths.transcript(record.key), env=record.env).run())
-
-        record.status = state.status
-        record.exit_code = state.exit_code
-        record.error = state.error
-        record.files_modified = state.files_modified or record.files_modified
-        record.mark_ended()
-        if state.premium_requests is not None:
-            record.premium_requests = (record.premium_requests or 0) + state.premium_requests
-
-        self.paths.write_record(record)
+        state = asyncio.run(run_followup(self.paths, record, message))
         if state.status in TERMINAL_FAILURE and state.error:
             self.call_from_thread(self.notify, f"{record.key}: {state.error}", severity="error")

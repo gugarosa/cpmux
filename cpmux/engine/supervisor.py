@@ -5,6 +5,7 @@ import asyncio
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from rich.live import Live
@@ -116,7 +117,7 @@ class Supervisor:
         """Load a supervisor from a persisted run.
 
         Args:
-            start_path: Path within the repository.
+            start_path: Repository root containing the persisted run.
             run_id: Run identifier.
 
         Returns:
@@ -148,7 +149,15 @@ class Supervisor:
         return supervisor
 
     def prepare(self) -> None:
-        """Create the manifest, worktrees, and session records."""
+        """Create the manifest, worktrees, prompts, and session records.
+
+        Git setup failures are stored on the affected item's record so other
+        items can still run.
+
+        Raises:
+            OSError: Run artifacts cannot be created or persisted.
+
+        """
 
         self.paths.write_manifest(
             RunManifest(
@@ -179,6 +188,7 @@ class Supervisor:
                 permission_flags=item.permissions.to_flags(),
                 env=dict(item.env),
             )
+
             self.records[item.key] = record
             self.paths.ensure_session_dirs(item.key)
             self.paths.prompt_file(item.key).write_text(item.effective_prompt())
@@ -193,7 +203,7 @@ class Supervisor:
             except git.GitError as exc:
                 record.status = Status.FAILED
                 record.error = str(exc)
-                logger.warning(f"`{item.key}` worktree setup failed: {exc}.")
+                logger.warning(f"`{item.key}` worktree setup failed: {str(exc).removesuffix('.')}.")
 
             self.paths.write_record(record)
 
@@ -274,6 +284,7 @@ class Supervisor:
                 record.premium_requests = state.premium_requests
                 record.files_modified = state.files_modified
                 record.error = state.error
+
                 if state.status == Status.DONE:
                     record.status = Status.FINALIZING
                     self.paths.write_record(record)
@@ -282,6 +293,7 @@ class Supervisor:
                     await self._finalize(item, record)
                 else:
                     record.status = state.status
+
                 self.paths.write_record(record)
                 self._refresh()
         except asyncio.CancelledError:
@@ -312,7 +324,7 @@ class Supervisor:
         except Exception as exc:
             record.status = Status.FAILED
             record.error = record.error or str(exc)
-            logger.error(f"`{item.key}` finalization failed: {exc}.")
+            logger.error(f"`{item.key}` finalization failed: {str(exc).removesuffix('.')}.")
 
     async def _open_pr(self, item: ResolvedItem, record: SessionRecord) -> None:
         worktree = self.paths.worktree(item.key)
@@ -344,7 +356,7 @@ class Supervisor:
         except (pr.PRError, git.GitError) as exc:
             record.status = Status.FAILED
             record.error = str(exc)
-            logger.error(f"`{item.key}` pull request failed: {exc}.")
+            logger.error(f"`{item.key}` pull request failed: {str(exc).removesuffix('.')}.")
 
     async def _commit_local(self, item: ResolvedItem, record: SessionRecord) -> None:
         worktree = self.paths.worktree(item.key)
@@ -365,15 +377,16 @@ class Supervisor:
         except (pr.PRError, git.GitError) as exc:
             record.status = Status.FAILED
             record.error = str(exc)
-            logger.error(f"`{item.key}` local commit failed: {exc}.")
+            logger.error(f"`{item.key}` local commit failed: {str(exc).removesuffix('.')}.")
 
-    def _on_update(self, key: str, state: SessionState, event: dict) -> None:
+    def _on_update(self, key: str, state: SessionState, event: dict[str, Any]) -> None:
         self.live_states[key] = state
         record = self.records[key]
         status = Status.FINALIZING if state.status == Status.DONE else state.status
         if status != record.status:
             record.status = status
             self.paths.write_record(record)
+
         self._refresh()
 
     def _refresh(self) -> None:
