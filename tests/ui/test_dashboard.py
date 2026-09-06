@@ -186,7 +186,7 @@ def test_dashboard_open_pr_without_pr_does_not_open_browser(tmp_path, monkeypatc
 def test_dashboard_followup_reports_startup_failure(tmp_path, monkeypatch):
     paths = _build_run(tmp_path, ["alpha"])
     (tmp_path / "alpha").mkdir()
-    monkeypatch.setattr("cpmux.ui.dashboard.followup_argv", lambda *args: [str(tmp_path / "missing-copilot")])
+    monkeypatch.setattr("cpmux.engine.interact.followup_argv", lambda *args: [str(tmp_path / "missing-copilot")])
     notifications = []
 
     async def scenario():

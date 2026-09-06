@@ -29,8 +29,7 @@ from cpmux.engine.copilot_store import (
     InvalidFtsQuery,
     search_sessions,
 )
-from cpmux.engine.interact import followup_argv, resume_interactive_argv
-from cpmux.engine.session import SessionRunner
+from cpmux.engine.interact import resume_interactive_argv, run_followup
 from cpmux.engine.store import (
     RunPaths,
     SessionRecord,
@@ -92,7 +91,11 @@ def _load_plan_or_exit(file: Path) -> Plan:
     try:
         return load_plan(file)
     except ConfigError as exc:
-        hint = "create one with `cpmux init`, or generate one with `cpmux plan`." if not Path(file).exists() else None
+        hint = (
+            "create one with `cpmux init`, or generate one with `cpmux plan`."
+            if isinstance(exc.__cause__, FileNotFoundError)
+            else None
+        )
         theme.print_error(str(exc), hint=hint)
         raise typer.Exit(1)
 
@@ -553,17 +556,7 @@ def send(
         theme.print_error(f"worktree `{record.worktree}` is missing; the run may have been cleaned.")
         raise typer.Exit(1)
 
-    argv = followup_argv(record.session_id, record.worktree, record.model, record.permission_flags, message)
-    state = asyncio.run(SessionRunner(key, argv, paths.transcript(key), env=record.env).run())
-
-    record.status = state.status
-    record.exit_code = state.exit_code
-    record.error = state.error
-    record.files_modified = state.files_modified or record.files_modified
-    record.mark_ended()
-    if state.premium_requests is not None:
-        record.premium_requests = (record.premium_requests or 0) + state.premium_requests
-    paths.write_record(record)
+    state = asyncio.run(run_followup(paths, record, message))
 
     if state.last_text:
         console.print(f"[bold green]🤖 assistant[/bold green] {escape(state.last_text)}")

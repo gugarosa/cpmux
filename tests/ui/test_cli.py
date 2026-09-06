@@ -2,6 +2,7 @@
 # Licensed under the MIT license.
 
 from importlib.metadata import version
+from pathlib import Path
 
 import pytest
 from click import unstyle
@@ -108,6 +109,26 @@ def test_commands_without_cpmux_dir_exit_one(tmp_path, monkeypatch, argv, expect
 def test_up_missing_config_path_exits_nonzero(tmp_path):
     result = runner.invoke(app, ["up", str(tmp_path / "missing.yaml"), "--dry-run"])
     assert result.exit_code != 0
+    assert "create one with" in result.output
+
+
+def test_up_reports_unreadable_config_without_a_create_hint(tmp_path, monkeypatch):
+    path = tmp_path / "plan.yaml"
+    path.write_text("items: [x]\n")
+    original_open = Path.open
+
+    def open_path(self, *args, **kwargs):
+        if self == path:
+            raise PermissionError("permission denied")
+        return original_open(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", open_path)
+
+    result = runner.invoke(app, ["up", str(path), "--dry-run"])
+
+    assert result.exit_code == 1
+    assert "permission denied" in result.output
+    assert "create one with" not in result.output
 
 
 def test_plan_text_writes_generated_plan(tmp_path, monkeypatch):
@@ -384,7 +405,7 @@ def test_send_reports_startup_failure_and_persists_it(tmp_path, monkeypatch):
     )
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(cli, "_require_tool", lambda *args: None)
-    monkeypatch.setattr(cli, "followup_argv", lambda *args: [str(tmp_path / "missing-copilot")])
+    monkeypatch.setattr("cpmux.engine.interact.followup_argv", lambda *args: [str(tmp_path / "missing-copilot")])
 
     result = runner.invoke(app, ["send", "a", "retry"])
 

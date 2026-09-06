@@ -5,7 +5,7 @@ import os
 import subprocess
 from pathlib import Path
 
-PR_DRAFT_FILENAME = ".cpmux-pr.md"
+from cpmux.config import PR_DRAFT_FILENAME
 
 
 class PRError(Exception):

@@ -208,7 +208,19 @@ class RunPaths:
         self.manifest.write_text(manifest.model_dump_json(indent=2))
 
     def write_record(self, record: SessionRecord) -> None:
-        """Persist the record atomically."""
+        """Replace the stored record atomically after creating its directories.
+
+        This protects readers from partial JSON, but does not coordinate competing
+        writers or merge their changes.
+
+        Args:
+            record: Session record to serialize without mutating it.
+
+        Raises:
+            OSError: Directory creation, writing, or replacement fails.
+            ValueError: The record key is not a valid storage identifier.
+
+        """
 
         self.ensure_session_dirs(record.key)
         target = self.record_file(record.key)
@@ -217,7 +229,19 @@ class RunPaths:
         os.replace(tmp, target)
 
     def read_record(self, key: str) -> SessionRecord:
-        """Load a session record."""
+        """Read and validate the persisted record without updating it.
+
+        Args:
+            key: Session identifier.
+
+        Returns:
+            A new record populated from stored JSON.
+
+        Raises:
+            OSError: The record file cannot be read.
+            ValueError: The identifier or stored record is invalid.
+
+        """
 
         return SessionRecord.model_validate_json(self.record_file(key).read_text())
 
@@ -264,7 +288,11 @@ def load_run(repo_root: str | Path, run_id: str) -> tuple[RunManifest, list[Sess
         run_id: Run identifier.
 
     Returns:
-        Run manifest and existing session records.
+        Manifest and existing records in manifest order; missing records are omitted.
+
+    Raises:
+        OSError: The manifest or a present record cannot be read.
+        ValueError: Run identifiers or stored data are invalid.
 
     """
 

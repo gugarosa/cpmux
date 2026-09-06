@@ -6,6 +6,21 @@ All notable changes to cpmux are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Share follow-up execution and outcome persistence between the CLI and dashboard,
+  without changing worker scheduling or concurrency policy.
+- Centralize YAML plan parsing and shared PR protocol vocabulary in configuration,
+  removing the reverse dependency from configuration into VCS.
+- Clarify public mutation, persistence, cancellation, and error contracts, and enforce
+  the existing prohibition on bare exception handlers.
+
+### Fixed
+
+- Report unreadable files and invalid YAML encodings as contextual `ConfigError` failures.
+- Reject falsey non-mapping YAML roots without misclassifying them as empty plans.
+- Include actionable field diagnostics when retrying generated plans.
+
 ## [0.1.2]
 
 ### Fixed

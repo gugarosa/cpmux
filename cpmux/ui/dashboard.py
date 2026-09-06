@@ -27,8 +27,7 @@ from textual.widgets import (
 
 from cpmux import theme
 from cpmux.engine import daemon
-from cpmux.engine.interact import followup_argv, resume_interactive_argv
-from cpmux.engine.session import SessionRunner
+from cpmux.engine.interact import resume_interactive_argv, run_followup
 from cpmux.engine.store import RunPaths, SessionRecord, load_run
 from cpmux.events import ACTIVE, TERMINAL_FAILURE, parse_line
 from cpmux.ui.render import deps_cell, event_text
@@ -364,17 +363,6 @@ class CpmuxApp(App):
 
     @work(thread=True)
     def _send_worker(self, record: SessionRecord, message: str) -> None:
-        argv = followup_argv(record.session_id, record.worktree, record.model, record.permission_flags, message)
-        state = asyncio.run(SessionRunner(record.key, argv, self.paths.transcript(record.key), env=record.env).run())
-
-        record.status = state.status
-        record.exit_code = state.exit_code
-        record.error = state.error
-        record.files_modified = state.files_modified or record.files_modified
-        record.mark_ended()
-        if state.premium_requests is not None:
-            record.premium_requests = (record.premium_requests or 0) + state.premium_requests
-
-        self.paths.write_record(record)
+        state = asyncio.run(run_followup(self.paths, record, message))
         if state.status in TERMINAL_FAILURE and state.error:
             self.call_from_thread(self.notify, f"{record.key}: {state.error}", severity="error")

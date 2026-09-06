@@ -21,7 +21,7 @@ from pydantic import (
     model_validator,
 )
 
-from cpmux.vcs.pr import PR_DRAFT_FILENAME
+PR_DRAFT_FILENAME = ".cpmux-pr.md"
 
 _ENV_RE = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::-([^}]*))?\}")
 
@@ -591,11 +591,42 @@ class Plan(BaseModel):
 
 
 class ConfigError(Exception):
-    """Raised when a cpmux YAML file is missing or invalid."""
+    """Raised when a cpmux plan cannot be read or validated."""
+
+
+def parse_plan(contents: str | bytes, source: str = "plan") -> Plan:
+    """Parse YAML and validate the complete plan without filesystem access.
+
+    Args:
+        contents: YAML text or encoded bytes accepted by PyYAML.
+        source: Label included in error messages.
+
+    Returns:
+        Plan with environment references expanded and item resolution validated.
+
+    Raises:
+        ConfigError: Invalid YAML, encoding, root type, or plan fields.
+
+    """
+
+    try:
+        raw = yaml.safe_load(contents)
+    except yaml.YAMLError as exc:
+        raise ConfigError(f"`{source}` is not valid YAML: {exc}.") from exc
+
+    if raw is None:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ConfigError(f"`{source}` top-level YAML must be a mapping, got `{type(raw).__name__}`.")
+
+    try:
+        return Plan.model_validate(raw)
+    except ValidationError as exc:
+        raise ConfigError(f"`{source}` is not a valid cpmux plan:\n{_format_validation(exc)}") from exc
 
 
 def load_plan(path: str | Path) -> Plan:
-    """Parse and validate a cpmux YAML file.
+    """Read and validate a cpmux YAML file.
 
     Args:
         path: YAML configuration path.
@@ -604,26 +635,19 @@ def load_plan(path: str | Path) -> Plan:
         Validated run plan.
 
     Raises:
-        ConfigError: Missing or invalid file.
+        ConfigError: Missing, unreadable, or invalid file, preserving its cause.
 
     """
 
     config_path = Path(path)
-    if not config_path.exists():
-        raise ConfigError(f"`{config_path}` config file does not exist.")
-
     try:
-        raw = yaml.safe_load(config_path.read_text()) or {}
-    except yaml.YAMLError as exc:
-        raise ConfigError(f"`{config_path}` is not valid YAML: {exc}.") from exc
+        contents = config_path.read_bytes()
+    except FileNotFoundError as exc:
+        raise ConfigError(f"`{config_path}` config file does not exist.") from exc
+    except OSError as exc:
+        raise ConfigError(f"`{config_path}` config file could not be read: {exc}.") from exc
 
-    if not isinstance(raw, dict):
-        raise ConfigError(f"`{config_path}` top-level YAML must be a mapping, got `{type(raw).__name__}`.")
-
-    try:
-        return Plan.model_validate(raw)
-    except ValidationError as exc:
-        raise ConfigError(f"`{config_path}` is not a valid cpmux plan:\n{_format_validation(exc)}") from exc
+    return parse_plan(contents, source=str(config_path))
 
 
 def _format_validation(exc: ValidationError) -> str:

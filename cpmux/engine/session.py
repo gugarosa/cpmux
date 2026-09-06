@@ -54,14 +54,22 @@ class SessionRunner:
         self._stderr = ""
 
     async def run(self, on_update: OnUpdate | None = None, on_spawn: OnSpawn | None = None) -> SessionState:
-        """Stream session events to the transcript.
+        """Append subprocess output to the transcript and update the live state.
+
+        Own the spawned process group until it exits or is reaped on cancellation
+        or failure. Startup and process failures are returned as failed states;
+        callback and filesystem errors propagate after cleanup.
 
         Args:
-            on_update: Applied-event callback.
-            on_spawn: Subprocess-start callback.
+            on_update: Synchronous callback after each decoded event updates the state.
+            on_spawn: Synchronous callback receiving the child PID before output is read.
 
         Returns:
-            Terminal session state.
+            The mutated state after subprocess exit, including its diagnostic error.
+
+        Raises:
+            OSError: Transcript creation or writing fails.
+            asyncio.CancelledError: Execution is cancelled after subprocess cleanup.
 
         """
 
@@ -155,7 +163,15 @@ class SessionRunner:
                 pass
 
     def terminate(self) -> None:
-        """Send SIGTERM to a running session process group."""
+        """Request SIGTERM without waiting for a running session process group.
+
+        The active run call remains responsible for draining output and reaping
+        the child. Calling this before spawn or after exit has no effect.
+
+        Raises:
+            PermissionError: The process group cannot be signalled.
+
+        """
 
         if self.proc is not None and self.proc.returncode is None:
             self._signal(signal.SIGTERM)

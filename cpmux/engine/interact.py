@@ -3,6 +3,10 @@
 
 from pathlib import Path
 
+from cpmux.engine.session import SessionRunner
+from cpmux.engine.store import RunPaths, SessionRecord
+from cpmux.events import SessionState
+
 
 def resume_interactive_argv(session_id: str, worktree: str | Path) -> list[str]:
     """Build arguments for an interactive resume.
@@ -57,3 +61,40 @@ def followup_argv(
         argv.append("--no-ask-user")
 
     return argv
+
+
+async def run_followup(paths: RunPaths, record: SessionRecord, message: str) -> SessionState:
+    """Run a follow-up turn, update its record in place, and persist the outcome.
+
+    Reported premium usage is accumulated; an absent modified-file list leaves the
+    previous list intact. No automatic Git finalization or ownership arbitration
+    is performed. Cancellation leaves the record unchanged after child cleanup.
+    The in-memory update precedes persistence, so a write failure does not undo it.
+
+    Args:
+        paths: Storage paths for the existing run.
+        record: Session to resume and update.
+        message: Follow-up prompt.
+
+    Returns:
+        Terminal session state, including execution failures recorded in its error field.
+
+    Raises:
+        OSError: Transcript or record persistence fails.
+        asyncio.CancelledError: The turn is cancelled after subprocess cleanup.
+
+    """
+
+    argv = followup_argv(record.session_id, record.worktree, record.model, record.permission_flags, message)
+    state = await SessionRunner(record.key, argv, paths.transcript(record.key), env=record.env).run()
+
+    record.status = state.status
+    record.exit_code = state.exit_code
+    record.error = state.error
+    record.files_modified = state.files_modified or record.files_modified
+    record.mark_ended()
+    if state.premium_requests is not None:
+        record.premium_requests = (record.premium_requests or 0) + state.premium_requests
+    paths.write_record(record)
+
+    return state
