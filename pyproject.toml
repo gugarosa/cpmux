@@ -47,6 +47,9 @@ path = "cpmux/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["cpmux"]
 
+[tool.uv]
+cache-keys = [{ file = "pyproject.toml" }, { file = "cpmux/__init__.py" }]
+
 [tool.black]
 line-length = 120
 target-version = ["py312"]

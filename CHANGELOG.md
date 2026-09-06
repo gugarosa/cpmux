@@ -6,6 +6,8 @@ All notable changes to cpmux are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.2]
+
 ### Fixed
 
 - Preserve large JSONL events and continue draining subprocess output instead of losing
@@ -19,7 +21,8 @@ All notable changes to cpmux are documented here. The format follows
 - Surface Git staging/index and pull-request lookup failures instead of treating them as
   no changes or no existing pull request.
 - Count pull-request creation as active work and report the installed release version
-  consistently, using one version source for the package and build metadata.
+  consistently, using one version source for the package and build metadata. Version-only
+  edits also invalidate uv's cached build metadata.
 
 ## [0.1.1] - 2026-09-01
 
@@ -90,7 +93,8 @@ Initial release.
   composing a plan from an editor, text, speech (`--voice`), or an audio file.
 - On-device speech-to-text via faster-whisper behind the `voice` extra.
 
-[Unreleased]: https://github.com/gugarosa/cpmux/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/gugarosa/cpmux/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/gugarosa/cpmux/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/gugarosa/cpmux/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/gugarosa/cpmux/compare/v0.0.1...v0.1.0
 [0.0.1]: https://github.com/gugarosa/cpmux/releases/tag/v0.0.1

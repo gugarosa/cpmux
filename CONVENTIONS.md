@@ -148,7 +148,8 @@ black + isort (`profile = black`) + flake8, all at line-length 120, wired throug
 `.pre-commit-config.yaml`.
 
 The release version lives in `cpmux/__init__.py`. Hatch reads it for wheel and source
-distribution metadata; update that value and regenerate `uv.lock` when changing versions.
+distribution metadata, and uv watches that file to invalidate cached build metadata.
+Update that value and regenerate `uv.lock` when changing versions.
 
 ```bash
 isort cpmux tests && black cpmux tests && flake8 cpmux tests
