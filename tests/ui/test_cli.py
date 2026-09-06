@@ -4,6 +4,7 @@
 from importlib.metadata import version
 
 import pytest
+from click import unstyle
 from typer.testing import CliRunner
 
 from cpmux.engine.store import RunManifest, RunPaths, SessionRecord
@@ -41,10 +42,23 @@ def test_up_rejects_invalid_concurrency_before_launch(tmp_path, concurrency):
     path.write_text("items: [x]\n")
 
     result = runner.invoke(app, ["up", str(path), "--dry-run", "--concurrency", concurrency])
+    output = unstyle(result.output)
 
     assert result.exit_code == 2
-    assert "--concurrency" in result.output
+    assert "--concurrency" in output
+    assert "range" in output
     assert not (tmp_path / ".cpmux").exists()
+
+
+@pytest.mark.parametrize("concurrency", ["1", "64"])
+def test_up_accepts_concurrency_bounds(tmp_path, concurrency):
+    path = tmp_path / "plan.yml"
+    path.write_text("items: [x]\n")
+
+    result = runner.invoke(app, ["up", str(path), "--dry-run", "--concurrency", concurrency])
+
+    assert result.exit_code == 0
+    assert f"max {concurrency} concurrent" in unstyle(result.output)
 
 
 @pytest.mark.parametrize(
