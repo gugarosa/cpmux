@@ -6,6 +6,8 @@ All notable changes to cpmux are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-06
+
 ### Changed
 
 - Align public APIs with the Google-style docstring layout, complete constructor and
@@ -115,7 +117,8 @@ Initial release.
   composing a plan from an editor, text, speech (`--voice`), or an audio file.
 - On-device speech-to-text via faster-whisper behind the `voice` extra.
 
-[Unreleased]: https://github.com/gugarosa/cpmux/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/gugarosa/cpmux/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/gugarosa/cpmux/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/gugarosa/cpmux/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/gugarosa/cpmux/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/gugarosa/cpmux/compare/v0.0.1...v0.1.0
